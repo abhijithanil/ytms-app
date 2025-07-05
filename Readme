@@ -1,0 +1,248 @@
+# YTManager Frontend
+
+A beautiful React.js frontend for the YouTube Video Management System (YTMS). Built with modern web technologies and designed to provide an intuitive, Jira-like experience for managing video editing workflows.
+
+## 🚀 Features
+
+- **Modern UI/UX** - Clean, responsive design with smooth animations
+- **Dashboard** - Overview of tasks, stats, and recent activities
+- **Task Board** - Kanban-style board for managing video editing tasks
+- **File Upload** - Drag & drop interface for uploading raw videos
+- **Team Management** - Manage team members and their assignments
+- **Real-time Updates** - Live notifications and status updates
+- **Authentication** - Secure login with JWT tokens
+- **Responsive Design** - Works perfectly on desktop and mobile
+
+## 🛠️ Tech Stack
+
+- **React 18** - Latest React with hooks and concurrent features
+- **React Router** - Client-side routing
+- **Tailwind CSS** - Utility-first CSS framework
+- **Lucide React** - Beautiful SVG icons
+- **Axios** - HTTP client for API calls
+- **React Hot Toast** - Elegant notifications
+- **React Dropzone** - File upload with drag & drop
+- **Date-fns** - Modern date utility library
+
+## 📦 Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd ytms-frontend
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Create environment file**
+   ```bash
+   cp .env.example .env
+   ```
+
+4. **Update environment variables**
+   ```bash
+   # .env
+   REACT_APP_API_URL=http://localhost:8080/api
+   ```
+
+5. **Start the development server**
+   ```bash
+   npm start
+   ```
+
+The app will be available at `http://localhost:3000`
+
+## 🏗️ Project Structure
+
+```
+src/
+├── components/          # Reusable UI components
+│   └── Layout/         # Layout components (Header, Sidebar)
+├── context/            # React Context providers
+│   └── AuthContext.js  # Authentication context
+├── pages/              # Page components
+│   ├── Dashboard.js    # Dashboard page
+│   ├── TaskBoard.js    # Kanban task board
+│   ├── UploadVideo.js  # Video upload form
+│   ├── Team.js         # Team management
+│   └── Login.js        # Login page
+├── services/           # API services
+│   └── api.js          # Axios configuration and API calls
+├── App.js              # Main app component
+├── App.css             # Global styles and Tailwind imports
+└── index.js            # React app entry point
+```
+
+## 🎨 Design System
+
+### Colors
+- **Primary**: Blue (`#6366f1`) - Main brand color
+- **Success**: Green (`#22c55e`) - Success states
+- **Warning**: Yellow (`#f59e0b`) - Warning states  
+- **Danger**: Red (`#ef4444`) - Error states
+- **Gray Scale**: Various gray shades for text and backgrounds
+
+### Typography
+- **Font Family**: Inter (Google Fonts)
+- **Font Weights**: 300, 400, 500, 600, 700
+
+### Components
+- **Cards**: Rounded corners with subtle shadows
+- **Buttons**: Multiple variants (primary, secondary, danger)
+- **Forms**: Clean inputs with focus states
+- **Animations**: Smooth transitions and hover effects
+
+## 🔌 API Integration
+
+The frontend connects to the Spring Boot backend through RESTful APIs:
+
+### Authentication
+- `POST /api/auth/login` - User login
+- `POST /api/auth/register` - User registration
+- `GET /api/auth/me` - Get current user
+
+### Tasks
+- `GET /api/tasks` - Get all tasks
+- `POST /api/tasks` - Create new task
+- `PUT /api/tasks/:id/assign` - Assign task to editor
+- `PUT /api/tasks/:id/status` - Update task status
+
+### Users
+- `GET /api/users/editors` - Get all editors
+- `GET /api/users` - Get all users (admin only)
+
+### File Upload
+- `POST /api/files/upload` - Upload video files
+
+## 🚦 Available Scripts
+
+- `npm start` - Start development server
+- `npm build` - Build for production
+- `npm test` - Run tests
+- `npm run eject` - Eject from Create React App
+
+## 🔐 Authentication
+
+The app uses JWT tokens for authentication:
+
+1. User logs in with username/password
+2. Backend returns JWT token
+3. Token is stored in localStorage
+4. Token is sent with all API requests
+5. Automatic logout on token expiration
+
+## 📱 Responsive Design
+
+The UI is fully responsive and works on:
+- **Desktop** (1024px+)
+- **Tablet** (768px - 1023px)
+- **Mobile** (320px - 767px)
+
+## 🎯 Key Features
+
+### Dashboard
+- Task statistics and metrics
+- Recent tasks overview
+- Quick actions and navigation
+
+### Task Board
+- Kanban-style columns (Draft, Assigned, In Progress, Review, Ready, Uploaded)
+- Drag & drop functionality (future enhancement)
+- Filtering and search
+- Priority and status indicators
+
+### Upload Video
+- Drag & drop file upload
+- Task creation form
+- Editor assignment
+- Priority and deadline setting
+
+### Team Management
+- Team member overview
+- Task assignments
+- Performance statistics
+- Role management (admin only)
+
+## 🔧 Configuration
+
+### Environment Variables
+```bash
+REACT_APP_API_URL=http://localhost:8080/api
+NODE_ENV=development
+REACT_APP_APP_NAME=YTManager
+REACT_APP_VERSION=1.0.0
+```
+
+### Proxy Configuration
+The `package.json` includes a proxy configuration for development:
+```json
+"proxy": "http://localhost:8080"
+```
+
+## 🚀 Deployment
+
+### Build for Production
+```bash
+npm run build
+```
+
+### Deploy to Static Hosting
+The build folder can be deployed to any static hosting service:
+- Netlify
+- Vercel
+- AWS S3 + CloudFront
+- GitHub Pages
+
+### Environment Variables for Production
+Make sure to set the correct API URL for production:
+```bash
+REACT_APP_API_URL=https://your-api-domain.com/api
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **CORS Errors**
+   - Ensure the backend CORS configuration allows the frontend domain
+   - Check the API URL in environment variables
+
+2. **Authentication Issues**
+   - Clear localStorage and try logging in again
+   - Check if the JWT token is expired
+
+3. **Build Errors**
+   - Delete `node_modules` and run `npm install` again
+   - Check for any TypeScript errors if using TS
+
+### Debug Mode
+Enable debug logging by setting:
+```bash
+REACT_APP_DEBUG=true
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 📞 Support
+
+For support and questions:
+- Create an issue in the repository
+- Contact the development team
+- Check the documentation
+
+---
+
+Built with ❤️ using React and modern web technologies.
