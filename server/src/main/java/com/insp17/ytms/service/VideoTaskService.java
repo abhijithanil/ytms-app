@@ -1,0 +1,320 @@
+package com.insp17.ytms.service;
+
+import com.insp17.ytms.entity.*;
+import com.insp17.ytms.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import jakarta.transaction.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@Transactional
+public class VideoTaskService {
+
+    @Autowired
+    private VideoTaskRepository videoTaskRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private RevisionRepository revisionRepository;
+
+    @Autowired
+    private CommentRepository commentRepository;
+
+    @Autowired
+    private AudioInstructionRepository audioInstructionRepository;
+
+    @Autowired
+    private TaskPermissionRepository taskPermissionRepository;
+
+    @Autowired
+    private FileStorageService fileStorageService;
+
+    @Autowired
+    private EmailService emailService;
+
+    public List<VideoTask> getAllTasks() {
+        return videoTaskRepository.findAll();
+    }
+
+    public List<VideoTask> getVisibleTasksForUser(Long userId) {
+        return videoTaskRepository.findVisibleTasksForUser(userId);
+    }
+
+    public List<VideoTask> getAccessibleTasksForUser(Long userId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        if (user.getRole() == UserRole.ADMIN) {
+            return getAllTasks();
+        }
+        return videoTaskRepository.findAccessibleTasksForUser(userId, userId);
+    }
+
+    public VideoTask getTaskById(Long id) {
+        return videoTaskRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Task not found"));
+    }
+
+    public Optional<VideoTask> getTaskByIdWithDetails(Long id) {
+        return videoTaskRepository.findByIdWithAllDetails(id);
+    }
+
+    public VideoTask createTask(VideoTask task, MultipartFile videoFile, List<MultipartFile> audioFiles) throws IOException {
+        // Upload raw video
+        if (videoFile != null && !videoFile.isEmpty()) {
+            FileStorageService.FileUploadResult result = fileStorageService.uploadVideo(videoFile, "raw-videos");
+            task.setRawVideoUrl(result.getUrl());
+            task.setRawVideoFilename(result.getOriginalFilename());
+        }
+
+        VideoTask savedTask = videoTaskRepository.save(task);
+
+        // Upload audio instructions
+        if (audioFiles != null && !audioFiles.isEmpty()) {
+            for (MultipartFile audioFile : audioFiles) {
+                if (!audioFile.isEmpty()) {
+                    addAudioInstruction(savedTask.getId(), audioFile, "", task.getCreatedBy());
+                }
+            }
+        }
+
+        return savedTask;
+    }
+
+    public VideoTask assignEditor(Long taskId, Long editorId, User assignedBy) {
+        VideoTask task = getTaskById(taskId);
+        User oldEditor = task.getAssignedEditor();
+        User newEditor = userRepository.findById(editorId)
+                .orElseThrow(() -> new RuntimeException("Editor not found"));
+
+        if (newEditor.getRole() != UserRole.EDITOR && newEditor.getRole() != UserRole.ADMIN) {
+            throw new RuntimeException("User is not an editor");
+        }
+
+        TaskStatus oldStatus = task.getTaskStatus();
+        task.setAssignedEditor(newEditor);
+        task.setTaskStatus(TaskStatus.DRAFT); // Move to DRAFT when editor changes
+        task.setUpdatedAt(LocalDateTime.now());
+
+        VideoTask savedTask = videoTaskRepository.save(task);
+
+        // Send email notifications
+        emailService.sendEditorChangedEmail(task, oldEditor, newEditor, assignedBy);
+        if (oldStatus != TaskStatus.DRAFT) {
+            emailService.sendStatusChangeEmail(task, oldStatus, TaskStatus.DRAFT, assignedBy);
+        }
+
+        return savedTask;
+    }
+
+    public VideoTask updateTaskStatus(Long taskId, TaskStatus newStatus, User updatedBy) {
+        VideoTask task = getTaskById(taskId);
+        TaskStatus oldStatus = task.getTaskStatus();
+
+        // Validate status transition
+        if (!isValidStatusTransition(oldStatus, newStatus, updatedBy.getRole())) {
+            throw new RuntimeException("Invalid status transition");
+        }
+
+        task.setTaskStatus(newStatus);
+        task.setUpdatedAt(LocalDateTime.now());
+
+        VideoTask savedTask = videoTaskRepository.save(task);
+
+        // Send email notifications
+        emailService.sendStatusChangeEmail(task, oldStatus, newStatus, updatedBy);
+
+        // Special notification for READY status
+        if (newStatus == TaskStatus.READY) {
+            emailService.sendTaskReadyForApprovalEmail(task, task.getAssignedEditor());
+        }
+
+        return savedTask;
+    }
+
+    private boolean isValidStatusTransition(TaskStatus oldStatus, TaskStatus newStatus, UserRole userRole) {
+        // Admin can change any status
+        if (userRole == UserRole.ADMIN) {
+            return true;
+        }
+
+        // Editor status transitions
+        if (userRole == UserRole.EDITOR) {
+            switch (oldStatus) {
+                case ASSIGNED:
+                    return newStatus == TaskStatus.IN_PROGRESS;
+                case IN_PROGRESS:
+                    return newStatus == TaskStatus.READY || newStatus == TaskStatus.REVIEW;
+                case REVIEW:
+                    return newStatus == TaskStatus.IN_PROGRESS || newStatus == TaskStatus.READY;
+                case READY:
+                    return newStatus == TaskStatus.IN_PROGRESS;
+                default:
+                    return false;
+            }
+        }
+
+        return false;
+    }
+
+    public List<VideoTask> getTasksByEditor(Long editorId) {
+        return videoTaskRepository.findByAssignedEditorId(editorId);
+    }
+
+    public List<VideoTask> getTasksByStatus(TaskStatus status) {
+        return videoTaskRepository.findByTaskStatus(status);
+    }
+
+    public void setTaskPrivacy(Long taskId, PrivacyLevel privacyLevel, List<Long> userIds) {
+        VideoTask task = getTaskById(taskId);
+        task.setPrivacyLevel(privacyLevel);
+        videoTaskRepository.save(task);
+
+        // Clear existing permissions
+        taskPermissionRepository.deleteByVideoTaskIdAndUserId(taskId, null);
+
+        // Add new permissions if SELECTED privacy
+        if (privacyLevel == PrivacyLevel.SELECTED && userIds != null) {
+            for (Long userId : userIds) {
+                User user = userRepository.findById(userId).orElse(null);
+                if (user != null) {
+                    TaskPermission permission = new TaskPermission(task, user, PermissionType.VIEW);
+                    taskPermissionRepository.save(permission);
+                }
+            }
+        }
+    }
+
+    public boolean canUserAccessTask(Long taskId, Long userId) {
+        VideoTask task = getTaskById(taskId);
+        User user = userRepository.findById(userId).orElse(null);
+
+        if (user == null) return false;
+
+        // Admin can access all tasks
+        if (user.getRole() == UserRole.ADMIN) return true;
+
+        // Task creator can access
+        if (task.getCreatedBy().getId().equals(userId)) return true;
+
+        // Assigned editor can access
+        if (task.getAssignedEditor() != null && task.getAssignedEditor().getId().equals(userId)) return true;
+
+        // Check privacy level
+        if (task.getPrivacyLevel() == PrivacyLevel.ALL) return true;
+
+        // Check specific permissions
+        return taskPermissionRepository.existsByVideoTaskIdAndUserIdAndPermissionType(taskId, userId, PermissionType.VIEW);
+    }
+
+    public boolean canUserDownloadTaskFiles(Long taskId, Long userId) {
+        VideoTask task = getTaskById(taskId);
+        User user = userRepository.findById(userId).orElse(null);
+
+        if (user == null) return false;
+
+        // Admin can download all
+        if (user.getRole() == UserRole.ADMIN) return true;
+
+        // Task creator can download
+        if (task.getCreatedBy().getId().equals(userId)) return true;
+
+        // Assigned editor can download
+        if (task.getAssignedEditor() != null && task.getAssignedEditor().getId().equals(userId)) return true;
+
+        // Check download permissions
+        return taskPermissionRepository.existsByVideoTaskIdAndUserIdAndPermissionType(taskId, userId, PermissionType.DOWNLOAD);
+    }
+
+    public void scheduleYouTubeUpload(Long taskId, LocalDateTime uploadTime) {
+        VideoTask task = getTaskById(taskId);
+        task.setYoutubeUploadTime(uploadTime);
+        task.setTaskStatus(TaskStatus.SCHEDULED);
+        videoTaskRepository.save(task);
+    }
+
+    public List<VideoTask> getScheduledTasksForUpload() {
+        return videoTaskRepository.findScheduledTasksForUpload(LocalDateTime.now());
+    }
+
+    public AudioInstruction addAudioInstruction(Long taskId, MultipartFile audioFile, String description, User uploadedBy) throws IOException {
+        VideoTask task = getTaskById(taskId);
+
+        FileStorageService.FileUploadResult result = fileStorageService.uploadAudio(audioFile, "audio-instructions");
+
+        AudioInstruction audioInstruction = new AudioInstruction(
+                task,
+                result.getUrl(),
+                result.getOriginalFilename(),
+                description,
+                uploadedBy
+        );
+
+        return audioInstructionRepository.save(audioInstruction);
+    }
+
+    public List<AudioInstruction> getAudioInstructions(Long taskId) {
+        return audioInstructionRepository.findByVideoTaskIdOrderByCreatedAtDesc(taskId);
+    }
+
+    public DashboardStats getDashboardStats(Long userId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+
+        DashboardStats stats = new DashboardStats();
+
+        if (user.getRole() == UserRole.ADMIN) {
+            stats.setTotalTasks(videoTaskRepository.count());
+            stats.setInProgress(videoTaskRepository.countByTaskStatus(TaskStatus.IN_PROGRESS));
+            stats.setReadyToUpload(videoTaskRepository.countByTaskStatus(TaskStatus.READY));
+            stats.setCompleted(videoTaskRepository.countByTaskStatus(TaskStatus.UPLOADED));
+        } else {
+            List<VideoTask> userTasks = getAccessibleTasksForUser(userId);
+            stats.setTotalTasks(userTasks.size());
+            stats.setInProgress(userTasks.stream().mapToInt(task -> task.getTaskStatus() == TaskStatus.IN_PROGRESS ? 1 : 0).sum());
+            stats.setReadyToUpload(userTasks.stream().mapToInt(task -> task.getTaskStatus() == TaskStatus.READY ? 1 : 0).sum());
+            stats.setCompleted(userTasks.stream().mapToInt(task -> task.getTaskStatus() == TaskStatus.UPLOADED ? 1 : 0).sum());
+        }
+
+        return stats;
+    }
+
+    public List<VideoTask> getRecentTasks(Long userId) {
+        if (userRepository.findById(userId).orElseThrow().getRole() == UserRole.ADMIN) {
+            return videoTaskRepository.findTop10ByOrderByCreatedAtDesc();
+        } else {
+            return getAccessibleTasksForUser(userId).stream()
+                    .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                    .limit(10)
+                    .toList();
+        }
+    }
+
+    public static class DashboardStats {
+        private long totalTasks;
+        private long inProgress;
+        private long readyToUpload;
+        private long completed;
+
+        // Getters and setters
+        public long getTotalTasks() { return totalTasks; }
+        public void setTotalTasks(long totalTasks) { this.totalTasks = totalTasks; }
+
+        public long getInProgress() { return inProgress; }
+        public void setInProgress(long inProgress) { this.inProgress = inProgress; }
+
+        public long getReadyToUpload() { return readyToUpload; }
+        public void setReadyToUpload(long readyToUpload) { this.readyToUpload = readyToUpload; }
+
+        public long getCompleted() { return completed; }
+        public void setCompleted(long completed) { this.completed = completed; }
+    }
+}

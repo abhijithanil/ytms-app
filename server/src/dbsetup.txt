@@ -1,0 +1,45 @@
+-- PostgreSQL Setup Script for YTMS
+
+-- 1. Connect to PostgreSQL as superuser (usually postgres)
+-- psql -U postgres
+
+-- 2. Create the database
+CREATE DATABASE ytms_db;
+
+-- 3. Create a user for the application
+CREATE USER ytms_user WITH PASSWORD 'ytms_password';
+
+-- 4. Grant privileges to the user
+GRANT ALL PRIVILEGES ON DATABASE ytms_db TO ytms_user;
+
+-- 5. Connect to the new database
+\c ytms_db;
+
+-- 6. Grant schema privileges
+GRANT ALL ON SCHEMA public TO ytms_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ytms_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ytms_user;
+
+-- 7. Set default privileges for future tables
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ytms_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ytms_user;
+
+
+-- 8. Create types
+ytms_db=# CREATE TYPE user_role AS ENUM ('ADMIN', 'EDITOR');
+CREATE TYPE
+ytms_db=# CREATE TYPE status AS ENUM ('PENDING', 'IN_PROGRESS', 'READY', 'COMPLETED', 'REVIEW', 'UPLOADED');
+CREATE TYPE
+
+-- Optional: Create initial admin user (will be handled by Spring Boot)
+-- This is just for reference
+/*
+INSERT INTO users (username, email, password, role, created_at)
+VALUES (
+    'admin',
+    'admin@ytms.com',
+    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', -- password: password
+    'ADMIN',
+    CURRENT_TIMESTAMP
+);
+*/
