@@ -21,6 +21,9 @@ public interface TaskPermissionRepository extends JpaRepository<TaskPermission, 
 
     void deleteByVideoTaskIdAndUserId(Long videoTaskId, Long userId);
 
+    // This is the new method that resolves the error
+    void deleteByVideoTaskId(Long videoTaskId);
+
     boolean existsByVideoTaskIdAndUserIdAndPermissionType(Long videoTaskId, Long userId, PermissionType permissionType);
 
     @Query("SELECT tp.user FROM TaskPermission tp WHERE tp.videoTask.id = :taskId AND tp.permissionType = :permissionType")

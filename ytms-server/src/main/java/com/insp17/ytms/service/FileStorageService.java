@@ -1,32 +1,42 @@
 package com.insp17.ytms.service;
 
+import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.cloud.storage.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.annotation.PostConstruct;
 import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
 
 @Service
 public class FileStorageService {
 
-    @Value("${deployed.at:INTERNAL}")
+    @Value("${deployed.at:GCP}")
     private String deploymentType;
 
-    @Value("${gcp.bucket.name:ytms-bucket}")
+    @Value("${gcp.bucket-name}")
     private String gcpBucketName;
 
     @Value("${file.storage.path:/mnt/storage/ytms}")
     private String internalStoragePath;
+
+    @Value("${gcp.service-account-key-path}")
+    private String serviceAccountKeyPath;
 
     private Storage storage = null;
 
@@ -34,13 +44,52 @@ public class FileStorageService {
     private static final long MAX_AUDIO_SIZE = 500L * 1024 * 1024; // 500MB
 
     public FileStorageService() {
+    }
+
+    @PostConstruct
+    public void initGCPStorage() throws IOException {
+        if (gcpBucketName == null) {
+            System.err.println("Bucket name is not confugured properly");
+            System.exit(1);
+        }
+
+        ServiceAccountCredentials credentials = ServiceAccountCredentials
+                .fromStream(new FileInputStream(serviceAccountKeyPath));
+
+        this.storage = StorageOptions.newBuilder()
+                .setCredentials(credentials)
+                .build()
+                .getService();
+    }
+
+    public String generateResumableUploadUrl(String objectName, String contentType) throws StorageException {
         try {
-            this.storage = StorageOptions.getDefaultInstance().getService();
+            System.out.println("Generating RESUMABLE upload URL for: " + objectName);
+
+            BlobInfo blobInfo = BlobInfo.newBuilder(BlobId.of(gcpBucketName, objectName))
+                    .setContentType(contentType)
+                    .build();
+
+            URL signedUrl = storage.signUrl(
+                    blobInfo,
+                    60,
+                    TimeUnit.MINUTES,
+                    Storage.SignUrlOption.httpMethod(HttpMethod.POST),
+                    Storage.SignUrlOption.withV4Signature(),
+                    Storage.SignUrlOption.withExtHeaders(Map.of(
+                            "x-goog-resumable", "start"
+                    ))
+            );
+
+            return signedUrl.toString();
+
         } catch (Exception e) {
-            // If GCP is not configured, this will be null and we'll use internal storage
-            System.out.println("GCP Storage not configured, using internal storage only");
+            System.err.println("Error generating resumable upload URL: " + e.getMessage());
+            e.printStackTrace();
+            throw new StorageException(500, "Failed to generate resumable upload URL: " + e.getMessage());
         }
     }
+
 
     public FileUploadResult uploadVideo(MultipartFile file, String folder) throws IOException {
         validateVideoFile(file);
@@ -152,7 +201,7 @@ public class FileStorageService {
         if (!Files.exists(uploadPath)) {
             try {
                 Files.createDirectories(uploadPath);
-            } catch (IOException ioException){
+            } catch (IOException ioException) {
                 ioException.printStackTrace();
             }
         }
@@ -267,7 +316,7 @@ public class FileStorageService {
         Files.deleteIfExists(fullPath);
     }
 
-    private String generateUniqueFilename(String originalFilename) {
+    public String generateUniqueFilename(String originalFilename) {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
         String uuid = UUID.randomUUID().toString().substring(0, 8);
         String extension = getFileExtension(originalFilename);

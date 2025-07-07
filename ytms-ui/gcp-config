@@ -1,0 +1,5 @@
+gcloud auth login
+
+gcloud config set project inspire26
+
+gcloud storage buckets update gs://ytmthelper-inspire26 --cors-file=cors-config.json 

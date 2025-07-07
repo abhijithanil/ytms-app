@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
 		<version>3.5.3</version>
-		<relativePath/> <!-- lookup parent from repository -->
-	</parent>
+		<relativePath/> </parent>
 	<groupId>com.insp17.ytms</groupId>
 	<artifactId>ytms</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
@@ -28,7 +27,6 @@
 			<version>6.2.3</version>
 		</dependency>
 
-		<!-- Spring Boot Starters -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
@@ -54,7 +52,6 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
-		<!-- Database -->
 		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
@@ -73,7 +70,6 @@
 			<scope>runtime</scope>
 		</dependency>
 
-		<!-- JWT for Authentication -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
 			<artifactId>jjwt-api</artifactId>
@@ -94,7 +90,6 @@
 			<scope>runtime</scope>
 		</dependency>
 
-		<!-- File Upload -->
 		<dependency>
 			<groupId>commons-fileupload</groupId>
 			<artifactId>commons-fileupload</artifactId>
@@ -107,13 +102,11 @@
 			<version>2.15.1</version>
 		</dependency>
 
-		<!-- WebSocket for real-time features -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-websocket</artifactId>
 		</dependency>
 
-		<!-- JSON Processing -->
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-core</artifactId>
@@ -129,13 +122,11 @@
 			<artifactId>jackson-datatype-jsr310</artifactId>
 		</dependency>
 
-		<!-- Email Support -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-mail</artifactId>
 		</dependency>
 
-		<!-- Cache Support -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-cache</artifactId>
@@ -146,20 +137,17 @@
 			<artifactId>ehcache</artifactId>
 		</dependency>
 
-		<!-- Documentation - Swagger/OpenAPI -->
 		<dependency>
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>2.6.0</version>
 		</dependency>
 
-		<!-- Logging -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-logging</artifactId>
 		</dependency>
 
-		<!-- Development Tools -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-devtools</artifactId>
@@ -173,7 +161,6 @@
 			<optional>true</optional>
 		</dependency>
 
-		<!-- Testing -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
@@ -204,21 +191,18 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- Cloud Storage (AWS S3, Google Cloud, etc.) -->
 		<dependency>
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>s3</artifactId>
 			<version>2.25.11</version>
 		</dependency>
 
-		<!-- Apache Tika for file type detection -->
 		<dependency>
 			<groupId>org.apache.tika</groupId>
 			<artifactId>tika-core</artifactId>
 			<version>2.9.1</version>
 		</dependency>
 
-		<!-- ModelMapper for DTO mapping -->
 		<dependency>
 			<groupId>org.modelmapper</groupId>
 			<artifactId>modelmapper</artifactId>
@@ -279,7 +263,6 @@
 				</configuration>
 			</plugin>
 
-			<!-- Plugin for generating build info -->
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
@@ -292,7 +275,6 @@
 				</executions>
 			</plugin>
 
-			<!-- Plugin for code coverage -->
 			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
@@ -313,14 +295,12 @@
 				</executions>
 			</plugin>
 
-			<!-- Plugin for static code analysis -->
 			<plugin>
 				<groupId>com.github.spotbugs</groupId>
 				<artifactId>spotbugs-maven-plugin</artifactId>
 				<version>4.8.3.0</version>
 			</plugin>
 
-			<!-- Plugin for dependency vulnerability scanning -->
 			<plugin>
 				<groupId>org.owasp</groupId>
 				<artifactId>dependency-check-maven</artifactId>
@@ -337,7 +317,6 @@
 	</build>
 
 	<profiles>
-		<!-- Development Profile -->
 		<profile>
 			<id>dev</id>
 			<properties>
@@ -348,7 +327,6 @@
 			</activation>
 		</profile>
 
-		<!-- Production Profile -->
 		<profile>
 			<id>prod</id>
 			<properties>
@@ -370,7 +348,6 @@
 			</build>
 		</profile>
 
-		<!-- Testing Profile -->
 		<profile>
 			<id>test</id>
 			<properties>
@@ -378,18 +355,6 @@
 			</properties>
 		</profile>
 	</profiles>
-
-<!--	<repositories>-->
-<!--		<repository>-->
-<!--			<id>spring-releases</id>-->
-<!--			<name>Spring Releases</name>-->
-<!--			<url>https://repo.spring.io/release</url>-->
-<!--			<snapshots>-->
-<!--				<enabled>false</enabled>-->
-<!--			</snapshots>-->
-<!--		</repository>-->
-<!--	</repositories>-->
-
 
 	<pluginRepositories>
 		<pluginRepository>

@@ -3,10 +3,7 @@ package com.insp17.ytms.service;
 import com.insp17.ytms.entity.*;
 import com.insp17.ytms.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
-
 import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -68,26 +65,10 @@ public class VideoTaskService {
         return videoTaskRepository.findByIdWithAllDetails(id);
     }
 
-    public VideoTask createTask(VideoTask task, MultipartFile videoFile, List<MultipartFile> audioFiles) throws IOException {
-        // Upload raw video
-        if (videoFile != null && !videoFile.isEmpty()) {
-            FileStorageService.FileUploadResult result = fileStorageService.uploadVideo(videoFile, "raw-videos");
-            task.setRawVideoUrl(result.getUrl());
-            task.setRawVideoFilename(result.getOriginalFilename());
-        }
-
-        VideoTask savedTask = videoTaskRepository.save(task);
-
-        // Upload audio instructions
-        if (audioFiles != null && !audioFiles.isEmpty()) {
-            for (MultipartFile audioFile : audioFiles) {
-                if (!audioFile.isEmpty()) {
-                    addAudioInstruction(savedTask.getId(), audioFile, "", task.getCreatedBy());
-                }
-            }
-        }
-
-        return savedTask;
+    public VideoTask createTask(VideoTask task) {
+        // This method is now corrected to only accept the task object.
+        // File handling is done via direct upload before this is called.
+        return videoTaskRepository.save(task);
     }
 
     public VideoTask assignEditor(Long taskId, Long editorId, User assignedBy) {
@@ -102,15 +83,14 @@ public class VideoTaskService {
 
         TaskStatus oldStatus = task.getTaskStatus();
         task.setAssignedEditor(newEditor);
-        task.setTaskStatus(TaskStatus.DRAFT); // Move to DRAFT when editor changes
+        task.setTaskStatus(TaskStatus.ASSIGNED);
         task.setUpdatedAt(LocalDateTime.now());
 
         VideoTask savedTask = videoTaskRepository.save(task);
 
-        // Send email notifications
         emailService.sendEditorChangedEmail(task, oldEditor, newEditor, assignedBy);
-        if (oldStatus != TaskStatus.DRAFT) {
-            emailService.sendStatusChangeEmail(task, oldStatus, TaskStatus.DRAFT, assignedBy);
+        if (oldStatus != TaskStatus.ASSIGNED) {
+            emailService.sendStatusChangeEmail(task, oldStatus, TaskStatus.ASSIGNED, assignedBy);
         }
 
         return savedTask;
@@ -120,7 +100,6 @@ public class VideoTaskService {
         VideoTask task = getTaskById(taskId);
         TaskStatus oldStatus = task.getTaskStatus();
 
-        // Validate status transition
         if (!isValidStatusTransition(oldStatus, newStatus, updatedBy.getRole())) {
             throw new RuntimeException("Invalid status transition");
         }
@@ -130,10 +109,8 @@ public class VideoTaskService {
 
         VideoTask savedTask = videoTaskRepository.save(task);
 
-        // Send email notifications
         emailService.sendStatusChangeEmail(task, oldStatus, newStatus, updatedBy);
 
-        // Special notification for READY status
         if (newStatus == TaskStatus.READY) {
             emailService.sendTaskReadyForApprovalEmail(task, task.getAssignedEditor());
         }
@@ -142,12 +119,10 @@ public class VideoTaskService {
     }
 
     private boolean isValidStatusTransition(TaskStatus oldStatus, TaskStatus newStatus, UserRole userRole) {
-        // Admin can change any status
         if (userRole == UserRole.ADMIN) {
             return true;
         }
 
-        // Editor status transitions
         if (userRole == UserRole.EDITOR) {
             switch (oldStatus) {
                 case ASSIGNED:
@@ -179,10 +154,8 @@ public class VideoTaskService {
         task.setPrivacyLevel(privacyLevel);
         videoTaskRepository.save(task);
 
-        // Clear existing permissions
-        taskPermissionRepository.deleteByVideoTaskIdAndUserId(taskId, null);
+        taskPermissionRepository.deleteByVideoTaskId(taskId);
 
-        // Add new permissions if SELECTED privacy
         if (privacyLevel == PrivacyLevel.SELECTED && userIds != null) {
             for (Long userId : userIds) {
                 User user = userRepository.findById(userId).orElse(null);
@@ -199,20 +172,11 @@ public class VideoTaskService {
         User user = userRepository.findById(userId).orElse(null);
 
         if (user == null) return false;
-
-        // Admin can access all tasks
         if (user.getRole() == UserRole.ADMIN) return true;
-
-        // Task creator can access
         if (task.getCreatedBy().getId().equals(userId)) return true;
-
-        // Assigned editor can access
         if (task.getAssignedEditor() != null && task.getAssignedEditor().getId().equals(userId)) return true;
-
-        // Check privacy level
         if (task.getPrivacyLevel() == PrivacyLevel.ALL) return true;
 
-        // Check specific permissions
         return taskPermissionRepository.existsByVideoTaskIdAndUserIdAndPermissionType(taskId, userId, PermissionType.VIEW);
     }
 
@@ -221,17 +185,10 @@ public class VideoTaskService {
         User user = userRepository.findById(userId).orElse(null);
 
         if (user == null) return false;
-
-        // Admin can download all
         if (user.getRole() == UserRole.ADMIN) return true;
-
-        // Task creator can download
         if (task.getCreatedBy().getId().equals(userId)) return true;
-
-        // Assigned editor can download
         if (task.getAssignedEditor() != null && task.getAssignedEditor().getId().equals(userId)) return true;
 
-        // Check download permissions
         return taskPermissionRepository.existsByVideoTaskIdAndUserIdAndPermissionType(taskId, userId, PermissionType.DOWNLOAD);
     }
 
