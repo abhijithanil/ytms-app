@@ -1,19 +1,26 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import Layout from './components/Layout/Layout';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import TaskBoard from './pages/TaskBoard';
-import TaskDetails from './pages/TaskDetails';
-import UploadVideo from './pages/UploadVideo';
-import Team from './pages/Team';
-import './App.css';
+import React from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { Toaster } from "react-hot-toast";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+
+import Layout from "./components/Layout/Layout";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import TaskBoard from "./pages/TaskBoard";
+import TaskDetails from "./pages/TaskDetails";
+import UploadVideo from "./pages/UploadVideo";
+
+import Team from "./pages/Team";
+import "./App.css";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -21,13 +28,13 @@ function ProtectedRoute({ children }) {
       </div>
     );
   }
-  
+
   return user ? children : <Navigate to="/login" />;
 }
 
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -35,7 +42,7 @@ function PublicRoute({ children }) {
       </div>
     );
   }
-  
+
   return !user ? children : <Navigate to="/dashboard" />;
 }
 
@@ -44,36 +51,36 @@ function App() {
     <AuthProvider>
       <Router>
         <div className="App">
-          <Toaster 
+          <Toaster
             position="top-right"
             toastOptions={{
               duration: 4000,
               style: {
-                background: '#363636',
-                color: '#fff',
+                background: "#363636",
+                color: "#fff",
               },
               success: {
                 duration: 3000,
                 theme: {
-                  primary: 'green',
-                  secondary: 'black',
+                  primary: "green",
+                  secondary: "black",
                 },
               },
             }}
           />
-          
+
           <Routes>
-            <Route 
-              path="/login" 
+            <Route
+              path="/login"
               element={
                 <PublicRoute>
                   <Login />
                 </PublicRoute>
-              } 
+              }
             />
-            
-            <Route 
-              path="/*" 
+
+            <Route
+              path="/*"
               element={
                 <ProtectedRoute>
                   <Layout>
@@ -87,7 +94,7 @@ function App() {
                     </Routes>
                   </Layout>
                 </ProtectedRoute>
-              } 
+              }
             />
           </Routes>
         </div>

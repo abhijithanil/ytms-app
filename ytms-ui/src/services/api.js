@@ -172,6 +172,7 @@ export const tasksAPI = {
 // Revisions API
 export const revisionsAPI = {
   createRevision: (formData) => {
+    debugger
     console.log('Creating revision with form data');
     
     const uploadApi = axios.create({
@@ -188,7 +189,7 @@ export const revisionsAPI = {
     );
     
     return uploadApi.post('/revisions', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'application/json' }
     });
   },
   getRevisionsByTask: (taskId) => {
