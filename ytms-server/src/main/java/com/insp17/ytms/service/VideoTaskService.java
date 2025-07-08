@@ -2,8 +2,8 @@ package com.insp17.ytms.service;
 
 import com.insp17.ytms.entity.*;
 import com.insp17.ytms.repository.*;
-import org.springframework.beans.factory.annotation.Autowired;
 import jakarta.transaction.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -74,6 +74,12 @@ public class VideoTaskService {
     public VideoTask assignEditor(Long taskId, Long editorId, User assignedBy) {
         VideoTask task = getTaskById(taskId);
         User oldEditor = task.getAssignedEditor();
+
+        if(editorId == null) {
+            task.setAssignedEditor(null);
+            return videoTaskRepository.save(task);
+        }
+
         User newEditor = userRepository.findById(editorId)
                 .orElseThrow(() -> new RuntimeException("Editor not found"));
 
@@ -255,6 +261,8 @@ public class VideoTaskService {
         }
     }
 
+
+
     public static class DashboardStats {
         private long totalTasks;
         private long inProgress;
@@ -262,16 +270,36 @@ public class VideoTaskService {
         private long completed;
 
         // Getters and setters
-        public long getTotalTasks() { return totalTasks; }
-        public void setTotalTasks(long totalTasks) { this.totalTasks = totalTasks; }
+        public long getTotalTasks() {
+            return totalTasks;
+        }
 
-        public long getInProgress() { return inProgress; }
-        public void setInProgress(long inProgress) { this.inProgress = inProgress; }
+        public void setTotalTasks(long totalTasks) {
+            this.totalTasks = totalTasks;
+        }
 
-        public long getReadyToUpload() { return readyToUpload; }
-        public void setReadyToUpload(long readyToUpload) { this.readyToUpload = readyToUpload; }
+        public long getInProgress() {
+            return inProgress;
+        }
 
-        public long getCompleted() { return completed; }
-        public void setCompleted(long completed) { this.completed = completed; }
+        public void setInProgress(long inProgress) {
+            this.inProgress = inProgress;
+        }
+
+        public long getReadyToUpload() {
+            return readyToUpload;
+        }
+
+        public void setReadyToUpload(long readyToUpload) {
+            this.readyToUpload = readyToUpload;
+        }
+
+        public long getCompleted() {
+            return completed;
+        }
+
+        public void setCompleted(long completed) {
+            this.completed = completed;
+        }
     }
 }

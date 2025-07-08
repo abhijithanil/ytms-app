@@ -7,7 +7,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.PostConstruct;
-import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -132,7 +131,7 @@ public class FileStorageService {
         // Check file extension
         String filename = file.getOriginalFilename();
         if (filename == null || !isValidVideoExtension(filename)) {
-            throw new IOException("Invalid video file extension. Supported: mp4, mov, avi, mkv, wmv, webm, flv, m4v");
+            throw new IOException("Invalid video file extension. Supported: mp4, mov, avi, wmv, webm, flv, m4v");
         }
     }
 
@@ -158,7 +157,7 @@ public class FileStorageService {
     }
 
     private boolean isValidVideoExtension(String filename) {
-        String[] validExtensions = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm", ".flv", ".m4v"};
+        String[] validExtensions = {".mp4", ".mov", ".avi", ".wmv", ".webm", ".flv", ".m4v"};
         String lowerFilename = filename.toLowerCase();
         for (String ext : validExtensions) {
             if (lowerFilename.endsWith(ext)) {
@@ -218,76 +217,38 @@ public class FileStorageService {
         return new FileUploadResult(url, file.getOriginalFilename(), file.getSize());
     }
 
-    public InputStream downloadFileAsStream(String filePath) throws IOException {
-        if ("GCP".equals(deploymentType) && storage != null) {
-            return downloadStreamFromGCP(filePath);
-        } else {
-            return downloadStreamFromInternal(filePath);
-        }
+
+    public String getSignedUrlToDownload(String gcsUrl) throws IOException {
+
+        String objectName = getString(gcsUrl);
+
+        URL signedUrl = storage.signUrl(
+                BlobInfo.newBuilder(gcpBucketName, objectName).build(),
+                60,
+                TimeUnit.MINUTES,
+                Storage.SignUrlOption.httpMethod(HttpMethod.GET),
+                Storage.SignUrlOption.withV4Signature()
+        );
+
+        return signedUrl.toString();
     }
 
-    public byte[] downloadFile(String filePath) throws IOException {
-        if ("GCP".equals(deploymentType) && storage != null) {
-            return downloadFromGCP(filePath);
-        } else {
-            return downloadFromInternal(filePath);
+    private static String getString(String gcsUrl) {
+        if (!gcsUrl.startsWith("gs://")) {
+            throw new IllegalArgumentException("Invalid GCS URL format. Expected gs://bucket-name/object-name");
         }
+
+        String pathWithoutProtocol = gcsUrl.substring(5); // Remove "gs://"
+        int firstSlashIndex = pathWithoutProtocol.indexOf('/');
+
+        if (firstSlashIndex == -1) {
+            throw new IllegalArgumentException("Invalid GCS URL format. Missing object name");
+        }
+
+        String objectName = pathWithoutProtocol.substring(firstSlashIndex + 1);
+        return objectName;
     }
 
-    private byte[] downloadFromGCP(String filePath) {
-        if (storage == null) {
-            throw new RuntimeException("GCP Storage is not configured");
-        }
-
-        String objectName = filePath.replace("gs://" + gcpBucketName + "/", "");
-        Blob blob = storage.get(gcpBucketName, objectName);
-
-        if (blob == null) {
-            throw new RuntimeException("File not found: " + filePath);
-        }
-
-        return blob.getContent();
-    }
-
-    private InputStream downloadStreamFromGCP(String filePath) throws IOException {
-        if (storage == null) {
-            throw new IOException("GCP Storage is not configured");
-        }
-
-        String objectName = filePath.replace("gs://" + gcpBucketName + "/", "");
-        Blob blob = storage.get(gcpBucketName, objectName);
-
-        if (blob == null) {
-            throw new IOException("File not found: " + filePath);
-        }
-
-        // For large files, use getContent() and wrap in ByteArrayInputStream
-        // For production, you might want to use blob.reader() for streaming
-        byte[] content = blob.getContent();
-        return new ByteArrayInputStream(content);
-    }
-
-    private byte[] downloadFromInternal(String filePath) throws IOException {
-        String objectPath = filePath.replace("/files/", "");
-        Path fullPath = Paths.get(internalStoragePath, objectPath);
-
-        if (!Files.exists(fullPath)) {
-            throw new IOException("File not found: " + filePath);
-        }
-
-        return Files.readAllBytes(fullPath);
-    }
-
-    private InputStream downloadStreamFromInternal(String filePath) throws IOException {
-        String objectPath = filePath.replace("/files/", "");
-        Path fullPath = Paths.get(internalStoragePath, objectPath);
-
-        if (!Files.exists(fullPath)) {
-            throw new IOException("File not found: " + filePath);
-        }
-
-        return Files.newInputStream(fullPath);
-    }
 
     public void deleteFile(String filePath) throws IOException {
         if ("GCP".equals(deploymentType) && storage != null) {
@@ -352,6 +313,32 @@ public class FileStorageService {
 
     public String getStorageType() {
         return isGcpConfigured() ? "GCP" : "INTERNAL";
+    }
+
+    public String getGcpBucketName() {
+        return gcpBucketName;
+    }
+
+    public String generateSignedUrlForDownload(String objectName) {
+        try {
+            BlobInfo blobInfo = BlobInfo.newBuilder(BlobId.of(gcpBucketName, objectName)).build();
+
+            URL signedUrl = storage.signUrl(
+                    blobInfo,
+                    15,
+                    TimeUnit.MINUTES,
+                    Storage.SignUrlOption.withV4Signature(),
+                    Storage.SignUrlOption.httpMethod(HttpMethod.GET)
+            );
+            return signedUrl.toString();
+        } catch (Exception e) {
+            System.err.println("Error generating signed URL for " + objectName + ": " + e.getMessage());
+            throw new RuntimeException("Could not generate signed URL", e);
+        }
+    }
+
+    public byte[] downloadFile(String audioUrl) throws IOException {
+        return null;
     }
 
     public static class FileUploadResult {

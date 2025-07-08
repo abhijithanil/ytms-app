@@ -8,6 +8,7 @@ import com.insp17.ytms.service.VideoTaskService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.config.Task;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -191,4 +192,44 @@ public class VideoTaskController {
                 .collect(Collectors.toList());
         return ResponseEntity.ok(taskDTOs);
     }
+
+    @GetMapping("/{id}/video-url")
+    public ResponseEntity<Map<String, String>> getTaskVideoUrl(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
+        if (!videoTaskService.canUserAccessTask(id, userPrincipal.getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        VideoTask task = videoTaskService.getTaskById(id);
+        if (task.getRawVideoUrl() == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        String objectName = task.getRawVideoUrl().replace("gs://" + fileStorageService.getGcpBucketName() + "/", "");
+        String signedUrl = fileStorageService.generateSignedUrlForDownload(objectName);
+
+        Map<String, String> response = new HashMap<>();
+        response.put("url", signedUrl);
+        response.put("objectName", objectName);
+
+        return ResponseEntity.ok(response);
+    }
+
+
+//    @GetMapping("/revisions/{revisionId}/video-url")
+//    public ResponseEntity<Map<String, String>> getRevisionVideoUrl(@PathVariable Long revisionId, @CurrentUser UserPrincipal userPrincipal) {
+//        Revision revision = revisionService.getRevisionById(revisionId);
+//        if (!videoTaskService.canUserAccessTask(revision.getVideoTask().getId(), userPrincipal.getId())) {
+//            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+//        }
+//        if (revision.getEditedVideoUrl() == null) {
+//            return ResponseEntity.notFound().build();
+//        }
+//
+//        String objectName = revision.getEditedVideoUrl().replace("gs://" + fileStorageService.getGcpBucketName() + "/", "");
+//        String signedUrl = fileStorageService.generateSignedUrlForDownload(objectName);
+//
+//        Map<String, String> response = new HashMap<>();
+//        response.put("url", signedUrl);
+//
+//        return ResponseEntity.ok(response);
+//    }
 }

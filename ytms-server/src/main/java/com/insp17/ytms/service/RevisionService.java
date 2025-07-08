@@ -1,5 +1,6 @@
 package com.insp17.ytms.service;
 
+import com.insp17.ytms.dtos.RevisionRequest;
 import com.insp17.ytms.entity.Comment;
 import com.insp17.ytms.entity.Revision;
 import com.insp17.ytms.entity.User;
@@ -10,7 +11,6 @@ import com.insp17.ytms.repository.VideoTaskRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
@@ -35,21 +35,15 @@ public class RevisionService {
     @Autowired
     private EmailService emailService;
 
-    public Revision createRevision(Long taskId, MultipartFile videoFile, String notes, User uploadedBy) throws IOException {
-        VideoTask task = videoTaskRepository.findById(taskId)
+    public Revision createRevision(RevisionRequest revisionRequest, User uploadedBy) throws IOException {
+        VideoTask task = videoTaskRepository.findById(revisionRequest.getVideoTaskId())
                 .orElseThrow(() -> new RuntimeException("Task not found"));
 
-        Integer nextRevisionNumber = getNextRevisionNumber(taskId);
+        Integer nextRevisionNumber = getNextRevisionNumber(revisionRequest.getVideoTaskId());
 
-        FileStorageService.FileUploadResult result = fileStorageService.uploadVideo(videoFile, "revisions");
 
         Revision revision = new Revision(
-                task,
-                nextRevisionNumber,
-                result.getUrl(),
-                result.getOriginalFilename(),
-                notes,
-                uploadedBy
+                task, nextRevisionNumber, revisionRequest.getEditedVideoUrl(), revisionRequest.getEditedVideoFilename(), revisionRequest.getNotes(), uploadedBy
         );
 
         Revision savedRevision = revisionRepository.save(revision);

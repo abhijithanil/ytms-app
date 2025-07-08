@@ -2,9 +2,13 @@ package com.insp17.ytms.controllers;
 
 import com.insp17.ytms.dtos.CurrentUser;
 import com.insp17.ytms.dtos.UserPrincipal;
-import com.insp17.ytms.entity.*;
-import com.insp17.ytms.service.*;
+import com.insp17.ytms.entity.AudioInstruction;
+import com.insp17.ytms.entity.Revision;
+import com.insp17.ytms.entity.VideoTask;
 import com.insp17.ytms.repository.AudioInstructionRepository;
+import com.insp17.ytms.service.FileStorageService;
+import com.insp17.ytms.service.RevisionService;
+import com.insp17.ytms.service.VideoTaskService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
@@ -16,6 +20,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -237,7 +243,7 @@ public class FileController {
     }
 
     @GetMapping("/download/video/{taskId}")
-    public ResponseEntity<Resource> downloadRawVideo(@PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
+    public ResponseEntity<Map<String,String>> downloadRawVideo(@PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
         try {
             System.out.println("Downloading raw video for task: " + taskId + " by user: " + userPrincipal.getUsername());
 
@@ -251,16 +257,12 @@ public class FileController {
                 return ResponseEntity.notFound().build();
             }
 
-            byte[] fileContent = fileStorageService.downloadFile(task.getRawVideoUrl());
-            ByteArrayResource resource = new ByteArrayResource(fileContent);
+            String signedUrl = fileStorageService.getSignedUrlToDownload(task.getRawVideoUrl());
 
-            String filename = task.getRawVideoFilename() != null ? task.getRawVideoFilename() : "video.mp4";
-
-            return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                    .contentLength(fileContent.length)
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                    .body(resource);
+            Map<String, String> response = new HashMap<>();
+            response.put("signedUrl", signedUrl);
+            response.put("fileName", task.getRawVideoFilename());
+            return ResponseEntity.ok(response);
 
         } catch (IOException e) {
             System.err.println("Error downloading video for task " + taskId + ": " + e.getMessage());
@@ -269,7 +271,7 @@ public class FileController {
     }
 
     @GetMapping("/download/revision/{revisionId}")
-    public ResponseEntity<Resource> downloadRevisionVideo(@PathVariable Long revisionId, @CurrentUser UserPrincipal userPrincipal) {
+    public ResponseEntity<Map<String, String>> downloadRevisionVideo(@PathVariable Long revisionId, @CurrentUser UserPrincipal userPrincipal) {
         try {
             System.out.println("Downloading revision video: " + revisionId + " by user: " + userPrincipal.getUsername());
 
@@ -279,16 +281,12 @@ public class FileController {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
 
-            byte[] fileContent = fileStorageService.downloadFile(revision.getEditedVideoUrl());
-            ByteArrayResource resource = new ByteArrayResource(fileContent);
+            String signedUrl = fileStorageService.getSignedUrlToDownload(revision.getEditedVideoUrl());
 
-            String filename = revision.getEditedVideoFilename() != null ? revision.getEditedVideoFilename() : "revision.mp4";
-
-            return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                    .contentLength(fileContent.length)
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                    .body(resource);
+            Map<String, String> response = new HashMap<>();
+            response.put("signedUrl", signedUrl);
+            response.put("fileName", revision.getEditedVideoFilename());
+            return ResponseEntity.ok(response);
 
         } catch (IOException e) {
             System.err.println("Error downloading revision " + revisionId + ": " + e.getMessage());
@@ -301,13 +299,20 @@ public class FileController {
 
         String extension = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
         switch (extension) {
-            case "mp4": return "video/mp4";
-            case "mov": return "video/quicktime";
-            case "avi": return "video/x-msvideo";
-            case "mkv": return "video/x-matroska";
-            case "wmv": return "video/x-ms-wmv";
-            case "webm": return "video/webm";
-            default: return "video/mp4";
+            case "mp4":
+                return "video/mp4";
+            case "mov":
+                return "video/quicktime";
+            case "avi":
+                return "video/x-msvideo";
+            case "mkv":
+                return "video/x-matroska";
+            case "wmv":
+                return "video/x-ms-wmv";
+            case "webm":
+                return "video/webm";
+            default:
+                return "video/mp4";
         }
     }
 
@@ -316,12 +321,18 @@ public class FileController {
 
         String extension = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
         switch (extension) {
-            case "mp3": return "audio/mpeg";
-            case "wav": return "audio/wav";
-            case "m4a": return "audio/mp4";
-            case "aac": return "audio/aac";
-            case "ogg": return "audio/ogg";
-            default: return "audio/mpeg";
+            case "mp3":
+                return "audio/mpeg";
+            case "wav":
+                return "audio/wav";
+            case "m4a":
+                return "audio/mp4";
+            case "aac":
+                return "audio/aac";
+            case "ogg":
+                return "audio/ogg";
+            default:
+                return "audio/mpeg";
         }
     }
 }

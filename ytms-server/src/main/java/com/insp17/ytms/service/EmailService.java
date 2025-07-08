@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import com.insp17.ytms.entity.VideoTask;
 import com.insp17.ytms.entity.User;
@@ -18,6 +19,7 @@ public class EmailService {
     @Value("${spring.mail.from}")
     private String fromEmail;
 
+    @Async("verificationEmailTaskExecutor")
     public void sendTaskAssignedEmail(VideoTask task, User editor) {
         String subject = "New Task Assigned: " + task.getTitle();
         String body = String.format(
@@ -40,6 +42,7 @@ public class EmailService {
         sendEmail(editor.getEmail(), subject, body);
     }
 
+    @Async("verificationEmailTaskExecutor")
     public void sendStatusChangeEmail(VideoTask task, TaskStatus oldStatus, TaskStatus newStatus, User changedBy) {
         String subject = "Task Status Updated: " + task.getTitle();
         String body = String.format(
@@ -68,6 +71,7 @@ public class EmailService {
         }
     }
 
+    @Async("verificationEmailTaskExecutor")
     public void sendRevisionUploadedEmail(VideoTask task, int revisionNumber, User uploadedBy) {
         String subject = "New Revision Uploaded: " + task.getTitle();
         String body = String.format(
@@ -94,6 +98,7 @@ public class EmailService {
         }
     }
 
+    @Async("verificationEmailTaskExecutor")
     public void sendTaskReadyForApprovalEmail(VideoTask task, User editor) {
         String subject = "Task Ready for Approval: " + task.getTitle();
         String body = String.format(
@@ -114,6 +119,7 @@ public class EmailService {
         }
     }
 
+    @Async("verificationEmailTaskExecutor")
     public void sendYouTubeUploadNotification(VideoTask task, String youtubeVideoId) {
         String subject = "Video Uploaded to YouTube: " + task.getTitle();
         String body = String.format(
@@ -139,6 +145,7 @@ public class EmailService {
         }
     }
 
+    @Async("verificationEmailTaskExecutor")
     public void sendEditorChangedEmail(VideoTask task, User oldEditor, User newEditor, User changedBy) {
         String subject = "Task Editor Changed: " + task.getTitle();
 
