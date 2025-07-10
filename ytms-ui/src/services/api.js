@@ -171,7 +171,6 @@ export const tasksAPI = {
     return api.post(`/tasks/${taskId}/schedule-upload`, { uploadTime });
   },
   addAudioInstruction: (audioInstruction) => {
-    debugger;
     console.log(`Adding audio instruction to task ${audioInstruction.videoTaskId}`);
     return api.post(`/tasks/${audioInstruction.videoTaskId}/audio-instructions`, audioInstruction);
   },
@@ -184,7 +183,6 @@ export const tasksAPI = {
 // Revisions API
 export const revisionsAPI = {
   createRevision: (formData) => {
-    debugger;
     console.log("Creating revision with form data");
 
     const uploadApi = axios.create({

@@ -533,7 +533,6 @@ const UploadVideo = () => {
       }
 
       let commentList = [];
-      debugger;
       if (audioInstructionUrls.length > 0) {
         const comment = `${user.username || "User"} added ${
           audioInstructionUrls.length

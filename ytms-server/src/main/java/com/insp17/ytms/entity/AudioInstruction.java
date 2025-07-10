@@ -31,10 +31,11 @@ public class AudioInstruction {
     private User uploadedBy;
 
     @Column(name = "created_at")
-    private LocalDateTime createdAt;
+    private LocalDateTime createdAt = LocalDateTime.now();
 
     // Constructors, getters, setters
-    public AudioInstruction() {}
+    public AudioInstruction() {
+    }
 
     public AudioInstruction(VideoTask videoTask, String audioUrl, String audioFilename, String description, User uploadedBy) {
         this.videoTask = videoTask;
@@ -46,24 +47,59 @@ public class AudioInstruction {
     }
 
     // Getters and setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public VideoTask getVideoTask() { return videoTask; }
-    public void setVideoTask(VideoTask videoTask) { this.videoTask = videoTask; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public String getAudioUrl() { return audioUrl; }
-    public void setAudioUrl(String audioUrl) { this.audioUrl = audioUrl; }
+    public VideoTask getVideoTask() {
+        return videoTask;
+    }
 
-    public String getAudioFilename() { return audioFilename; }
-    public void setAudioFilename(String audioFilename) { this.audioFilename = audioFilename; }
+    public void setVideoTask(VideoTask videoTask) {
+        this.videoTask = videoTask;
+    }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public String getAudioUrl() {
+        return audioUrl;
+    }
 
-    public User getUploadedBy() { return uploadedBy; }
-    public void setUploadedBy(User uploadedBy) { this.uploadedBy = uploadedBy; }
+    public void setAudioUrl(String audioUrl) {
+        this.audioUrl = audioUrl;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public String getAudioFilename() {
+        return audioFilename;
+    }
+
+    public void setAudioFilename(String audioFilename) {
+        this.audioFilename = audioFilename;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public User getUploadedBy() {
+        return uploadedBy;
+    }
+
+    public void setUploadedBy(User uploadedBy) {
+        this.uploadedBy = uploadedBy;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
 }

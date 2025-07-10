@@ -79,7 +79,6 @@ const TaskEditorAssigner = ({ task, onTaskUpdate }) => {
     try {
       // API call with null to unassign
       console.log(task.id)
-      debugger
       const response = await tasksAPI.assignEditor(task.id, null);
       toast.success('Editor unassigned.', { id: toastId });
       onTaskUpdate(response.data);

@@ -543,7 +543,6 @@ const TaskDetails = () => {
       toast.error("Please record an audio instruction first.");
       return;
     }
-    debugger;
 
     try {
       // Upload the audio blob
@@ -568,7 +567,6 @@ const TaskDetails = () => {
       const gcsUrl = `gs://${
         process.env.REACT_APP_GCP_BUCKET_NAME || "ytmthelper-inspire26"
       }/${objectName}`;
-      debugger;
 
       // Create audio instruction using the existing method
       const audioInstruction = {
@@ -691,7 +689,6 @@ const TaskDetails = () => {
   };
 
   const handlePlayAudio = async (audioId) => {
-    debugger
     if (playingAudio === audioId) {
       // Pause current audio
 
@@ -1742,7 +1739,7 @@ const TaskDetails = () => {
                             {formatDistanceToNow(new Date(audio.createdAt), {
                               addSuffix: true,
                             })}
-                            by {audio.uploadedBy.username}
+                            {" by "} {audio.uploadedBy.username}
                           </p>
                         </div>
                       </div>
