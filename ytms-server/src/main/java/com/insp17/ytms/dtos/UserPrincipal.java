@@ -11,11 +11,11 @@ import java.util.List;
 import java.util.Objects;
 
 public class UserPrincipal implements UserDetails {
-    private Long id;
-    private String username;
+    private final Long id;
+    private final String username;
     private String email;
-    private String password;
-    private Collection<? extends GrantedAuthority> authorities;
+    private final String password;
+    private final Collection<? extends GrantedAuthority> authorities;
 
     public UserPrincipal(Long id, String username, String email, String password,
                          Collection<? extends GrantedAuthority> authorities) {

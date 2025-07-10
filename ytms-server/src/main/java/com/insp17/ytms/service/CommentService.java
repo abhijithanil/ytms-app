@@ -34,6 +34,10 @@ public class CommentService {
         return commentRepository.save(comment);
     }
 
+    public Comment updateComment(Long taskId, Long commentId, String comment, User author) {
+        return null;
+    }
+
     public Comment addCommentToRevision(Long revisionId, String content, User author) {
         Revision revision = revisionRepository.findById(revisionId)
                 .orElseThrow(() -> new RuntimeException("Revision not found"));

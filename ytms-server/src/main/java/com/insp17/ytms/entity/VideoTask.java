@@ -3,6 +3,7 @@ package com.insp17.ytms.entity;
 import jakarta.persistence.*;
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -86,7 +87,7 @@ public class VideoTask {
         this.description = description;
         this.createdBy = createdBy;
         this.taskStatus = TaskStatus.DRAFT;
-        this.taskPriority = TaskPriority.MEDIUM.MEDIUM;
+        this.taskPriority = TaskPriority.MEDIUM;
         this.privacyLevel = PrivacyLevel.ALL;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
@@ -99,7 +100,7 @@ public class VideoTask {
         this.description = description;
         this.createdBy = createdBy;
         this.taskStatus = TaskStatus.DRAFT;
-        this.taskPriority = TaskPriority.MEDIUM.MEDIUM;
+        this.taskPriority = TaskPriority.MEDIUM;
         this.privacyLevel = PrivacyLevel.ALL;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();

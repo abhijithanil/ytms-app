@@ -1,14 +1,14 @@
 package com.insp17.ytms.service;
 
+import com.insp17.ytms.entity.TaskStatus;
+import com.insp17.ytms.entity.User;
+import com.insp17.ytms.entity.VideoTask;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import com.insp17.ytms.entity.VideoTask;
-import com.insp17.ytms.entity.User;
-import com.insp17.ytms.entity.TaskStatus;
 
 @Service
 public class EmailService {

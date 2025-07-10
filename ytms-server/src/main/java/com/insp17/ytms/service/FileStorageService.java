@@ -3,6 +3,7 @@ package com.insp17.ytms.service;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.cloud.storage.*;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -337,8 +338,34 @@ public class FileStorageService {
         }
     }
 
-    public byte[] downloadFile(String audioUrl) throws IOException {
-        return null;
+    public byte[] downloadFile(String gcsUrl) throws IOException {
+        String objectName = getString(gcsUrl);
+        BlobInfo blobInfo = BlobInfo.newBuilder(BlobId.of(gcpBucketName, objectName)).build();
+        Blob blob = storage.get(blobInfo.getBlobId());
+
+        // Check if the blob exists
+        if (blob == null) {
+            throw new IOException("File not found in GCS: " + gcsUrl);
+        }
+
+        // Download the file's content into a byte array
+        return blob.getContent();
+    }
+
+    @Async("gcpDeleteTaskExecutor")
+    public void deleteFileFromGCP(String videoUrl) {
+        if (videoUrl == null) {
+            return;
+        }
+
+        String objectName = getString(videoUrl);
+        boolean deleted = storage.delete(gcpBucketName, objectName);
+
+        if (!deleted) {
+            System.err.println("Warning: GCP file not deleted (may not exist): " + videoUrl);
+        } else {
+            System.out.println("Deleted GCP object: " + videoUrl);
+        }
     }
 
     public static class FileUploadResult {

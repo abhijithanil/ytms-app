@@ -1,11 +1,11 @@
 package com.insp17.ytms.service;
 
+import com.insp17.ytms.dtos.AudioInstructionDTO;
 import com.insp17.ytms.entity.*;
 import com.insp17.ytms.repository.*;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -75,7 +75,7 @@ public class VideoTaskService {
         VideoTask task = getTaskById(taskId);
         User oldEditor = task.getAssignedEditor();
 
-        if(editorId == null) {
+        if (editorId == null) {
             task.setAssignedEditor(null);
             return videoTaskRepository.save(task);
         }
@@ -209,24 +209,25 @@ public class VideoTaskService {
         return videoTaskRepository.findScheduledTasksForUpload(LocalDateTime.now());
     }
 
-    public AudioInstruction addAudioInstruction(Long taskId, MultipartFile audioFile, String description, User uploadedBy) throws IOException {
-        VideoTask task = getTaskById(taskId);
+    public AudioInstruction addAudioInstruction(AudioInstructionDTO audioInstructionDTO, User uploadedBy) throws IOException {
+        VideoTask task = getTaskById(audioInstructionDTO.getVideoTaskId());
 
-        FileStorageService.FileUploadResult result = fileStorageService.uploadAudio(audioFile, "audio-instructions");
+        if (task == null) {
+            throw new RuntimeException("Task not found");
+        }
 
-        AudioInstruction audioInstruction = new AudioInstruction(
-                task,
-                result.getUrl(),
-                result.getOriginalFilename(),
-                description,
-                uploadedBy
-        );
+        AudioInstruction audioInstruction = new AudioInstruction();
+        audioInstruction.setAudioUrl(audioInstructionDTO.getAudioUrl());
+        audioInstruction.setVideoTask(task);
+        audioInstruction.setUploadedBy(uploadedBy);
+        audioInstruction.setDescription(audioInstructionDTO.getDescription());
+        audioInstruction.setAudioFilename(audioInstruction.getAudioFilename());
 
         return audioInstructionRepository.save(audioInstruction);
     }
 
     public List<AudioInstruction> getAudioInstructions(Long taskId) {
-        return audioInstructionRepository.findByVideoTaskIdOrderByCreatedAtDesc(taskId);
+        return audioInstructionRepository.findByVideoTaskIdOrderByCreatedAtAsc(taskId);
     }
 
     public DashboardStats getDashboardStats(Long userId) {
@@ -261,6 +262,16 @@ public class VideoTaskService {
         }
     }
 
+    public void deleteTask(Long id) {
+
+        VideoTask videoTask = videoTaskRepository.findById(id).orElseThrow(() -> new RuntimeException("Video not found"));
+
+        fileStorageService.deleteFileFromGCP(videoTask.getRawVideoUrl());
+        videoTask.getRevisions().forEach(e -> fileStorageService.deleteFileFromGCP(e.getEditedVideoUrl()));
+        videoTask.getAudioInstructions().forEach(e -> fileStorageService.deleteFileFromGCP(e.getAudioUrl()));
+
+        videoTaskRepository.deleteById(id);
+    }
 
 
     public static class DashboardStats {

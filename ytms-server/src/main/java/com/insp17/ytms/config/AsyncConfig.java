@@ -14,10 +14,21 @@ public class AsyncConfig {
     @Bean(name = "verificationEmailTaskExecutor")
     public Executor emailTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);   // At least 2 threads always running
-        executor.setMaxPoolSize(4);    // Can scale up to 4 threads when needed
-        executor.setQueueCapacity(20); // Can queue up to 20 pending email requests
+        executor.setCorePoolSize(0);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(20);
         executor.setThreadNamePrefix("VerificationEmailExecutor-");
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean(name = "gcpDeleteTaskExecutor")
+    public Executor deleteGcpVideos() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(0);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("GCPDeleteVideoExecutor-");
         executor.initialize();
         return executor;
     }

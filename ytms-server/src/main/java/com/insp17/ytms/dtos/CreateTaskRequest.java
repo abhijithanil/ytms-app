@@ -1,10 +1,14 @@
 package com.insp17.ytms.dtos;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.insp17.ytms.entity.PrivacyLevel;
 import com.insp17.ytms.entity.TaskPriority;
 
+import java.util.ArrayList;
 import java.util.List;
 
+@JsonDeserialize
 public class CreateTaskRequest {
     private String title;
     private String description;
@@ -14,8 +18,22 @@ public class CreateTaskRequest {
     private Long assignedEditorId;
     private String rawVideoUrl;
     private String rawVideoFilename;
-    private List<String> tags;
-    private List<Long> userIds;
+
+    @JsonProperty("tags")
+    private List<String> tags = new ArrayList<>();
+
+    @JsonProperty("userIds")
+    private List<Long> userIds = new ArrayList<>();
+
+    @JsonProperty("comments")
+    private List<String> comments = new ArrayList<>();
+
+    @JsonProperty("audioInstructionUrls")
+    private List<String> audioInstructionUrls = new ArrayList<>();
+
+    // Default constructor
+    public CreateTaskRequest() {
+    }
 
     // Getters and Setters
     public String getTitle() {
@@ -83,18 +101,52 @@ public class CreateTaskRequest {
     }
 
     public List<String> getTags() {
-        return tags;
+        return tags != null ? tags : new ArrayList<>();
     }
 
     public void setTags(List<String> tags) {
-        this.tags = tags;
+        this.tags = tags != null ? tags : new ArrayList<>();
     }
 
     public List<Long> getUserIds() {
-        return userIds;
+        return userIds != null ? userIds : new ArrayList<>();
     }
 
     public void setUserIds(List<Long> userIds) {
-        this.userIds = userIds;
+        this.userIds = userIds != null ? userIds : new ArrayList<>();
+    }
+
+    public List<String> getComments() {
+        return comments != null ? comments : new ArrayList<>();
+    }
+
+    public void setComments(List<String> comments) {
+        this.comments = comments != null ? comments : new ArrayList<>();
+    }
+
+    public List<String> getAudioInstructionUrls() {
+        return audioInstructionUrls != null ? audioInstructionUrls : new ArrayList<>();
+    }
+
+    public void setAudioInstructionUrls(List<String> audioInstructionUrls) {
+        this.audioInstructionUrls = audioInstructionUrls != null ? audioInstructionUrls : new ArrayList<>();
+    }
+
+    @Override
+    public String toString() {
+        return "CreateTaskRequest{" +
+                "title='" + title + '\'' +
+                ", description='" + description + '\'' +
+                ", priority=" + priority +
+                ", privacyLevel=" + privacyLevel +
+                ", deadline='" + deadline + '\'' +
+                ", assignedEditorId=" + assignedEditorId +
+                ", rawVideoUrl='" + rawVideoUrl + '\'' +
+                ", rawVideoFilename='" + rawVideoFilename + '\'' +
+                ", tags=" + tags +
+                ", userIds=" + userIds +
+                ", comments=" + comments +
+                ", audioInstructionUrls=" + audioInstructionUrls +
+                '}';
     }
 }

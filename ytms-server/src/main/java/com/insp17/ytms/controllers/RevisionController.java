@@ -1,9 +1,11 @@
 package com.insp17.ytms.controllers;
 
-import com.insp17.ytms.dtos.*;
+import com.insp17.ytms.dtos.CurrentUser;
+import com.insp17.ytms.dtos.RevisionDTO;
+import com.insp17.ytms.dtos.RevisionRequest;
+import com.insp17.ytms.dtos.UserPrincipal;
 import com.insp17.ytms.entity.Revision;
 import com.insp17.ytms.entity.User;
-import com.insp17.ytms.entity.VideoTask;
 import com.insp17.ytms.service.FileStorageService;
 import com.insp17.ytms.service.RevisionService;
 import com.insp17.ytms.service.UserService;
@@ -13,7 +15,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -89,10 +90,9 @@ public class RevisionController {
         return ResponseEntity.ok(new RevisionDTO(revision));
     }
 
-
-    @GetMapping("/{id}/video-url")
-    public ResponseEntity<Map<String, String>> getTaskVideoUrl(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
-        if (!videoTaskService.canUserAccessTask(id, userPrincipal.getId())) {
+    @GetMapping("/{id}/task/{taskId}/video-url")
+    public ResponseEntity<Map<String, String>> getTaskVideoUrl(@PathVariable Long id, @PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
+        if (!videoTaskService.canUserAccessTask(taskId, userPrincipal.getId())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         Revision revision = revisionService.getRevisionById(id);

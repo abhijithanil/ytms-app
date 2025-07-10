@@ -1,9 +1,9 @@
 package com.insp17.ytms.dtos;
 
-import com.insp17.ytms.entity.*;
+import com.insp17.ytms.entity.User;
+import com.insp17.ytms.entity.UserRole;
+
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.stream.Collectors;
 
 // UserDTO
 public class UserDTO {

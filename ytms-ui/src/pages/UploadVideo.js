@@ -1,6 +1,4 @@
-// In abhijithanil/ytms-app/ytms-app-aea7291d4ef02c6e9e64dc4ccc01002592217a0a/ytms-ui/src/pages/UploadVideo.js
-
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useDropzone } from "react-dropzone";
 import {
   Upload,
@@ -14,6 +12,12 @@ import {
   Users,
   Shield,
   Calendar,
+  Play,
+  Pause,
+  Square,
+  Trash2,
+  Check,
+  RotateCcw,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { tasksAPI, usersAPI } from "../services/api";
@@ -23,39 +27,20 @@ import axios from "axios";
 
 const { isCancel, CancelToken } = axios;
 
-const safeInstanceofCheck = (obj, constructor) => {
-  try {
-    return obj instanceof constructor;
-  } catch (e) {
-    return false;
-  }
-};
-
-const isValidFile = (file) => {
-  return (
-    file &&
-    typeof file === "object" &&
-    typeof file.name === "string" &&
-    typeof file.size === "number" &&
-    typeof file.type === "string" &&
-    typeof file.lastModified === "number"
-  );
-};
-
-const hasFileProperties = (file) => {
-  return !!(file && file.name && file.size && file.type);
-};
-
-const hasStreamMethod = (file) => {
-  return typeof file?.stream === "function";
-};
-
 const formatFileSize = (bytes) => {
   if (bytes === 0) return "0 Bytes";
   const k = 1024;
   const sizes = ["Bytes", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+};
+
+const formatTime = (seconds) => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
+    .toString()
+    .padStart(2, "0")}`;
 };
 
 const UploadProgressToast = ({ progress, fileName, onCancel }) => (
@@ -122,7 +107,7 @@ const UploadVideo = () => {
   });
 
   const [uploadedFile, setUploadedFile] = useState(null);
-  const [audioFiles, setAudioFiles] = useState([]);
+  const [audioInstructions, setAudioInstructions] = useState([]);
   const [editors, setEditors] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
@@ -132,6 +117,15 @@ const UploadVideo = () => {
   const [uploadToastId, setUploadToastId] = useState(null);
   const [cancelTokenSource, setCancelTokenSource] = useState(null);
 
+  // Audio recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [currentAudioBlob, setCurrentAudioBlob] = useState(null);
+  const mediaRecorderRef = useRef(null);
+  const recordingIntervalRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
   useEffect(() => {
     fetchEditors();
     fetchAllUsers();
@@ -139,6 +133,9 @@ const UploadVideo = () => {
     return () => {
       if (cancelTokenSource) {
         cancelTokenSource.cancel("Upload cancelled by component unmount.");
+      }
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
       }
     };
   }, [cancelTokenSource]);
@@ -187,29 +184,9 @@ const UploadVideo = () => {
     isDragActive: isVideoDragActive,
   } = useDropzone({
     onDrop: onVideoDrop,
-    // accept: { "video/*": [".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm"] },
     accept: { "video/*": [".mp4", ".mov"] },
     maxFiles: 1,
     maxSize: 10000 * 1024 * 1024,
-  });
-
-  const onAudioDrop = useCallback((acceptedFiles, rejectedFiles) => {
-    if (rejectedFiles.length > 0) {
-      toast.error("Invalid audio file format or size.");
-      return;
-    }
-    setAudioFiles((prev) => [...prev, ...acceptedFiles]);
-    toast.success(`${acceptedFiles.length} audio file(s) added!`);
-  }, []);
-
-  const {
-    getRootProps: getAudioRootProps,
-    getInputProps: getAudioInputProps,
-    isDragActive: isAudioDragActive,
-  } = useDropzone({
-    onDrop: onAudioDrop,
-    accept: { "audio/*": [".mp3", ".wav", ".m4a", ".aac", ".ogg"] },
-    maxSize: 100 * 1024 * 1024,
   });
 
   const handleInputChange = (e) => {
@@ -246,11 +223,6 @@ const UploadVideo = () => {
     toast.info("Video file removed");
   };
 
-  const removeAudioFile = (index) => {
-    setAudioFiles((prev) => prev.filter((_, i) => i !== index));
-    toast.info("Audio file removed");
-  };
-
   const handleUserSelection = (userId) => {
     setSelectedUsers((prev) => {
       if (prev.includes(userId)) {
@@ -282,63 +254,177 @@ const UploadVideo = () => {
     return true;
   };
 
+  // --- Audio Recording Handlers ---
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      setCurrentAudioBlob(null);
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: "audio/webm",
+        });
+        setCurrentAudioBlob(audioBlob);
+        // Stop all tracks on the stream to turn off the mic indicator
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+      setIsPaused(false);
+      setRecordingTime(0);
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime((prevTime) => prevTime + 1);
+      }, 1000);
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      toast.error("Could not access microphone. Please check permissions.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      clearInterval(recordingIntervalRef.current);
+      setIsRecording(false);
+      setIsPaused(false);
+    }
+  };
+
+  const togglePauseResume = () => {
+    if (mediaRecorderRef.current) {
+      if (isPaused) {
+        mediaRecorderRef.current.resume();
+        setIsPaused(false);
+        recordingIntervalRef.current = setInterval(() => {
+          setRecordingTime((prevTime) => prevTime + 1);
+        }, 1000);
+      } else {
+        mediaRecorderRef.current.pause();
+        setIsPaused(true);
+        clearInterval(recordingIntervalRef.current);
+      }
+    }
+  };
+
+  const saveInstruction = () => {
+    if (currentAudioBlob) {
+      const newInstruction = {
+        blob: currentAudioBlob,
+        name: `instruction-${Date.now()}.webm`,
+        url: URL.createObjectURL(currentAudioBlob),
+      };
+      setAudioInstructions((prev) => [...prev, newInstruction]);
+      setCurrentAudioBlob(null);
+      setRecordingTime(0);
+      toast.success("Audio instruction added.");
+    }
+  };
+
+  const deleteInstruction = (indexToDelete) => {
+    setAudioInstructions((prev) =>
+      prev.filter((_, index) => index !== indexToDelete)
+    );
+    toast.info("Audio instruction removed.");
+  };
+
+  const resetRecording = () => {
+    setCurrentAudioBlob(null);
+    setRecordingTime(0);
+    if (isRecording || isPaused) {
+      stopRecording();
+    }
+  };
+
+  // --- End Audio Recording Handlers ---
+
   const uploadFileToGCS = async (
     signedUrl,
     file,
     onProgress,
     cancelTokenSource
   ) => {
-    const init = await fetch(signedUrl, {
-      method: "POST",
-      headers: {
-        "x-goog-resumable": "start",
-        "Content-Type": file.type || "application/octet-stream",
-      },
-    });
-
-    if (!init.ok) {
-      const text = await init.text();
-      throw new Error(
-        `Failed to start resumable upload: ${init.status} ${init.statusText}\n${text}`
-      );
-    }
-
-    const sessionUri = init.headers.get("Location");
-    if (!sessionUri) throw new Error("Missing resumable session URI");
-
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
 
-      if (cancelTokenSource && cancelTokenSource.token) {
-        cancelTokenSource.token.promise.then((cancel) => {
-          xhr.abort();
-          reject(cancel);
-        });
-      }
-
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable && onProgress) {
-          onProgress(Math.round((e.loaded / e.total) * 100));
-        }
-      };
+      // Step 1: Initialize resumable upload
+      xhr.open("POST", signedUrl, true);
+      xhr.setRequestHeader("X-Goog-Resumable", "start");
+      xhr.setRequestHeader("Content-Type", file.type);
+      xhr.setRequestHeader("Content-Length", "0");
 
       xhr.onload = () => {
-        if (xhr.status === 200 || xhr.status === 201) {
-          resolve({ status: xhr.status });
+        if (xhr.status === 201) {
+          // Get the upload URL from the Location header
+          const uploadUrl = xhr.getResponseHeader("Location");
+
+          if (!uploadUrl) {
+            reject(new Error("No upload URL received"));
+            return;
+          }
+
+          // Step 2: Upload the actual file
+          const uploadXhr = new XMLHttpRequest();
+          uploadXhr.open("PUT", uploadUrl, true);
+          uploadXhr.setRequestHeader("Content-Type", file.type);
+
+          uploadXhr.upload.onprogress = (e) => {
+            if (e.lengthComputable && onProgress) {
+              const progress = Math.round((e.loaded / e.total) * 100);
+              onProgress(progress);
+            }
+          };
+
+          uploadXhr.onload = () => {
+            if (uploadXhr.status >= 200 && uploadXhr.status < 300) {
+              resolve({ status: uploadXhr.status });
+            } else {
+              reject(
+                new Error(
+                  `Upload failed: ${uploadXhr.status} ${uploadXhr.statusText}`
+                )
+              );
+            }
+          };
+
+          uploadXhr.onerror = () =>
+            reject(new Error("Network error during upload."));
+          uploadXhr.onabort = () => reject(new Error("Upload cancelled."));
+
+          if (cancelTokenSource && cancelTokenSource.token) {
+            cancelTokenSource.token.promise.then(() => {
+              uploadXhr.abort();
+            });
+          }
+
+          uploadXhr.send(file);
         } else {
           reject(
-            new Error(`Upload failed: ${xhr.status} ${xhr.statusText}\n${xhr.responseText}`)
+            new Error(
+              `Failed to initialize resumable upload: ${xhr.status} ${xhr.statusText}`
+            )
           );
         }
       };
-      xhr.onerror = () => reject(new Error("Network error during upload"));
-      xhr.onabort = () => reject(new Error("Upload cancelled"));
-      xhr.ontimeout = () => reject(new Error("Upload timed out"));
 
-      xhr.timeout = 30 * 60 * 1000;
-      xhr.open("PUT", sessionUri);
-      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-      xhr.send(file);
+      xhr.onerror = () =>
+        reject(new Error("Network error during upload initialization."));
+      xhr.onabort = () => reject(new Error("Upload initialization cancelled."));
+
+      if (cancelTokenSource && cancelTokenSource.token) {
+        cancelTokenSource.token.promise.then(() => {
+          xhr.abort();
+        });
+      }
+
+      xhr.send();
     });
   };
 
@@ -358,6 +444,7 @@ const UploadVideo = () => {
     let currentToastId;
 
     try {
+      // 1. Upload Video File
       const signedUrlResponse = await tasksAPI.generateUploadUrl(
         uploadedFile.name,
         uploadedFile.type,
@@ -397,35 +484,80 @@ const UploadVideo = () => {
         );
       };
 
-      await uploadFileToGCS(
-        signedUrl,
-        uploadedFile,
-        handleProgress,
-        source
-      );
-
+      await uploadFileToGCS(signedUrl, uploadedFile, handleProgress, source);
       toast.dismiss(currentToastId);
+      setUploadToastId(null);
+      const videoGcsUrl = `gs://${
+        process.env.REACT_APP_GCP_BUCKET_NAME || "ytmthelper-inspire26"
+      }/${objectName}`;
 
-      const taskFormData = new FormData();
-      taskFormData.append("title", formData.title);
-      taskFormData.append("description", formData.description);
-      taskFormData.append("priority", formData.priority);
-      taskFormData.append("privacyLevel", formData.privacyLevel);
-      if (formData.deadline) taskFormData.append("deadline", formData.deadline);
-      if (formData.assignedEditorId)
-        taskFormData.append("assignedEditorId", formData.assignedEditorId);
-      if (formData.tags.length > 0)
-        taskFormData.append("tags", JSON.stringify(formData.tags));
+      // 2. Upload Audio Instructions
+      let audioInstructionUrls = [];
+      if (audioInstructions.length > 0) {
+        const audioToastId = toast.loading(
+          `Uploading ${audioInstructions.length} audio instruction(s)...`
+        );
+        try {
+          audioInstructionUrls = await Promise.all(
+            audioInstructions.map(async (instruction) => {
+              const audioSignedUrlResponse = await tasksAPI.generateUploadUrl(
+                instruction.name,
+                instruction.blob.type,
+                "audio-instructions"
+              );
+              const { signedUrl: audioSignedUrl, objectName: audioObjectName } =
+                audioSignedUrlResponse.data;
+              await uploadFileToGCS(
+                audioSignedUrl,
+                instruction.blob,
+                null,
+                source
+              );
+              return `gs://${
+                process.env.REACT_APP_GCP_BUCKET_NAME || "ytmthelper-inspire26"
+              }/${audioObjectName}`;
+            })
+          );
+          toast.success("Audio instructions uploaded!", { id: audioToastId });
+        } catch (uploadError) {
+          toast.error("Failed to upload audio files.", { id: audioToastId });
+          throw uploadError; // Abort task creation if audio upload fails
+        }
+      }
 
-      const gcsUrl = `gs://${process.env.REACT_APP_GCP_BUCKET_NAME || "ytmthelper-inspire26"}/${objectName}`;
-      taskFormData.append("rawVideoUrl", gcsUrl);
-      taskFormData.append("rawVideoFilename", uploadedFile.name);
+      var tags = [];
+      if (formData.tags.length > 0) {
+        formData.tags.forEach((tag) => {
+          tags.push(tag);
+        });
+      }
 
-      audioFiles.forEach((file) => {
-        taskFormData.append("audioFiles", file);
-      });
+      let commentList = [];
+      debugger;
+      if (audioInstructionUrls.length > 0) {
+        const comment = `${user.username || "User"} added ${
+          audioInstructionUrls.length
+        } audio instruction(s).`;
 
-      const response = await tasksAPI.createTask(taskFormData);
+        commentList = [comment];
+      }
+
+      const taskData = {
+        title: formData.title,
+        description: formData.description,
+        priority: formData.priority,
+        privacyLevel: formData.privacyLevel,
+        deadline: formData.deadline || null,
+        assignedEditorId: formData.assignedEditorId || null,
+        rawVideoUrl: videoGcsUrl,
+        rawVideoFilename: uploadedFile.name,
+        tags: tags,
+        userIds: formData.privacyLevel === "SELECTED" ? selectedUsers : [],
+        comments: commentList,
+        audioInstructionUrls: audioInstructionUrls,
+      };
+
+      const response = await tasksAPI.createTask(taskData);
 
       if (formData.privacyLevel === "SELECTED" && selectedUsers.length > 0) {
         await tasksAPI.setTaskPrivacy(response.data.id, {
@@ -437,20 +569,21 @@ const UploadVideo = () => {
       toast.success("Task created successfully!");
       navigate("/tasks");
     } catch (error) {
-      if (isCancel(error)) {
+      if (isCancel(error) || error.message === "Upload cancelled.") {
         toast.error("Upload cancelled.");
       } else {
-        if (currentToastId) toast.dismiss(currentToastId);
+        console.error("Task creation failed:", error);
+        if (uploadToastId) toast.dismiss(uploadToastId);
         toast.error("Failed to create task. Please try again.");
       }
       setUploadProgress(0);
     } finally {
       setIsSubmitting(false);
       setCancelTokenSource(null);
-      setUploadToastId(null);
+      if (uploadToastId) toast.dismiss(uploadToastId);
     }
   };
-  
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center space-x-4 mb-6">
@@ -469,6 +602,7 @@ const UploadVideo = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Task Details Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center space-x-2 mb-6">
             <Video className="h-5 w-5 text-primary-600" />
@@ -477,6 +611,7 @@ const UploadVideo = () => {
             </h2>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Form fields... */}
             <div className="lg:col-span-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Task Title *
@@ -688,16 +823,16 @@ const UploadVideo = () => {
           </div>
         </div>
 
+        {/* Upload Files Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-2">
-              <Upload className="h-5 w-5 text-primary-600" />
-              <h2 className="text-lg font-semibold text-gray-900">
-                Upload Files
-              </h2>
-            </div>
+          <div className="flex items-center space-x-2 mb-6">
+            <Upload className="h-5 w-5 text-primary-600" />
+            <h2 className="text-lg font-semibold text-gray-900">
+              Upload & Record Files
+            </h2>
           </div>
           <div className="space-y-6">
+            {/* Video Upload */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-4">
                 Raw Video File *
@@ -722,7 +857,6 @@ const UploadVideo = () => {
                     Drag & drop or click to browse
                   </p>
                   <p className="text-xs text-gray-400">
-                    {/* Supports: MP4, MOV, AVI, MKV, WMV, WebM (max 10GB) */}
                     Supports: MP4, MOV (max 10GB)
                   </p>
                 </div>
@@ -752,60 +886,125 @@ const UploadVideo = () => {
               )}
             </div>
 
+            {/* Audio Recorder */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-4">
                 <Mic className="inline h-4 w-4 mr-1" />
                 Audio Instructions (Optional)
               </label>
-              <div
-                {...getAudioRootProps()}
-                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
-                  isAudioDragActive
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-300 hover:border-gray-400"
-                }`}
-              >
-                <input {...getAudioInputProps()} />
-                <Mic className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-600 mb-2">
-                  {isAudioDragActive
-                    ? "Drop audio files here"
-                    : "Add voice instructions"}
-                </p>
-                <p className="text-xs text-gray-400">
-                  Supports: MP3, WAV, M4A, AAC, OGG (max 100MB each)
-                </p>
-              </div>
+              <div className="border border-gray-200 rounded-xl p-4 space-y-4">
+                {!isRecording && !currentAudioBlob && (
+                  <button
+                    type="button"
+                    onClick={startRecording}
+                    className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                  >
+                    <Mic className="h-5 w-5" />
+                    <span>Record New Instruction</span>
+                  </button>
+                )}
 
-              {audioFiles.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  {audioFiles.map((file, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between bg-blue-50 rounded-lg p-3 border border-blue-200"
-                    >
+                {(isRecording || currentAudioBlob) && (
+                  <div className="bg-blue-50 rounded-lg p-4 space-y-4">
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <Mic className="h-4 w-4 text-blue-500" />
-                        <div>
-                          <span className="text-sm font-medium text-gray-700">
-                            {file.name}
-                          </span>
-                          <p className="text-xs text-gray-500">
-                            {formatFileSize(file.size)}
-                          </p>
+                        <div className="flex items-center justify-center h-8 w-8 rounded-full bg-red-500 animate-pulse">
+                          <Mic className="h-4 w-4 text-white" />
+                        </div>
+                        <span className="font-mono text-lg text-gray-700">
+                          {formatTime(recordingTime)}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {isRecording && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={togglePauseResume}
+                              className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-100"
+                            >
+                              {isPaused ? (
+                                <Play className="h-5 w-5 text-gray-700" />
+                              ) : (
+                                <Pause className="h-5 w-5 text-gray-700" />
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={stopRecording}
+                              className="p-2 bg-red-500 text-white rounded-full shadow-sm hover:bg-red-600"
+                            >
+                              <Square className="h-5 w-5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {currentAudioBlob && (
+                      <div className="space-y-3">
+                        <audio
+                          src={URL.createObjectURL(currentAudioBlob)}
+                          controls
+                          className="w-full"
+                        />
+                        <div className="flex justify-end space-x-2">
+                          <button
+                            type="button"
+                            onClick={resetRecording}
+                            className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                            <span>Record Again</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={saveInstruction}
+                            className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-green-500 text-white rounded-md hover:bg-green-600"
+                          >
+                            <Check className="h-4 w-4" />
+                            <span>Save Instruction</span>
+                          </button>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => removeAudioFile(index)}
-                        className="p-1 hover:bg-blue-200 rounded"
+                    )}
+                  </div>
+                )}
+
+                {audioInstructions.length > 0 && (
+                  <div className="space-y-3 pt-4">
+                    <h4 className="text-sm font-medium text-gray-600">
+                      Saved Instructions
+                    </h4>
+                    {audioInstructions.map((instruction, index) => (
+                      <div
+                        key={instruction.url}
+                        className="flex items-center justify-between bg-gray-50 rounded-lg p-3 border border-gray-200"
                       >
-                        <X className="h-4 w-4 text-gray-400" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+                        <div className="flex items-center space-x-3 flex-1 min-w-0">
+                          <Mic className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium text-gray-700 truncate block">
+                              {`Instruction ${index + 1}`}
+                            </span>
+                            <audio
+                              src={instruction.url}
+                              controls
+                              className="w-full max-w-xs h-8 mt-1"
+                            />
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => deleteInstruction(index)}
+                          className="ml-3 p-2 hover:bg-red-100 rounded-full"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

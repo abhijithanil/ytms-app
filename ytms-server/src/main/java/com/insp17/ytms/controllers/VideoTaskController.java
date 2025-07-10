@@ -2,16 +2,12 @@ package com.insp17.ytms.controllers;
 
 import com.insp17.ytms.dtos.*;
 import com.insp17.ytms.entity.*;
-import com.insp17.ytms.service.FileStorageService;
-import com.insp17.ytms.service.UserService;
-import com.insp17.ytms.service.VideoTaskService;
+import com.insp17.ytms.service.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.config.Task;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -35,6 +31,12 @@ public class VideoTaskController {
     @Autowired
     private FileStorageService fileStorageService;
 
+    @Autowired
+    private CommentService commentService;
+
+    @Autowired
+    private AudioInstructionService audioInstructionService;
+
 
     @GetMapping
     public ResponseEntity<List<VideoTaskDTO>> getAllTasks(@CurrentUser UserPrincipal userPrincipal) {
@@ -52,6 +54,18 @@ public class VideoTaskController {
         }
         VideoTask task = videoTaskService.getTaskByIdWithDetails(id).orElseThrow();
         return ResponseEntity.ok(new VideoTaskDTO(task));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Boolean>> deleteTaskById(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
+        if (!videoTaskService.canUserAccessTask(id, userPrincipal.getId())) {
+            return ResponseEntity.status(403).build();
+        }
+
+        videoTaskService.deleteTask(id);
+        Map<String, Boolean> response = new HashMap<>();
+        response.put("deleteStatus", true);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping
@@ -79,10 +93,25 @@ public class VideoTaskController {
                 task.setRawVideoFilename(createTaskRequest.getRawVideoFilename());
             }
 
+
             VideoTask createdTask = videoTaskService.createTask(task);
 
             if (createTaskRequest.getPrivacyLevel() == PrivacyLevel.SELECTED && createTaskRequest.getUserIds() != null) {
                 videoTaskService.setTaskPrivacy(createdTask.getId(), PrivacyLevel.SELECTED, createTaskRequest.getUserIds());
+            }
+
+            if (createTaskRequest.getComments() != null && !(createTaskRequest.getComments().isEmpty())) {
+                createTaskRequest.getComments().forEach(comment -> commentService.addComment(createdTask.getId(), comment, creator));
+            }
+
+            if (createTaskRequest.getAudioInstructionUrls() != null && !(createTaskRequest.getAudioInstructionUrls().isEmpty())) {
+                createTaskRequest.getAudioInstructionUrls().forEach(instructionUrl -> {
+                    AudioInstruction audioInstruction = new AudioInstruction();
+                    audioInstruction.setVideoTask(createdTask);
+                    audioInstruction.setUploadedBy(creator);
+                    audioInstruction.setAudioUrl(instructionUrl);
+                    audioInstructionService.addInstruction(audioInstruction);
+                });
             }
 
             return ResponseEntity.ok(new VideoTaskDTO(createdTask));
@@ -142,20 +171,19 @@ public class VideoTaskController {
         return ResponseEntity.ok().build();
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
     @PostMapping("/{id}/audio-instructions")
     public ResponseEntity<AudioInstructionDTO> addAudioInstruction(
-            @PathVariable Long id,
-            @RequestParam("audioFile") MultipartFile audioFile,
-            @RequestParam(value = "description", required = false) String description,
+            @RequestBody AudioInstructionDTO audioInstructionDTO,
             @CurrentUser UserPrincipal userPrincipal) {
 
         try {
-            if (!videoTaskService.canUserAccessTask(id, userPrincipal.getId())) {
+            if (!videoTaskService.canUserAccessTask(audioInstructionDTO.getVideoTaskId(), userPrincipal.getId())) {
                 return ResponseEntity.status(403).build();
             }
 
             User uploadedBy = userService.getUserById(userPrincipal.getId());
-            AudioInstruction audioInstruction = videoTaskService.addAudioInstruction(id, audioFile, description, uploadedBy);
+            AudioInstruction audioInstruction = videoTaskService.addAudioInstruction(audioInstructionDTO, uploadedBy);
             return ResponseEntity.ok(new AudioInstructionDTO(audioInstruction));
 
         } catch (IOException e) {
