@@ -171,12 +171,23 @@ export const tasksAPI = {
     return api.post(`/tasks/${taskId}/schedule-upload`, { uploadTime });
   },
   addAudioInstruction: (audioInstruction) => {
-    console.log(`Adding audio instruction to task ${audioInstruction.videoTaskId}`);
-    return api.post(`/tasks/${audioInstruction.videoTaskId}/audio-instructions`, audioInstruction);
+    console.log(
+      `Adding audio instruction to task ${audioInstruction.videoTaskId}`
+    );
+    return api.post(
+      `/tasks/${audioInstruction.videoTaskId}/audio-instructions`,
+      audioInstruction
+    );
   },
   getAudioInstructions: (taskId) => {
     console.log(`Fetching audio instructions for task ${taskId}`);
     return api.get(`/tasks/${taskId}/audio-instructions`);
+  },
+
+   deleteAudioInstruction: (audioInstructionId) => {
+    debugger
+    console.log(`Deleting audio instruction ${audioInstructionId}`);
+    return api.delete(`/tasks/audio-instructions/${audioInstructionId}/delete`);
   },
 };
 
@@ -210,6 +221,10 @@ export const revisionsAPI = {
   },
   getLatestRevision: (taskId) => api.get(`/revisions/task/${taskId}/latest`),
   getRevisionById: (id) => api.get(`/revisions/${id}`),
+  deleteRevision: (id) => {
+    console.log(`Deleting revision ${id}`);
+    return api.delete(`/revisions/${id}`);
+  },
 };
 
 // Comments API
@@ -229,6 +244,10 @@ export const commentsAPI = {
   getRevisionComments: (revisionId) => {
     console.log(`Fetching comments for revision ${revisionId}`);
     return api.get(`/comments/revision/${revisionId}`);
+  },
+  deleteComment: (id) => {
+    console.log(`Deleting revision ${id}`);
+    return api.delete(`comments/${id}`);
   },
 };
 

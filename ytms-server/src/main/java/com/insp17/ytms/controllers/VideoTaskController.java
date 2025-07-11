@@ -203,6 +203,25 @@ public class VideoTaskController {
         return ResponseEntity.ok(audioDTOs);
     }
 
+    @DeleteMapping("/audio-instructions/{audioInstructionId}/delete")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+    public ResponseEntity<Void> deleteAudioInstruction(@PathVariable Long audioInstructionId, @CurrentUser UserPrincipal userPrincipal) {
+        AudioInstruction audioInstruction = audioInstructionService.getAudioInstructionById(audioInstructionId);
+        if (!videoTaskService.canUserAccessTask(audioInstruction.getVideoTask().getId(), userPrincipal.getId())) {
+            return ResponseEntity.status(403).build();
+        }
+        Long userId = userPrincipal.getId();
+        User user = userService.getUserById(userId);
+        if (user.getId() == audioInstruction.getUploadedBy().getId() || user.getRole() == UserRole.ADMIN) {
+            audioInstructionService.deleteInstruction(audioInstructionId);
+        } else {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        return ResponseEntity.noContent().build();
+    }
+
+
     @GetMapping("/editor/{editorId}")
     public ResponseEntity<List<VideoTaskDTO>> getTasksByEditor(@PathVariable Long editorId) {
         List<VideoTask> tasks = videoTaskService.getTasksByEditor(editorId);

@@ -2,6 +2,7 @@ package com.insp17.ytms.repository;
 
 import com.insp17.ytms.entity.AudioInstruction;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -16,4 +17,8 @@ public interface AudioInstructionRepository extends JpaRepository<AudioInstructi
 
     @Query("SELECT ai FROM AudioInstruction ai WHERE ai.videoTask.id = :taskId ORDER BY ai.createdAt ASC")
     List<AudioInstruction> findByVideoTaskIdOrderByCreatedAtAsc(@Param("taskId") Long taskId);
+
+    @Modifying(clearAutomatically = true)
+    @Query("DELETE FROM AudioInstruction a WHERE a.id = :id")
+    int deleteByIdNativeSql(@Param("id") Long id);
 }

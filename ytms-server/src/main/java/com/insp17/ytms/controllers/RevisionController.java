@@ -6,6 +6,7 @@ import com.insp17.ytms.dtos.RevisionRequest;
 import com.insp17.ytms.dtos.UserPrincipal;
 import com.insp17.ytms.entity.Revision;
 import com.insp17.ytms.entity.User;
+import com.insp17.ytms.entity.UserRole;
 import com.insp17.ytms.service.FileStorageService;
 import com.insp17.ytms.service.RevisionService;
 import com.insp17.ytms.service.UserService;
@@ -42,7 +43,7 @@ public class RevisionController {
     @PostMapping
     @PreAuthorize("hasRole('EDITOR') or hasRole('ADMIN')")
     public ResponseEntity<RevisionDTO> createRevision(@RequestBody RevisionRequest revisionRequest,
-            @CurrentUser UserPrincipal userPrincipal) {
+                                                      @CurrentUser UserPrincipal userPrincipal) {
 
         try {
             if (!videoTaskService.canUserAccessTask(revisionRequest.getVideoTaskId(), userPrincipal.getId())) {
@@ -108,5 +109,23 @@ public class RevisionController {
         response.put("objectName", objectName);
 
         return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+    public ResponseEntity<Void> deleteRevision(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
+        Revision revision = revisionService.getRevisionById(id);
+        if (!videoTaskService.canUserAccessTask(revision.getVideoTask().getId(), userPrincipal.getId())) {
+            return ResponseEntity.status(403).build();
+        }
+        Long userId = userPrincipal.getId();
+        User user = userService.getUserById(userId);
+        if (user.getId() == revision.getUploadedBy().getId() || user.getRole() == UserRole.ADMIN) {
+            revisionService.deleteRevision(id);
+        } else {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        return ResponseEntity.noContent().build();
     }
 }

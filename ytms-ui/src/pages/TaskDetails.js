@@ -592,6 +592,29 @@ const TaskDetails = () => {
     }
   };
 
+  const handleRevisionDelete = async (revisionId) => {
+    try {
+      await revisionsAPI.deleteRevision(revisionId);
+      toast.success('Revision deleted successfully');
+      fetchTaskDetails();
+    } catch (error) {
+      console.error('Failed to delete revision:', error);
+      toast.error('Failed to delete revision');
+    }
+  };
+
+  const handleAudioDelete = async (audioId) => {
+    try {
+      await tasksAPI.deleteAudioInstruction(audioId);
+      debugger
+      toast.success('Audio instruction deleted successfully');
+      fetchTaskDetails();
+    } catch (error) {
+      console.error('Failed to delete audio instruction:', error);
+      toast.error('Failed to delete audio instruction');
+    }
+  };
+
   // --- Audio Recording Handlers ---
 
   const formatTime = (seconds) => {
@@ -1539,6 +1562,16 @@ const TaskDetails = () => {
                       >
                         <Download className="h-4 w-4 text-gray-500" />
                       </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRevisionDelete(revision.id);
+                        }}
+                        className="p-1 hover:bg-red-100 rounded transition-colors"
+                        title="Delete Revision"
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1743,6 +1776,13 @@ const TaskDetails = () => {
                           </p>
                         </div>
                       </div>
+                      <button
+                        onClick={() => handleAudioDelete(audio.id)}
+                        className="p-1 hover:bg-red-100 rounded transition-colors"
+                        title="Delete Audio Instruction"
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </button>
                     </div>
 
                     {audio.description && (

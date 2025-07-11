@@ -80,4 +80,39 @@ public class RevisionService {
     public Optional<Revision> getLatestRevision(Long taskId) {
         return revisionRepository.findLatestRevisionByTaskId(taskId);
     }
+
+
+    @Transactional
+    public void deleteRevision(Long revisionId) {
+        System.out.println("Attempting to delete revision with ID: " + revisionId);
+
+        Revision revision = revisionRepository.findById(revisionId)
+                .orElseThrow(() -> new RuntimeException("Revision not found with ID: " + revisionId));
+
+        try {
+            fileStorageService.deleteFileFromGCP(revision.getEditedVideoUrl());
+            System.out.println("File deleted from GCP.");
+        } catch (Exception e) {
+            System.err.println("Error deleting from GCP: " + e.getMessage());
+        }
+
+        List<Comment> comments = commentRepository.findByRevisionId(revisionId);
+
+        if (comments != null && !comments.isEmpty()) {
+           for (Comment comment: comments) {
+               try {
+                   commentRepository.deleteByIdNativeSql(comment.getId());
+               } catch (Exception e) {
+                   e.printStackTrace();
+               }
+           }
+        }
+
+        System.out.println("About to delete from database...");
+        int deletedRows = revisionRepository.deleteByIdNativeSql(revisionId);
+        System.out.println("Deleted rows: " + deletedRows);
+
+        revisionRepository.flush();
+        System.out.println("Flushed changes");
+    }
 }

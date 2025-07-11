@@ -2,6 +2,7 @@ package com.insp17.ytms.repository;
 
 import com.insp17.ytms.entity.Revision;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -23,4 +24,8 @@ public interface RevisionRepository extends JpaRepository<Revision, Long> {
 
     @Query("SELECT r FROM Revision r WHERE r.videoTask.id = :taskId ORDER BY r.revisionNumber DESC LIMIT 1")
     Optional<Revision> findLatestRevisionByTaskId(@Param("taskId") Long taskId);
+
+    @Modifying(clearAutomatically = true)
+    @Query("DELETE FROM Revision r WHERE r.id = :id")
+    int deleteByIdNativeSql(@Param("id") Long id);
 }
