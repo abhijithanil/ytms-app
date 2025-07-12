@@ -59,4 +59,24 @@ public class CommentController {
                 .collect(Collectors.toList());
         return ResponseEntity.ok(commentDTOs);
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<CommentDTO> updateComment(@PathVariable Long id, @RequestBody AddCommentRequest request, @CurrentUser UserPrincipal userPrincipal) {
+        Comment comment = commentService.getCommentById(id);
+        if (comment.getAuthor().getId().equals(userPrincipal.getId())) {
+            Comment updatedComment = commentService.updateComment(id, request.getContent());
+            return ResponseEntity.ok(new CommentDTO(updatedComment));
+        }
+        return ResponseEntity.status(403).build();
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteComment(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
+        Comment comment = commentService.getCommentById(id);
+        if (comment.getAuthor().getId().equals(userPrincipal.getId())) {
+            commentService.deleteComment(id);
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.status(403).build();
+    }
 }

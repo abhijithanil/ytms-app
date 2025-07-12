@@ -50,4 +50,19 @@ public class CommentService {
     public List<Comment> getCommentsByTask(Long taskId) {
         return commentRepository.findByVideoTaskIdOrderByCreatedAtDesc(taskId);
     }
+
+    public Comment getCommentById(Long id) {
+        return commentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Comment not found"));
+    }
+
+    public Comment updateComment(Long id, String content) {
+        Comment comment = getCommentById(id);
+        comment.setContent(content);
+        return commentRepository.save(comment);
+    }
+
+    public void deleteComment(Long id) {
+        commentRepository.deleteByIdNativeSql(id);
+    }
 }

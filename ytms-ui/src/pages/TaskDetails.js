@@ -25,6 +25,10 @@ import {
   Square,
   RotateCcw,
   Check,
+  Edit3,
+  MoreVertical,
+  Edit,
+  Youtube,
 } from "lucide-react";
 
 import { useParams, useNavigate } from "react-router-dom";
@@ -45,6 +49,10 @@ import toast from "react-hot-toast";
 import TaskEditorAssigner from "../components/TaskEditorAssigner";
 
 import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
+
+import VideoMetadataModal from "../components/VideoMetadataModal";
+
+import EditTaskModal from "../components/EditTaskModal";
 
 import axios from "axios";
 
@@ -83,6 +91,12 @@ const TaskDetails = () => {
 
   const [playingAudio, setPlayingAudio] = useState(null);
 
+  // Comment edit/delete state
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentText, setEditingCommentText] = useState("");
+  const [commentMenuOpen, setCommentMenuOpen] = useState(null);
+  const [deletingCommentId, setDeletingCommentId] = useState(null);
+
   // Audio recording state
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -112,11 +126,19 @@ const TaskDetails = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Edit task modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  // Video metadata modal state
+  const [showVideoMetadataModal, setShowVideoMetadataModal] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState(null);
+
   const videoRef = useRef(null);
 
   const audioRefs = useRef({});
 
   const taskSettingsRef = useRef(null);
+  const commentMenuRefs = useRef({});
 
   const [revisionFormData, setRevisionFormData] = useState({
     notes: "",
@@ -152,6 +174,16 @@ const TaskDetails = () => {
       ) {
         setShowTaskSettings(false);
       }
+      
+      // Close comment menus when clicking outside
+      Object.keys(commentMenuRefs.current).forEach(commentId => {
+        if (
+          commentMenuRefs.current[commentId] &&
+          !commentMenuRefs.current[commentId].contains(event.target)
+        ) {
+          setCommentMenuOpen(null);
+        }
+      });
     };
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -307,6 +339,15 @@ const TaskDetails = () => {
   };
 
   const handleStatusUpdate = async (newStatus) => {
+    // Check if video metadata is required for certain status transitions
+    if ((newStatus === "SCHEDULED" || newStatus === "UPLOADED") && 
+        task.status === "READY" && 
+        !task.videoMetadata) {
+      setPendingStatus(newStatus);
+      setShowVideoMetadataModal(true);
+      return;
+    }
+
     try {
       await tasksAPI.updateStatus(id, newStatus);
 
@@ -341,6 +382,41 @@ const TaskDetails = () => {
     }
   };
 
+  const handleTaskEdit = async (formData) => {
+    try {
+      const response = await tasksAPI.updateTask(id, formData);
+      setTask(response.data);
+      setShowEditModal(false);
+      toast.success("Task updated successfully");
+    } catch (error) {
+      console.error("Failed to update task:", error);
+      toast.error("Failed to update task");
+    }
+  };
+
+  const handleVideoMetadataSubmit = async (metadataData) => {
+    try {
+      // Save video metadata
+      const response = await tasksAPI.updateVideoMetadata(id, metadataData);
+      setTask(response.data);
+      
+      // Now update the status
+      if (pendingStatus) {
+        await tasksAPI.updateStatus(id, pendingStatus);
+        setTask((prev) => ({ ...prev, status: pendingStatus }));
+        toast.success(`Task moved to ${pendingStatus.toLowerCase()} with video metadata`);
+      } else {
+        toast.success("Video metadata saved successfully");
+      }
+
+      setShowVideoMetadataModal(false);
+      setPendingStatus(null);
+    } catch (error) {
+      console.error("Failed to save video metadata:", error);
+      toast.error("Failed to save video metadata");
+    }
+  };
+
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
 
@@ -363,6 +439,55 @@ const TaskDetails = () => {
 
       toast.error("Failed to add comment");
     }
+  };
+
+  // Comment edit/delete handlers
+  const handleEditComment = (comment) => {
+    setEditingCommentId(comment.id);
+    setEditingCommentText(comment.content);
+    setCommentMenuOpen(null);
+  };
+
+  const handleSaveEdit = async (commentId) => {
+    if (!editingCommentText.trim()) return;
+
+    try {
+      await commentsAPI.updateComment(commentId, {
+        content: editingCommentText,
+      });
+
+      setEditingCommentId(null);
+      setEditingCommentText("");
+      fetchTaskDetails(); // Refresh comments
+      toast.success("Comment updated successfully");
+    } catch (error) {
+      console.error("Failed to update comment:", error);
+      toast.error("Failed to update comment");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCommentId(null);
+    setEditingCommentText("");
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    setDeletingCommentId(commentId);
+    try {
+      await commentsAPI.deleteComment(commentId);
+      fetchTaskDetails(); // Refresh comments
+      toast.success("Comment deleted successfully");
+    } catch (error) {
+      console.error("Failed to delete comment:", error);
+      toast.error("Failed to delete comment");
+    } finally {
+      setDeletingCommentId(null);
+      setCommentMenuOpen(null);
+    }
+  };
+
+  const canEditOrDeleteComment = (comment) => {
+    return user.role === "ADMIN" || comment.author.id === user.id;
   };
 
   const uploadFileToGCS = async (
@@ -606,7 +731,6 @@ const TaskDetails = () => {
   const handleAudioDelete = async (audioId) => {
     try {
       await tasksAPI.deleteAudioInstruction(audioId);
-      debugger
       toast.success('Audio instruction deleted successfully');
       fetchTaskDetails();
     } catch (error) {
@@ -962,6 +1086,10 @@ const TaskDetails = () => {
     return user.role === "ADMIN";
   };
 
+  const canEditTask = () => {
+    return user.role === "ADMIN" || task?.createdBy?.id === user.id;
+  };
+
   // Helper function to check if a revision is currently playing
   const isRevisionPlaying = (revision) => {
     return selectedRevision?.id === revision.id && isVideoPlaying;
@@ -970,6 +1098,94 @@ const TaskDetails = () => {
   // Helper function to check if raw video is currently playing
   const isRawVideoPlaying = () => {
     return !selectedRevision && isVideoPlaying;
+  };
+
+  // Helper function to render video metadata
+  const renderVideoMetadata = (metadata) => {
+    if (!metadata) return null;
+
+    return (
+      <div className="space-y-3">
+        <div>
+          <label className="text-sm font-medium text-gray-500">Video Title</label>
+          <p className="text-gray-900 mt-1">{metadata.title || "Not set"}</p>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium text-gray-500">Video Description</label>
+          <p className="text-gray-900 mt-1 whitespace-pre-wrap">
+            {metadata.description || "Not set"}
+          </p>
+        </div>
+
+        {metadata.tags && metadata.tags.length > 0 && (
+          <div>
+            <label className="text-sm font-medium text-gray-500">Tags</label>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {metadata.tags.map((tag, index) => (
+                <span
+                  key={index}
+                  className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium text-gray-500">Category</label>
+            <p className="text-gray-900 mt-1">{metadata.category || "Not set"}</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-500">Language</label>
+            <p className="text-gray-900 mt-1">{metadata.language || "Not set"}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium text-gray-500">Privacy Status</label>
+            <p className="text-gray-900 mt-1 capitalize">
+              {metadata.privacy_status || "Not set"}
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-500">License</label>
+            <p className="text-gray-900 mt-1">{metadata.license || "Not set"}</p>
+          </div>
+        </div>
+
+        {metadata.recording_details && (
+          <div>
+            <label className="text-sm font-medium text-gray-500">Recording Details</label>
+            <div className="mt-1 text-sm text-gray-700">
+              {metadata.recording_details.location_description && (
+                <p>Location: {metadata.recording_details.location_description}</p>
+              )}
+              {metadata.recording_details.recording_date && (
+                <p>Date: {new Date(metadata.recording_details.recording_date).toLocaleDateString()}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {metadata.video_chapters && metadata.video_chapters.length > 0 && (
+          <div>
+            <label className="text-sm font-medium text-gray-500">Video Chapters</label>
+            <div className="mt-1 space-y-1">
+              {metadata.video_chapters.map((chapter, index) => (
+                <div key={index} className="text-sm text-gray-700">
+                  <strong>{chapter.timestamp}</strong> - {chapter.title}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   if (loading) {
@@ -1198,21 +1414,98 @@ const TaskDetails = () => {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-medium text-gray-900">
-                        {comment.author.username}
-                      </span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium text-gray-900">
+                          {comment.author.username}
+                        </span>
 
-                      <span className="text-sm text-gray-500">
-                        {formatDistanceToNow(new Date(comment.createdAt), {
-                          addSuffix: true,
-                        })}
-                      </span>
+                        <span className="text-sm text-gray-500">
+                          {formatDistanceToNow(new Date(comment.createdAt), {
+                            addSuffix: true,
+                          })}
+                          {comment.updatedAt !== comment.createdAt && (
+                            <span className="ml-1 text-xs text-gray-400">
+                              (edited)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+
+                      {/* Comment Menu */}
+                      {canEditOrDeleteComment(comment) && (
+                        <div className="relative" ref={el => commentMenuRefs.current[comment.id] = el}>
+                          <button
+                            onClick={() => setCommentMenuOpen(commentMenuOpen === comment.id ? null : comment.id)}
+                            className="p-1 hover:bg-gray-100 rounded transition-colors"
+                          >
+                            <MoreVertical className="h-4 w-4 text-gray-400" />
+                          </button>
+
+                          {commentMenuOpen === comment.id && (
+                            <div className="absolute right-0 top-6 mt-1 w-32 bg-white rounded-md shadow-lg border border-gray-200 z-10">
+                              <div className="py-1">
+                                <button
+                                  onClick={() => handleEditComment(comment)}
+                                  className="flex items-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                >
+                                  <Edit3 className="h-3 w-3 mr-2" />
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteComment(comment.id)}
+                                  disabled={deletingCommentId === comment.id}
+                                  className="flex items-center w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                                >
+                                  <Trash2 className="h-3 w-3 mr-2" />
+                                  {deletingCommentId === comment.id ? 'Deleting...' : 'Delete'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
-                    <p className="text-gray-700 mt-1 break-words">
-                      {comment.content}
-                    </p>
+                    {editingCommentId === comment.id ? (
+                      <div className="mt-2 space-y-2">
+                        <input
+                          type="text"
+                          value={editingCommentText}
+                          onChange={(e) => setEditingCommentText(e.target.value)}
+                          className="w-full input-field text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleSaveEdit(comment.id);
+                            } else if (e.key === 'Escape') {
+                              handleCancelEdit();
+                            }
+                          }}
+                        />
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleSaveEdit(comment.id)}
+                            disabled={!editingCommentText.trim()}
+                            className="btn-primary text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Check className="h-3 w-3 mr-1" />
+                            Save
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            className="btn-secondary text-xs"
+                          >
+                            <X className="h-3 w-3 mr-1" />
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-gray-700 mt-1 break-words">
+                        {comment.content}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1243,7 +1536,7 @@ const TaskDetails = () => {
                 Task Information
               </h3>
 
-              {canDeleteTask() && (
+              {(canDeleteTask() || canEditTask()) && (
                 <div className="relative" ref={taskSettingsRef}>
                   <button
                     onClick={() => setShowTaskSettings(!showTaskSettings)}
@@ -1256,26 +1549,42 @@ const TaskDetails = () => {
                   {showTaskSettings && (
                     <div className="absolute right-0 top-10 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-10">
                       <div className="py-1">
-                        <button
-                          onClick={() => {
-                            setShowTaskSettings(false);
-                            setShowDeleteModal(true);
-                          }}
-                          className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete Task
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowTaskSettings(false);
-                            setShowDeleteModal(true);
-                          }}
-                          className="flex items-center w-full px-4 py-2 text-sm text-grey-600 hover:text-grey-600 transition-colors"
-                        >
-                          <Settings className="h-4 w-4 mr-2" />
-                          Edit Task
-                        </button>
+                        {canEditTask() && (
+                          <button
+                            onClick={() => {
+                              setShowTaskSettings(false);
+                              setShowEditModal(true);
+                            }}
+                            className="flex items-center w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                          >
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit Task
+                          </button>
+                        )}
+                        {user.role === "ADMIN" && (
+                          <button
+                            onClick={() => {
+                              setShowTaskSettings(false);
+                              setShowVideoMetadataModal(true);
+                            }}
+                            className="flex items-center w-full px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+                          >
+                            <Youtube className="h-4 w-4 mr-2" />
+                            Edit Video Metadata
+                          </button>
+                        )}
+                        {canDeleteTask() && (
+                          <button
+                            onClick={() => {
+                              setShowTaskSettings(false);
+                              setShowDeleteModal(true);
+                            }}
+                            className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Task
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1382,6 +1691,36 @@ const TaskDetails = () => {
 
                     <span className="text-gray-900">{revisions.length}</span>
                   </div>
+                </div>
+              )}
+
+              {/* Video Metadata Section - Only show for admins */}
+              {user.role === "ADMIN" && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-gray-500">
+                      Video Metadata
+                    </label>
+                    <Youtube className="h-4 w-4 text-gray-400" />
+                  </div>
+                  
+                  {task.videoMetadata ? (
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      {renderVideoMetadata(task.videoMetadata)}
+                    </div>
+                  ) : (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                      <p className="text-sm text-yellow-800">
+                        Video metadata not set. Required for moving to scheduled/uploaded status.
+                      </p>
+                      <button
+                        onClick={() => setShowVideoMetadataModal(true)}
+                        className="btn-primary text-xs mt-2"
+                      >
+                        Add Video Metadata
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1820,6 +2159,27 @@ const TaskDetails = () => {
         onConfirm={handleTaskDelete}
         taskName={task.title}
         isDeleting={isDeleting}
+      />
+
+      {/* Edit Task Modal */}
+      <EditTaskModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSubmit={handleTaskEdit}
+        task={task}
+      />
+
+      {/* Video Metadata Modal */}
+      <VideoMetadataModal
+        isOpen={showVideoMetadataModal}
+        onClose={() => {
+          setShowVideoMetadataModal(false);
+          setPendingStatus(null);
+        }}
+        onSubmit={handleVideoMetadataSubmit}
+        initialData={task?.videoMetadata}
+        isRequired={!!pendingStatus}
+        pendingStatus={pendingStatus}
       />
     </div>
   );

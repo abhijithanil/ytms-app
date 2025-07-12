@@ -185,7 +185,6 @@ export const tasksAPI = {
   },
 
    deleteAudioInstruction: (audioInstructionId) => {
-    debugger
     console.log(`Deleting audio instruction ${audioInstructionId}`);
     return api.delete(`/tasks/audio-instructions/${audioInstructionId}/delete`);
   },
@@ -245,6 +244,11 @@ export const commentsAPI = {
     console.log(`Fetching comments for revision ${revisionId}`);
     return api.get(`/comments/revision/${revisionId}`);
   },
+  updateComment: (id, commentData) => {
+    console.log(`Updating comment ${id}:`, commentData);
+    return api.put(`/comments/${id}`, commentData);
+  },
+  
   deleteComment: (id) => {
     console.log(`Deleting revision ${id}`);
     return api.delete(`comments/${id}`);
