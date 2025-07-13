@@ -1754,9 +1754,15 @@ const TaskDetails = () => {
                     <Youtube className="h-4 w-4 text-gray-400" />
                   </div>
 
-                  {task.videoMetadata ? (
+                  {metadata && Object.keys(metadata).length > 0 && metadata.title && metadata.title.trim() !== "" ? (
                     <div className="bg-gray-50 rounded-lg p-3">
-                      {renderVideoMetadata(task.videoMetadata)}
+                      {renderVideoMetadata(metadata)}
+                      <button
+                        onClick={() => setShowVideoMetadataModal(true)}
+                        className="btn-primary text-xs mt-3 w-full"
+                      >
+                        View Video Metadata
+                      </button>
                     </div>
                   ) : (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
@@ -1774,6 +1780,7 @@ const TaskDetails = () => {
                   )}
                 </div>
               )}
+
             </div>
           </div>
 
@@ -2228,7 +2235,7 @@ const TaskDetails = () => {
           setPendingStatus(null);
         }}
         onSubmit={handleVideoMetadataSubmit}
-        initialData={task?.videoMetadata}
+        initialData={metadata}
         isRequired={!!pendingStatus}
         pendingStatus={pendingStatus}
       />

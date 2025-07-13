@@ -2,13 +2,14 @@ package com.insp17.ytms.entity;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Entity
 @Table(name = "video_chapters")
-@Data
+// CHANGE: Replaced @Data for safety
+@Getter
+@Setter
+@ToString(exclude = "videoMetadata") // Exclude the parent to prevent infinite loops
 @NoArgsConstructor
 @AllArgsConstructor
 public class VideoChapter {

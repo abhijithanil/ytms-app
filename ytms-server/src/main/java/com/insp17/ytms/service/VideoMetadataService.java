@@ -12,9 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 @Service
@@ -25,114 +24,47 @@ public class VideoMetadataService {
 
     private final VideoMetadataRepository videoMetadataRepository;
     private final VideoTaskRepository videoTaskRepository;
+    // NOTE: chapterRepository is no longer needed here due to cascading saves.
 
     @Transactional
-    public VideoMetadataResponseDTO createVideoMetadata(Long taskId, VideoMetadataDTO metadataDTO) {
-        log.info("Creating video metadata for task ID: {}", taskId);
-
+    public VideoMetadataResponseDTO createOrUpdateVideoMetadata(Long taskId, VideoMetadataDTO metadataDTO) {
+        // NOTE: Renamed method to be more descriptive of its "create or update" behavior.
         VideoTask videoTask = videoTaskRepository.findById(taskId)
                 .orElseThrow(() -> new RuntimeException("Video task not found with ID: " + taskId));
 
-        Optional<VideoMetadata> taskById = videoMetadataRepository.findByVideoTaskId(taskId);
+        // NOTE: Use a single method that fetches metadata with chapters to handle both cases.
+        VideoMetadata metadata = videoMetadataRepository.findByVideoTaskIdWithChapters(taskId)
+                .orElseGet(() -> {
+                    log.info("Creating new video metadata for task ID: {}", taskId);
+                    VideoMetadata newMetadata = new VideoMetadata();
+                    newMetadata.setVideoTask(videoTask);
+                    return newMetadata;
+                });
 
-        if (taskById.isPresent()) {
-            return updateVideoMetadata(taskId, metadataDTO);
-        } else {
-            VideoMetadata metadata = convertToEntity(metadataDTO);
-            metadata.setVideoTask(videoTask);
-            if (metadataDTO.getVideoChapters() != null && !metadataDTO.getVideoChapters().isEmpty()) {
-                List<VideoChapter> chapters = new ArrayList<>();
-                IntStream.range(0, metadataDTO.getVideoChapters().size())
-                        .forEach(i -> {
-                            VideoMetadataDTO.VideoChapterDTO chapterDTO = metadataDTO.getVideoChapters().get(i);
-                            VideoChapter chapter = new VideoChapter();
-                            chapter.setTitle(chapterDTO.getTitle());
-                            chapter.setTimestamp(chapterDTO.getTimestamp());
-                            chapter.setOrder(i + 1);
-                            chapter.setVideoMetadata(metadata);
-                            chapters.add(chapter);
-                        });
-                metadata.setVideoChapters(chapters);
-                VideoMetadata savedMetadata = videoMetadataRepository.save(metadata);
-                return convertToResponseDTO(savedMetadata);
-
-            } else {
-                VideoMetadata savedMetadata = videoMetadataRepository.save(metadata);
-                return convertToResponseDTO(savedMetadata);
-            }
-        }
-    }
-
-    @Transactional
-    public VideoMetadataResponseDTO updateVideoMetadata(Long taskId, VideoMetadataDTO metadataDTO) {
         log.info("Updating video metadata for task ID: {}", taskId);
+        updateEntityFromDTO(metadata, metadataDTO);
 
-        VideoTask videoTask = videoTaskRepository.findById(taskId)
-                .orElseThrow(() -> new RuntimeException("Video task not found with ID: " + taskId));
-
-        VideoMetadata existingMetadata = videoMetadataRepository.findByVideoTaskIdWithChapters(taskId)
-                .orElseThrow(() -> new RuntimeException("Video metadata not found for task ID: " + taskId));
-
-        // Update basic fields
-        existingMetadata.setTitle(metadataDTO.getTitle());
-        existingMetadata.setDescription(metadataDTO.getDescription());
-        existingMetadata.setTags(metadataDTO.getTags());
-        existingMetadata.setThumbnailUrl(metadataDTO.getThumbnailUrl());
-        existingMetadata.setCategory(metadataDTO.getCategory());
-        existingMetadata.setLanguage(metadataDTO.getLanguage());
-        existingMetadata.setPrivacyStatus(metadataDTO.getPrivacyStatus());
-        existingMetadata.setAgeRestriction(metadataDTO.getAgeRestriction());
-        existingMetadata.setMadeForKids(metadataDTO.getMadeForKids());
-        existingMetadata.setLicense(metadataDTO.getLicense());
-
-        // Update recording details
-        if (metadataDTO.getRecordingDetails() != null) {
-            existingMetadata.setLocationDescription(metadataDTO.getRecordingDetails().getLocationDescription());
-            existingMetadata.setRecordingDate(metadataDTO.getRecordingDetails().getRecordingDate());
-        } else {
-            existingMetadata.setLocationDescription(null);
-            existingMetadata.setRecordingDate(null);
-        }
-
-        // Update video chapters
-        existingMetadata.clearChapters();
-        if (metadataDTO.getVideoChapters() != null && !metadataDTO.getVideoChapters().isEmpty()) {
-            List<VideoChapter> newChapters = new ArrayList<>();
-            IntStream.range(0, metadataDTO.getVideoChapters().size())
-                    .forEach(i -> {
-                        VideoMetadataDTO.VideoChapterDTO chapterDTO = metadataDTO.getVideoChapters().get(i);
-                        VideoChapter chapter = new VideoChapter();
-                        chapter.setTitle(chapterDTO.getTitle());
-                        chapter.setTimestamp(chapterDTO.getTimestamp());
-                        chapter.setOrder(i + 1);
-                        chapter.setVideoMetadata(existingMetadata);
-                        newChapters.add(chapter);
-                    });
-            existingMetadata.setVideoChapters(newChapters);
-        }
-
-        VideoMetadata savedMetadata = videoMetadataRepository.save(existingMetadata);
+        VideoMetadata savedMetadata = videoMetadataRepository.save(metadata);
         return convertToResponseDTO(savedMetadata);
     }
+
 
     @Transactional(readOnly = true)
     public VideoMetadataResponseDTO getVideoMetadata(Long taskId) {
         log.info("Retrieving video metadata for task ID: {}", taskId);
-
-        VideoMetadata metadata = videoMetadataRepository.findByVideoTaskId(taskId)
+        // NOTE: Use the query that fetches chapters to avoid LazyInitializationException
+        VideoMetadata metadata = videoMetadataRepository.findByVideoTaskIdWithChapters(taskId)
                 .orElseThrow(() -> new RuntimeException("Video metadata not found for task ID: " + taskId));
-
         return convertToResponseDTO(metadata);
     }
 
     @Transactional
     public void deleteVideoMetadata(Long taskId) {
         log.info("Deleting video metadata for task ID: {}", taskId);
-
-        VideoMetadata metadata = videoMetadataRepository.findByVideoTaskId(taskId)
-                .orElseThrow(() -> new RuntimeException("Video metadata not found for task ID: " + taskId));
-
-        videoMetadataRepository.delete(metadata);
+        if (!videoMetadataRepository.existsByVideoTaskId(taskId)) {
+            throw new RuntimeException("Video metadata not found for task ID: " + taskId);
+        }
+        videoMetadataRepository.deleteByVideoTaskId(taskId);
         log.info("Successfully deleted video metadata for task ID: {}", taskId);
     }
 
@@ -141,8 +73,8 @@ public class VideoMetadataService {
         return videoMetadataRepository.existsByVideoTaskId(taskId);
     }
 
-    private VideoMetadata convertToEntity(VideoMetadataDTO dto) {
-        VideoMetadata metadata = new VideoMetadata();
+    // NOTE: Centralized the logic for updating an entity from a DTO.
+    private void updateEntityFromDTO(VideoMetadata metadata, VideoMetadataDTO dto) {
         metadata.setTitle(dto.getTitle());
         metadata.setDescription(dto.getDescription());
         metadata.setTags(dto.getTags());
@@ -157,12 +89,31 @@ public class VideoMetadataService {
         if (dto.getRecordingDetails() != null) {
             metadata.setLocationDescription(dto.getRecordingDetails().getLocationDescription());
             metadata.setRecordingDate(dto.getRecordingDetails().getRecordingDate());
+        } else {
+            metadata.setLocationDescription(null);
+            metadata.setRecordingDate(null);
         }
 
-        return metadata;
+        // CHANGE: Simplified and corrected chapter update logic.
+        // This clears the old collection and adds the new one.
+        // CascadeType.ALL and orphanRemoval=true will handle deleting old chapters and saving new ones.
+        metadata.getVideoChapters().clear();
+        if (dto.getVideoChapters() != null && !dto.getVideoChapters().isEmpty()) {
+            IntStream.range(0, dto.getVideoChapters().size())
+                    .mapToObj(i -> {
+                        VideoMetadataDTO.VideoChapterDTO chapterDTO = dto.getVideoChapters().get(i);
+                        VideoChapter chapter = new VideoChapter();
+                        chapter.setTitle(chapterDTO.getTitle());
+                        chapter.setTimestamp(chapterDTO.getTimestamp());
+                        chapter.setOrder(i + 1);
+                        return chapter;
+                    })
+                    .forEach(metadata::addChapter); // Use convenience method to set bidirectional relationship
+        }
     }
 
     private VideoMetadataResponseDTO convertToResponseDTO(VideoMetadata metadata) {
+        // ... (This method was mostly fine, no major changes needed but benefits from lazy loading fix)
         VideoMetadataResponseDTO dto = new VideoMetadataResponseDTO();
         dto.setId(metadata.getId());
         dto.setTitle(metadata.getTitle());
@@ -178,7 +129,6 @@ public class VideoMetadataService {
         dto.setMadeForKids(metadata.getMadeForKids());
         dto.setLicense(metadata.getLicense());
 
-        // Set recording details
         if (metadata.getLocationDescription() != null || metadata.getRecordingDate() != null) {
             VideoMetadataDTO.RecordingDetailsDTO recordingDetails = new VideoMetadataDTO.RecordingDetailsDTO();
             recordingDetails.setLocationDescription(metadata.getLocationDescription());
@@ -186,11 +136,10 @@ public class VideoMetadataService {
             dto.setRecordingDetails(recordingDetails);
         }
 
-        // Set video chapters
         if (metadata.getVideoChapters() != null && !metadata.getVideoChapters().isEmpty()) {
             List<VideoMetadataDTO.VideoChapterDTO> chapterDTOs = metadata.getVideoChapters().stream()
                     .map(chapter -> new VideoMetadataDTO.VideoChapterDTO(chapter.getTitle(), chapter.getTimestamp()))
-                    .toList();
+                    .collect(Collectors.toList()); // Use Collectors.toList() for broader compatibility
             dto.setVideoChapters(chapterDTOs);
         }
 

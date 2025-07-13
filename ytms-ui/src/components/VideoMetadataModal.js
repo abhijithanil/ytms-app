@@ -42,6 +42,8 @@ const VideoMetadataModal = ({
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [originalData, setOriginalData] = useState(null);
   const fileInputRef = useRef(null);
 
   const categories = [
@@ -79,39 +81,62 @@ const VideoMetadataModal = ({
     { code: "ar", name: "Arabic" },
   ];
 
+  // Helper function to deep compare objects
+  const deepEqual = (obj1, obj2) => {
+    return JSON.stringify(obj1) === JSON.stringify(obj2);
+  };
+
+  // Check if form data has changed
+  useEffect(() => {
+    if (originalData) {
+      const isChanged = !deepEqual(formData, originalData);
+      setHasChanges(isChanged);
+    }
+  }, [formData, originalData]);
+
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
-        setFormData({
-          title: "",
-          description: "",
-          tags: [],
-          thumbnail_url: "",
-          category: "Entertainment",
-          language: "en",
-          privacy_status: "public",
-          age_restriction: false,
-          made_for_kids: false,
+        const data = {
+          title: initialData.title ? initialData.title : "",
+          description: initialData.description ? initialData.description : "",
+          tags: initialData.tags ? initialData.tags : [],
+          thumbnail_url: initialData.thumbnail_url
+            ? initialData.thumbnail_url
+            : "",
+          category: initialData.category ? initialData.category : "",
+          language: initialData.language ? initialData.language : "",
+          privacy_status: initialData.privacy_status
+            ? initialData.privacy_status
+            : "public",
+          age_restriction: initialData.age_restriction
+            ? initialData.age_restriction
+            : false,
+          made_for_kids: initialData.made_for_kids
+            ? initialData.made_for_kids
+            : false,
           recording_details: {
-            location_description: "",
-            recording_date: "",
+            location_description:
+              initialData?.recording_details?.location_description ?? "",
+            recording_date:
+              initialData?.recording_details?.recording_date ?? "",
           },
-          license: "YouTube Standard License",
-          video_chapters: [],
-          ...initialData,
-          tags: initialData.tags || [],
-          recording_details: initialData.recording_details || {
-            location_description: "",
-            recording_date: "",
-          },
-          video_chapters: initialData.video_chapters || [],
-        });
+          license: initialData.license
+            ? initialData.license
+            : "YouTube Standard License",
+          video_chapters: initialData.video_chapters ? initialData.video_chapters : [],
+         
+        };
+        setFormData(data);
+        setOriginalData(JSON.parse(JSON.stringify(data))); // Deep copy
+        debugger
         if (initialData.thumbnail_url) {
+            debugger
           setThumbnailPreview(initialData.thumbnail_url);
         }
       } else {
         // Reset to default values
-        setFormData({
+        const defaultData = {
           title: "",
           description: "",
           tags: [],
@@ -127,10 +152,13 @@ const VideoMetadataModal = ({
           },
           license: "YouTube Standard License",
           video_chapters: [],
-        });
+        };
+        setFormData(defaultData);
+        setOriginalData(null);
         setThumbnailFile(null);
         setThumbnailPreview(null);
       }
+      setHasChanges(false);
     }
   }, [isOpen, initialData]);
 
@@ -194,6 +222,7 @@ const VideoMetadataModal = ({
       }/${objectName}`;
 
       setFormData((prev) => ({ ...prev, thumbnail_url: publicUrl }));
+      setHasChanges(true); // Mark as changed when thumbnail is uploaded
       console.log("Thumbnail uploaded successfully:", publicUrl);
     } catch (error) {
       console.error("Error uploading thumbnail:", error);
@@ -214,6 +243,7 @@ const VideoMetadataModal = ({
     setThumbnailFile(null);
     setThumbnailPreview(null);
     setFormData((prev) => ({ ...prev, thumbnail_url: "" }));
+    setHasChanges(true); // Mark as changed when thumbnail is removed
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -234,14 +264,17 @@ const VideoMetadataModal = ({
       });
     }
 
-    var videoChapters = {}
-    if(formData.video_chapters.length > 0) {
-        formData.video_chapters.forEach((chapter) => {
-            console.log(chapter)
-        })
+    var videoChapters = {};
+    if (formData.video_chapters.length > 0) {
+      formData.video_chapters.forEach((chapter) => {
+        console.log(chapter);
+      });
     }
 
-    formData.video_chapters.filter((chapter) => chapter.title.trim() !== "" && chapter.timestamp.trim() !== "")
+    formData.video_chapters.filter(
+      (chapter) =>
+        chapter.title.trim() !== "" && chapter.timestamp.trim() !== ""
+    );
 
     setIsSubmitting(true);
     try {
@@ -260,7 +293,10 @@ const VideoMetadataModal = ({
           recording_date: formData.recording_details.recording_date,
         },
         license: formData.license,
-        video_chapters: formData.video_chapters.filter((chapter) => chapter.title.trim() !== "" && chapter.timestamp.trim() !== ""),
+        video_chapters: formData.video_chapters.filter(
+          (chapter) =>
+            chapter.title.trim() !== "" && chapter.timestamp.trim() !== ""
+        ),
       };
 
       console.log("Manually created data object:", data);
@@ -683,16 +719,26 @@ const VideoMetadataModal = ({
           <div className="flex space-x-3 pt-6 border-t sticky bottom-0 bg-white z-10 py-4">
             <button
               type="submit"
-              disabled={isSubmitting || isUploadingThumbnail}
+              disabled={
+                isSubmitting ||
+                isUploadingThumbnail ||
+                (!hasChanges && initialData)
+              }
               className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
               <Save className="h-4 w-4 mr-2" />
-              {isSubmitting ? "Saving..." : "Save Metadata"}
+              {isSubmitting
+                ? "Saving..."
+                : hasChanges || !initialData
+                ? "Save Metadata"
+                : "No Changes"}
             </button>
             <button
               type="button"
               onClick={onClose}
-              disabled={isRequired && !initialData}
+              disabled={
+                (isRequired && !initialData) || (!hasChanges && initialData)
+              }
               className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isRequired && !initialData ? "Metadata Required" : "Cancel"}

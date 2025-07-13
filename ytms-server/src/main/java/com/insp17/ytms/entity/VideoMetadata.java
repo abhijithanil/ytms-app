@@ -1,23 +1,24 @@
 package com.insp17.ytms.entity;
 
-import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 @Entity
 @Table(name = "video_metadata")
-@Data
+// CHANGE: Replaced @Data with more specific and safer annotations for entities.
+@Getter
+@Setter
+@ToString(exclude = {"videoTask", "videoChapters"}) // Exclude collections and relationships from toString
 @NoArgsConstructor
 @AllArgsConstructor
 public class VideoMetadata {
@@ -26,7 +27,8 @@ public class VideoMetadata {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    // NOTE: videoTask is often just an ID link, LAZY fetching is more appropriate.
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "video_task_id")
     private VideoTask videoTask;
 
@@ -36,6 +38,9 @@ public class VideoMetadata {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    // NOTE: @ElementCollection is the standard JPA way to store a collection of basic types like String.
+    @ElementCollection(fetch = FetchType.EAGER) // EAGER is often fine for a small set of strings
+    @CollectionTable(name = "video_metadata_tags", joinColumns = @JoinColumn(name = "metadata_id"))
     @Column(name = "tag")
     private Set<String> tags = new HashSet<>();
 
@@ -66,9 +71,10 @@ public class VideoMetadata {
     @Column(nullable = false)
     private String license = "YouTube Standard License";
 
-    @OneToMany(mappedBy = "videoMetadata", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    // CHANGE: Switched to LAZY fetching for performance.
+    @OneToMany(mappedBy = "videoMetadata", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JsonManagedReference
-    private List<VideoChapter> videoChapters;
+    private List<VideoChapter> videoChapters = new ArrayList<>();
 
 
     @CreationTimestamp
@@ -79,7 +85,7 @@ public class VideoMetadata {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // Convenience methods
+    // Convenience methods remain the same, very useful!
     public void addChapter(VideoChapter chapter) {
         videoChapters.add(chapter);
         chapter.setVideoMetadata(this);
@@ -88,12 +94,5 @@ public class VideoMetadata {
     public void removeChapter(VideoChapter chapter) {
         videoChapters.remove(chapter);
         chapter.setVideoMetadata(null);
-    }
-
-    public void clearChapters() {
-        if (videoChapters != null) {
-            videoChapters.forEach(chapter -> chapter.setVideoMetadata(null));
-            videoChapters.clear();
-        }
     }
 }

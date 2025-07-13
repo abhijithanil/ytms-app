@@ -35,7 +35,7 @@ public class VideoMetaDataController {
 
         try {
             log.info("Creating video metadata for task ID: {}", taskId);
-            VideoMetadataResponseDTO response = videoMetadataService.createVideoMetadata(taskId, metadataDTO);
+            VideoMetadataResponseDTO response = videoMetadataService.createOrUpdateVideoMetadata(taskId, metadataDTO);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (IllegalStateException e) {
             log.warn("Video metadata already exists for task ID: {}", taskId);
@@ -54,7 +54,7 @@ public class VideoMetaDataController {
 
         try {
             log.info("Updating video metadata for task ID: {}", taskId);
-            VideoMetadataResponseDTO response = videoMetadataService.updateVideoMetadata(taskId, metadataDTO);
+            VideoMetadataResponseDTO response = videoMetadataService.createOrUpdateVideoMetadata(taskId, metadataDTO);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Failed to update video metadata for task ID: {}", taskId, e);
@@ -114,12 +114,12 @@ public class VideoMetaDataController {
         try {
             log.info("Creating or updating video metadata for task ID: {}", taskId);
 
-            VideoMetadataResponseDTO response;
-            if (videoMetadataService.hasVideoMetadata(taskId)) {
-                response = videoMetadataService.updateVideoMetadata(taskId, metadataDTO);
-            } else {
-                response = videoMetadataService.createVideoMetadata(taskId, metadataDTO);
-            }
+            VideoMetadataResponseDTO response = videoMetadataService.createOrUpdateVideoMetadata(taskId, metadataDTO);
+//            if (videoMetadataService.hasVideoMetadata(taskId)) {
+//                response = videoMetadataService.updateVideoMetadata(taskId, metadataDTO);
+//            } else {
+//                response = videoMetadataService.createVideoMetadata(taskId, metadataDTO);
+//            }
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
