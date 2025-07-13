@@ -1,6 +1,7 @@
 package com.insp17.ytms.service;
 
 import com.insp17.ytms.dtos.AudioInstructionDTO;
+import com.insp17.ytms.dtos.TaskUpdateRequest;
 import com.insp17.ytms.entity.*;
 import com.insp17.ytms.repository.*;
 import jakarta.transaction.Transactional;
@@ -8,7 +9,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -271,6 +274,44 @@ public class VideoTaskService {
         videoTask.getAudioInstructions().forEach(e -> fileStorageService.deleteFileFromGCP(e.getAudioUrl()));
 
         videoTaskRepository.deleteById(id);
+    }
+
+    public VideoTask updateTaskStatus(Long id, TaskUpdateRequest taskUpdateRequest) {
+        VideoTask videoTask = videoTaskRepository.findById(id).orElseThrow(() -> new RuntimeException("Video not found"));
+        boolean hasModificationItem = false;
+        if (taskUpdateRequest.getDeadline() != null && !taskUpdateRequest.getDeadline().isEmpty()) {
+            Instant instant = Instant.parse(taskUpdateRequest.getDeadline());
+            videoTask.setDeadline(LocalDateTime.ofInstant(instant, ZoneOffset.UTC));
+            hasModificationItem = true;
+        }
+
+        if (taskUpdateRequest.getPriority() != null) {
+            videoTask.setTaskPriority(taskUpdateRequest.getPriority());
+            hasModificationItem = true;
+        }
+
+        if (taskUpdateRequest.getTitle() != null) {
+            videoTask.setTitle(taskUpdateRequest.getTitle());
+            hasModificationItem = true;
+        }
+
+        if (taskUpdateRequest.getDescription() != null) {
+            videoTask.setDescription(taskUpdateRequest.getDescription());
+            hasModificationItem = true;
+        }
+
+        if (taskUpdateRequest.getPrivacyLevel() != null) {
+            videoTask.setTaskPriority(taskUpdateRequest.getPriority());
+            hasModificationItem = true;
+        }
+
+        if (hasModificationItem) {
+            videoTask.setUpdatedAt(LocalDateTime.now());
+            VideoTask task = videoTaskRepository.save(videoTask);
+            return task;
+        }
+
+        return videoTask;
     }
 
 

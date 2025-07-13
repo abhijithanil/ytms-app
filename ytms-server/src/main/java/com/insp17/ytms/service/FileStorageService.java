@@ -2,6 +2,7 @@ package com.insp17.ytms.service;
 
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.cloud.storage.*;
+import com.insp17.ytms.dtos.ThumbnailUploadResult;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,9 @@ public class FileStorageService {
     @Value("${gcp.bucket-name}")
     private String gcpBucketName;
 
+    @Value("${gcp.public.bucket-name}")
+    private String gcpPublicBucketName;
+
     @Value("${file.storage.path:/mnt/storage/ytms}")
     private String internalStoragePath;
 
@@ -48,7 +52,7 @@ public class FileStorageService {
 
     @PostConstruct
     public void initGCPStorage() throws IOException {
-        if (gcpBucketName == null) {
+        if (gcpBucketName == null && gcpPublicBucketName == null) {
             System.err.println("Bucket name is not confugured properly");
             System.exit(1);
         }
@@ -60,6 +64,7 @@ public class FileStorageService {
                 .setCredentials(credentials)
                 .build()
                 .getService();
+
     }
 
     public String generateResumableUploadUrl(String objectName, String contentType) throws StorageException {
@@ -178,6 +183,27 @@ public class FileStorageService {
         }
         return false;
     }
+
+    public ThumbnailUploadResult uploadThumbnailImage(MultipartFile file) throws IOException {
+        if (storage == null) {
+            throw new IOException("GCP Storage is not configured");
+        }
+
+        String filename = generateUniqueFilename(file.getOriginalFilename());
+
+        BlobId blobId = BlobId.of(gcpPublicBucketName, filename);
+        BlobInfo blobInfo = BlobInfo.newBuilder(blobId)
+                .setContentType(file.getContentType())
+                .build();
+
+        Blob blob = storage.create(blobInfo, file.getBytes());
+
+
+        String publicUrl = String.format("https://storage.googleapis.com/%s/%s", gcpPublicBucketName, filename);
+
+        return new ThumbnailUploadResult(publicUrl, filename, file.getSize());
+    }
+
 
     private FileUploadResult uploadToGCP(MultipartFile file, String filePath) throws IOException {
         if (storage == null) {
@@ -365,6 +391,34 @@ public class FileStorageService {
             System.err.println("Warning: GCP file not deleted (may not exist): " + videoUrl);
         } else {
             System.out.println("Deleted GCP object: " + videoUrl);
+        }
+    }
+
+    public String generateImageUploadUrl(String objectName, String type) {
+        try {
+            System.out.println("Generating RESUMABLE upload URL for: " + objectName);
+
+            BlobInfo blobInfo = BlobInfo.newBuilder(BlobId.of(gcpPublicBucketName, objectName))
+                    .setContentType(type)
+                    .build();
+
+            URL signedUrl = storage.signUrl(
+                    blobInfo,
+                    2,
+                    TimeUnit.MINUTES,
+                    Storage.SignUrlOption.httpMethod(HttpMethod.POST),
+                    Storage.SignUrlOption.withV4Signature(),
+                    Storage.SignUrlOption.withExtHeaders(Map.of(
+                            "x-goog-resumable", "start"
+                    ))
+            );
+
+            return signedUrl.toString();
+
+        } catch (Exception e) {
+            System.err.println("Error generating resumable upload URL: " + e.getMessage());
+            e.printStackTrace();
+            throw new StorageException(500, "Failed to generate resumable upload URL: " + e.getMessage());
         }
     }
 

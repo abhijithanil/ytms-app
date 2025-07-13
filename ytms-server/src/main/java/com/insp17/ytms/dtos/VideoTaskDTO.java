@@ -28,6 +28,7 @@ public class VideoTaskDTO {
     private List<RevisionDTO> revisions;
     private List<CommentDTO> comments;
     private List<AudioInstructionDTO> audioInstructions;
+    private VideoMetadataResponseDTO videoMetadataResponseDTO;
 
     public VideoTaskDTO() {}
 
@@ -123,4 +124,11 @@ public class VideoTaskDTO {
     public List<AudioInstructionDTO> getAudioInstructions() { return audioInstructions; }
     public void setAudioInstructions(List<AudioInstructionDTO> audioInstructions) { this.audioInstructions = audioInstructions; }
 
+    public VideoMetadataResponseDTO getVideoMetadataResponseDTO() {
+        return videoMetadataResponseDTO;
+    }
+
+    public void setVideoMetadataResponseDTO(VideoMetadataResponseDTO videoMetadataResponseDTO) {
+        this.videoMetadataResponseDTO = videoMetadataResponseDTO;
+    }
 }

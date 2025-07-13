@@ -37,6 +37,9 @@ public class VideoTaskController {
     @Autowired
     private AudioInstructionService audioInstructionService;
 
+    @Autowired
+    private VideoMetadataService videoMetadataService;
+
 
     @GetMapping
     public ResponseEntity<List<VideoTaskDTO>> getAllTasks(@CurrentUser UserPrincipal userPrincipal) {
@@ -126,13 +129,20 @@ public class VideoTaskController {
     public ResponseEntity<?> generateUploadUrl(@RequestParam("filename") String filename, @RequestParam("type") String type, @RequestParam("folder") String folder) {
         try {
             String uniqueFilename = fileStorageService.generateUniqueFilename(filename);
-            String objectName = folder + "/" + uniqueFilename;
 
-            String signedUrl = fileStorageService.generateResumableUploadUrl(objectName, type);
+            String objectName = folder + "/" + uniqueFilename;
+            String signedUrl = "";
+            if (folder.equals("thumbnails")) {
+                signedUrl = fileStorageService.generateImageUploadUrl(objectName, type);
+
+            } else {
+                signedUrl = fileStorageService.generateResumableUploadUrl(objectName, type);
+            }
 
             Map<String, String> response = new HashMap<>();
             response.put("signedUrl", signedUrl);
             response.put("objectName", objectName);
+            response.put("fileName", uniqueFilename);
             System.out.println(response);
 
             return ResponseEntity.ok(response);
@@ -140,6 +150,18 @@ public class VideoTaskController {
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Could not generate upload URL: " + e.getMessage());
         }
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<VideoTaskDTO> updateTask(@PathVariable Long id, @RequestBody TaskUpdateRequest taskUpdateRequest, @CurrentUser UserPrincipal userPrincipal) {
+        User assignedBy = userService.getUserById(userPrincipal.getId());
+        if (assignedBy.getRole() != UserRole.ADMIN) {
+            return ResponseEntity.status(403).build();
+        }
+
+        VideoTask task = videoTaskService.updateTaskStatus(id, taskUpdateRequest);
+        return ResponseEntity.ok(new VideoTaskDTO(task));
     }
 
     @PutMapping("/{id}/assign")
@@ -261,22 +283,4 @@ public class VideoTaskController {
     }
 
 
-//    @GetMapping("/revisions/{revisionId}/video-url")
-//    public ResponseEntity<Map<String, String>> getRevisionVideoUrl(@PathVariable Long revisionId, @CurrentUser UserPrincipal userPrincipal) {
-//        Revision revision = revisionService.getRevisionById(revisionId);
-//        if (!videoTaskService.canUserAccessTask(revision.getVideoTask().getId(), userPrincipal.getId())) {
-//            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-//        }
-//        if (revision.getEditedVideoUrl() == null) {
-//            return ResponseEntity.notFound().build();
-//        }
-//
-//        String objectName = revision.getEditedVideoUrl().replace("gs://" + fileStorageService.getGcpBucketName() + "/", "");
-//        String signedUrl = fileStorageService.generateSignedUrlForDownload(objectName);
-//
-//        Map<String, String> response = new HashMap<>();
-//        response.put("url", signedUrl);
-//
-//        return ResponseEntity.ok(response);
-//    }
 }

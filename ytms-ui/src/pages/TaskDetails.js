@@ -37,6 +37,7 @@ import api, {
   tasksAPI,
   revisionsAPI,
   commentsAPI,
+  metadataAPI,
   fileAPI,
 } from "../services/api";
 
@@ -66,6 +67,8 @@ const TaskDetails = () => {
   const { user } = useAuth();
 
   const [task, setTask] = useState(null);
+
+  const [metadata, setMetadata] = useState({})
 
   const [revisions, setRevisions] = useState([]);
 
@@ -278,7 +281,7 @@ const TaskDetails = () => {
     try {
       setLoading(true);
 
-      const [taskResponse, revisionsResponse, commentsResponse, audioResponse] =
+      const [taskResponse, revisionsResponse, commentsResponse, audioResponse, metadataResponse] =
         await Promise.all([
           tasksAPI.getTaskById(id),
 
@@ -287,6 +290,8 @@ const TaskDetails = () => {
           commentsAPI.getTaskComments(id),
 
           tasksAPI.getAudioInstructions(id),
+
+          metadataAPI.getMetadata(id)
         ]);
 
       setTask(taskResponse.data);
@@ -296,6 +301,8 @@ const TaskDetails = () => {
       setComments(commentsResponse.data);
 
       setAudioInstructions(audioResponse.data);
+
+      setMetadata(metadataResponse.data)
 
       // Set latest revision or raw video as current
 
@@ -310,6 +317,9 @@ const TaskDetails = () => {
       } else if (taskResponse.data.rawVideoUrl) {
         handleRawVideoSelect();
       }
+
+      debugger
+      console.log(metadata)
     } catch (error) {
       console.error("Failed to fetch task details:", error);
 
@@ -382,9 +392,9 @@ const TaskDetails = () => {
     }
   };
 
-  const handleTaskEdit = async (formData) => {
+  const handleTaskEdit = async (data) => {
     try {
-      const response = await tasksAPI.updateTask(id, formData);
+      const response = await tasksAPI.updateTask(id, data);
       setTask(response.data);
       setShowEditModal(false);
       toast.success("Task updated successfully");
@@ -396,21 +406,8 @@ const TaskDetails = () => {
 
   const handleVideoMetadataSubmit = async (metadataData) => {
     try {
-      // Save video metadata
-      const response = await tasksAPI.updateVideoMetadata(id, metadataData);
-      setTask(response.data);
-      
-      // Now update the status
-      if (pendingStatus) {
-        await tasksAPI.updateStatus(id, pendingStatus);
-        setTask((prev) => ({ ...prev, status: pendingStatus }));
-        toast.success(`Task moved to ${pendingStatus.toLowerCase()} with video metadata`);
-      } else {
-        toast.success("Video metadata saved successfully");
-      }
-
-      setShowVideoMetadataModal(false);
-      setPendingStatus(null);
+      const response = await metadataAPI.createMetadata(id, metadataData);      
+      fetchTaskDetails()
     } catch (error) {
       console.error("Failed to save video metadata:", error);
       toast.error("Failed to save video metadata");

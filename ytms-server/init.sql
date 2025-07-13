@@ -1,5 +1,8 @@
 -- PostgreSQL initialization script for YTMS
 
+GRANT USAGE ON SCHEMA public TO ytms_user;
+GRANT CREATE ON SCHEMA public TO ytms_user;
+
 -- Drop existing types if they exist (for development)
 DROP TYPE IF EXISTS user_role CASCADE;
 DROP TYPE IF EXISTS task_status CASCADE;

@@ -1,10 +1,12 @@
 package com.insp17.ytms.entity;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -59,11 +61,14 @@ public class VideoTask {
     @Column(name = "youtube_video_id")
     private String youtubeVideoId;
 
+    @Column(name = "tags")
+    private Set<String> tags;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+    private LocalDateTime updatedAt = LocalDateTime.now();
 
     @OneToMany(mappedBy = "videoTask", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @Fetch(FetchMode.SUBSELECT)
@@ -77,6 +82,11 @@ public class VideoTask {
 
     @OneToMany(mappedBy = "videoTask", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private Set<TaskPermission> permissions = new HashSet<>();
+
+    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @JoinColumn(name = "video_metadata_id")
+    @JsonManagedReference
+    private VideoMetadata videoMetadata;
 
     // Constructors
     public VideoTask() {
@@ -162,7 +172,6 @@ public class VideoTask {
     public void setCreatedBy(User createdBy) {
         this.createdBy = createdBy;
     }
-
 
 
     public PrivacyLevel getPrivacyLevel() {
@@ -259,5 +268,25 @@ public class VideoTask {
 
     public void setTaskPriority(TaskPriority taskPriority) {
         this.taskPriority = taskPriority;
+    }
+
+    public VideoMetadata getVideoMetadata() {
+        return videoMetadata;
+    }
+
+    public void setVideoMetadata(VideoMetadata videoMetadata) {
+        this.videoMetadata = videoMetadata;
+    }
+
+    public boolean hasVideoMetadata() {
+        return videoMetadata != null;
+    }
+
+    public Set<String> getTags() {
+        return tags;
+    }
+
+    public void setTags(Set<String> tags) {
+        this.tags = tags;
     }
 }

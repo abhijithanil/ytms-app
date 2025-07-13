@@ -3,3 +3,17 @@ gcloud auth login
 gcloud config set project inspire26
 
 gcloud storage buckets update gs://ytmthelper-inspire26 --cors-file=cors-config.json 
+
+
+% gsutil mb -p inspire26 -l australia-southeast2 gs://ytmthelper-inspire26-pub/                                                                                                           ✹
+
+% gcloud compute addresses create gcs-ip --global                                                                                                                                         ✹
+
+ gcloud compute backend-buckets create gcs-backend \                                                                                                                                     ✹
+    --gcs-bucket-name=ytmthelper-inspire26-pub \
+    --enable-cdn
+
+gsutil iam ch allUsers:objectViewer gs://ytmthelper-inspire26-pub
+
+
+gcloud storage buckets update gs://ytmthelper-inspire26-pub --cors-file=cors-config.json 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save } from 'lucide-react';
+import { X, Save, Calendar} from 'lucide-react';
 
 const EditTaskModal = ({ isOpen, onClose, onSubmit, task }) => {
   const [formData, setFormData] = useState({
@@ -23,8 +23,8 @@ const EditTaskModal = ({ isOpen, onClose, onSubmit, task }) => {
 
     try {
       const submitData = {
-        ...formData,
         deadline: formData.deadline ? new Date(formData.deadline).toISOString() : null,
+        description: formData.description ? formData.description: null
       };
       await onSubmit(submitData);
     } catch (error) {
@@ -34,12 +34,9 @@ const EditTaskModal = ({ isOpen, onClose, onSubmit, task }) => {
     }
   };
 
-  const handleChange = (e) => {
+  const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   if (!isOpen) return null;
@@ -65,25 +62,28 @@ const EditTaskModal = ({ isOpen, onClose, onSubmit, task }) => {
             <textarea
               name="description"
               value={formData.description}
-              onChange={handleChange}
+              onChange={handleInputChange}
               rows={4}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Enter task description..."
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Deadline (Optional)
-            </label>
-            <input
-              type="date"
-              name="deadline"
-              value={formData.deadline}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
+          <div className="lg:col-span-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Calendar className="inline h-4 w-4 mr-1" />
+                Deadline (Optional)
+              </label>
+              <input
+                type="datetime-local"
+                name="deadline"
+                value={formData.deadline}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                min={new Date().toISOString().slice(0, 16)}
+              />
+            </div>
+
 
           <div className="flex space-x-3 pt-4">
             <button

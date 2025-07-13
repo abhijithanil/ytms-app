@@ -184,7 +184,7 @@ export const tasksAPI = {
     return api.get(`/tasks/${taskId}/audio-instructions`);
   },
 
-   deleteAudioInstruction: (audioInstructionId) => {
+  deleteAudioInstruction: (audioInstructionId) => {
     console.log(`Deleting audio instruction ${audioInstructionId}`);
     return api.delete(`/tasks/audio-instructions/${audioInstructionId}/delete`);
   },
@@ -248,10 +248,23 @@ export const commentsAPI = {
     console.log(`Updating comment ${id}:`, commentData);
     return api.put(`/comments/${id}`, commentData);
   },
-  
+
   deleteComment: (id) => {
     console.log(`Deleting revision ${id}`);
     return api.delete(`comments/${id}`);
+  },
+};
+
+export const metadataAPI = {
+  createMetadata: (taskId, metadataData) => {
+    return api.post(`/metadata/${taskId}`, metadataData, {
+      headers: { "Content-Type": "application/json" },
+    });
+  },
+  getMetadata: (taskId) => {
+    console.log(`Fetching metadata for task ${taskId}`);
+    debugger
+    return api.get(`/metadata/task/${taskId}`);
   },
 };
 
@@ -312,16 +325,19 @@ export const dashboardAPI = {
 
 // Storage API
 export const storageAPI = {
-  generateSignedUrl: (fileName, folder, contentType) => {
+  generateSignedUrl: (filename, folder, contentType) => {
     console.log(
-      `Generating signed URL for ${fileName} in ${folder} with type ${contentType}`
+      `Generating signed URL for ${filename} in ${folder} with type ${contentType}`
     );
-    return api.post("/storage/generate-signed-url", {
-      fileName,
-      folder,
-      contentType,
+    const params = new URLSearchParams({
+      filename: filename,
+      type: contentType,
+      folder: folder,
     });
+
+    return api.post(`/tasks/generate-upload-url?${params.toString()}`);
   },
+
   verifyUpload: (objectName) => {
     console.log(`Verifying upload for object ${objectName}`);
     return api.post("/storage/verify-upload", { objectName });
