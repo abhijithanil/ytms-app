@@ -11,6 +11,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -35,10 +36,8 @@ public class VideoMetadata {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @ElementCollection
-    @CollectionTable(name = "video_tags", joinColumns = @JoinColumn(name = "video_metadata_id"))
     @Column(name = "tag")
-    private Set<String> tags;
+    private Set<String> tags = new HashSet<>();
 
     @Column(name = "thumbnail_url")
     private String thumbnailUrl;
@@ -67,7 +66,7 @@ public class VideoMetadata {
     @Column(nullable = false)
     private String license = "YouTube Standard License";
 
-    @OneToMany(mappedBy = "videoMetadata", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "videoMetadata", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @JsonManagedReference
     private List<VideoChapter> videoChapters;
 

@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -16,7 +17,8 @@ public class VideoMetadataResponseDTO {
     private Long id;
     private String title;
     private String description;
-    private Set<String> tags;
+
+    private Set<String> tags = new HashSet<>();
 
     @JsonProperty("thumbnail_url")
     private String thumbnailUrl;

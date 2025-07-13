@@ -23,7 +23,7 @@ public class VideoChapter {
     @Column(nullable = false, length = 10)
     private String timestamp;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "video_metadata_id", nullable = false)
     @JsonBackReference
     private VideoMetadata videoMetadata;

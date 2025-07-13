@@ -119,7 +119,7 @@ public class VideoMetadataService {
     public VideoMetadataResponseDTO getVideoMetadata(Long taskId) {
         log.info("Retrieving video metadata for task ID: {}", taskId);
 
-        VideoMetadata metadata = videoMetadataRepository.findByVideoTaskIdWithChapters(taskId)
+        VideoMetadata metadata = videoMetadataRepository.findByVideoTaskId(taskId)
                 .orElseThrow(() -> new RuntimeException("Video metadata not found for task ID: " + taskId));
 
         return convertToResponseDTO(metadata);
@@ -167,7 +167,9 @@ public class VideoMetadataService {
         dto.setId(metadata.getId());
         dto.setTitle(metadata.getTitle());
         dto.setDescription(metadata.getDescription());
-        dto.setTags(metadata.getTags());
+        if (metadata.getTags() != null) {
+            dto.setTags(metadata.getTags());
+        }
         dto.setThumbnailUrl(metadata.getThumbnailUrl());
         dto.setCategory(metadata.getCategory());
         dto.setLanguage(metadata.getLanguage());

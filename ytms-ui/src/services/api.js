@@ -255,6 +255,7 @@ export const commentsAPI = {
   },
 };
 
+// metadata
 export const metadataAPI = {
   createMetadata: (taskId, metadataData) => {
     return api.post(`/metadata/${taskId}`, metadataData, {
@@ -263,7 +264,6 @@ export const metadataAPI = {
   },
   getMetadata: (taskId) => {
     console.log(`Fetching metadata for task ${taskId}`);
-    debugger
     return api.get(`/metadata/task/${taskId}`);
   },
 };

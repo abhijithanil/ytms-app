@@ -68,7 +68,7 @@ const TaskDetails = () => {
 
   const [task, setTask] = useState(null);
 
-  const [metadata, setMetadata] = useState({})
+  const [metadata, setMetadata] = useState({});
 
   const [revisions, setRevisions] = useState([]);
 
@@ -177,9 +177,9 @@ const TaskDetails = () => {
       ) {
         setShowTaskSettings(false);
       }
-      
+
       // Close comment menus when clicking outside
-      Object.keys(commentMenuRefs.current).forEach(commentId => {
+      Object.keys(commentMenuRefs.current).forEach((commentId) => {
         if (
           commentMenuRefs.current[commentId] &&
           !commentMenuRefs.current[commentId].contains(event.target)
@@ -281,18 +281,26 @@ const TaskDetails = () => {
     try {
       setLoading(true);
 
-      const [taskResponse, revisionsResponse, commentsResponse, audioResponse, metadataResponse] =
-        await Promise.all([
-          tasksAPI.getTaskById(id),
+      const [
+        taskResponse,
+        revisionsResponse,
+        commentsResponse,
+        audioResponse,
+        metadataResponse,
+      ] = await Promise.all([
+        tasksAPI.getTaskById(id),
 
-          revisionsAPI.getRevisionsByTask(id),
+        revisionsAPI.getRevisionsByTask(id),
 
-          commentsAPI.getTaskComments(id),
+        commentsAPI.getTaskComments(id),
 
-          tasksAPI.getAudioInstructions(id),
+        tasksAPI.getAudioInstructions(id),
 
-          metadataAPI.getMetadata(id)
-        ]);
+        metadataAPI.getMetadata(id).catch((error) => {
+          console.warn("Metadata fetch failed but was handled:", error);
+          return { data: null };
+        }),
+      ]);
 
       setTask(taskResponse.data);
 
@@ -302,7 +310,7 @@ const TaskDetails = () => {
 
       setAudioInstructions(audioResponse.data);
 
-      setMetadata(metadataResponse.data)
+      setMetadata(metadataResponse.data);
 
       // Set latest revision or raw video as current
 
@@ -318,8 +326,7 @@ const TaskDetails = () => {
         handleRawVideoSelect();
       }
 
-      debugger
-      console.log(metadata)
+      console.log(metadataResponse.data.title);
     } catch (error) {
       console.error("Failed to fetch task details:", error);
 
@@ -350,9 +357,11 @@ const TaskDetails = () => {
 
   const handleStatusUpdate = async (newStatus) => {
     // Check if video metadata is required for certain status transitions
-    if ((newStatus === "SCHEDULED" || newStatus === "UPLOADED") && 
-        task.status === "READY" && 
-        !task.videoMetadata) {
+    if (
+      (newStatus === "SCHEDULED" || newStatus === "UPLOADED") &&
+      task.status === "READY" &&
+      !task.videoMetadata
+    ) {
       setPendingStatus(newStatus);
       setShowVideoMetadataModal(true);
       return;
@@ -406,8 +415,8 @@ const TaskDetails = () => {
 
   const handleVideoMetadataSubmit = async (metadataData) => {
     try {
-      const response = await metadataAPI.createMetadata(id, metadataData);      
-      fetchTaskDetails()
+      const response = await metadataAPI.createMetadata(id, metadataData);
+      fetchTaskDetails();
     } catch (error) {
       console.error("Failed to save video metadata:", error);
       toast.error("Failed to save video metadata");
@@ -717,22 +726,22 @@ const TaskDetails = () => {
   const handleRevisionDelete = async (revisionId) => {
     try {
       await revisionsAPI.deleteRevision(revisionId);
-      toast.success('Revision deleted successfully');
+      toast.success("Revision deleted successfully");
       fetchTaskDetails();
     } catch (error) {
-      console.error('Failed to delete revision:', error);
-      toast.error('Failed to delete revision');
+      console.error("Failed to delete revision:", error);
+      toast.error("Failed to delete revision");
     }
   };
 
   const handleAudioDelete = async (audioId) => {
     try {
       await tasksAPI.deleteAudioInstruction(audioId);
-      toast.success('Audio instruction deleted successfully');
+      toast.success("Audio instruction deleted successfully");
       fetchTaskDetails();
     } catch (error) {
-      console.error('Failed to delete audio instruction:', error);
-      toast.error('Failed to delete audio instruction');
+      console.error("Failed to delete audio instruction:", error);
+      toast.error("Failed to delete audio instruction");
     }
   };
 
@@ -1104,12 +1113,16 @@ const TaskDetails = () => {
     return (
       <div className="space-y-3">
         <div>
-          <label className="text-sm font-medium text-gray-500">Video Title</label>
+          <label className="text-sm font-medium text-gray-500">
+            Video Title
+          </label>
           <p className="text-gray-900 mt-1">{metadata.title || "Not set"}</p>
         </div>
-        
+
         <div>
-          <label className="text-sm font-medium text-gray-500">Video Description</label>
+          <label className="text-sm font-medium text-gray-500">
+            Video Description
+          </label>
           <p className="text-gray-900 mt-1 whitespace-pre-wrap">
             {metadata.description || "Not set"}
           </p>
@@ -1133,37 +1146,58 @@ const TaskDetails = () => {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium text-gray-500">Category</label>
-            <p className="text-gray-900 mt-1">{metadata.category || "Not set"}</p>
+            <label className="text-sm font-medium text-gray-500">
+              Category
+            </label>
+            <p className="text-gray-900 mt-1">
+              {metadata.category || "Not set"}
+            </p>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-500">Language</label>
-            <p className="text-gray-900 mt-1">{metadata.language || "Not set"}</p>
+            <label className="text-sm font-medium text-gray-500">
+              Language
+            </label>
+            <p className="text-gray-900 mt-1">
+              {metadata.language || "Not set"}
+            </p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium text-gray-500">Privacy Status</label>
+            <label className="text-sm font-medium text-gray-500">
+              Privacy Status
+            </label>
             <p className="text-gray-900 mt-1 capitalize">
               {metadata.privacy_status || "Not set"}
             </p>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-500">License</label>
-            <p className="text-gray-900 mt-1">{metadata.license || "Not set"}</p>
+            <p className="text-gray-900 mt-1">
+              {metadata.license || "Not set"}
+            </p>
           </div>
         </div>
 
         {metadata.recording_details && (
           <div>
-            <label className="text-sm font-medium text-gray-500">Recording Details</label>
+            <label className="text-sm font-medium text-gray-500">
+              Recording Details
+            </label>
             <div className="mt-1 text-sm text-gray-700">
               {metadata.recording_details.location_description && (
-                <p>Location: {metadata.recording_details.location_description}</p>
+                <p>
+                  Location: {metadata.recording_details.location_description}
+                </p>
               )}
               {metadata.recording_details.recording_date && (
-                <p>Date: {new Date(metadata.recording_details.recording_date).toLocaleDateString()}</p>
+                <p>
+                  Date:{" "}
+                  {new Date(
+                    metadata.recording_details.recording_date
+                  ).toLocaleDateString()}
+                </p>
               )}
             </div>
           </div>
@@ -1171,7 +1205,9 @@ const TaskDetails = () => {
 
         {metadata.video_chapters && metadata.video_chapters.length > 0 && (
           <div>
-            <label className="text-sm font-medium text-gray-500">Video Chapters</label>
+            <label className="text-sm font-medium text-gray-500">
+              Video Chapters
+            </label>
             <div className="mt-1 space-y-1">
               {metadata.video_chapters.map((chapter, index) => (
                 <div key={index} className="text-sm text-gray-700">
@@ -1431,9 +1467,20 @@ const TaskDetails = () => {
 
                       {/* Comment Menu */}
                       {canEditOrDeleteComment(comment) && (
-                        <div className="relative" ref={el => commentMenuRefs.current[comment.id] = el}>
+                        <div
+                          className="relative"
+                          ref={(el) =>
+                            (commentMenuRefs.current[comment.id] = el)
+                          }
+                        >
                           <button
-                            onClick={() => setCommentMenuOpen(commentMenuOpen === comment.id ? null : comment.id)}
+                            onClick={() =>
+                              setCommentMenuOpen(
+                                commentMenuOpen === comment.id
+                                  ? null
+                                  : comment.id
+                              )
+                            }
                             className="p-1 hover:bg-gray-100 rounded transition-colors"
                           >
                             <MoreVertical className="h-4 w-4 text-gray-400" />
@@ -1450,12 +1497,16 @@ const TaskDetails = () => {
                                   Edit
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteComment(comment.id)}
+                                  onClick={() =>
+                                    handleDeleteComment(comment.id)
+                                  }
                                   disabled={deletingCommentId === comment.id}
                                   className="flex items-center w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
                                 >
                                   <Trash2 className="h-3 w-3 mr-2" />
-                                  {deletingCommentId === comment.id ? 'Deleting...' : 'Delete'}
+                                  {deletingCommentId === comment.id
+                                    ? "Deleting..."
+                                    : "Delete"}
                                 </button>
                               </div>
                             </div>
@@ -1469,13 +1520,15 @@ const TaskDetails = () => {
                         <input
                           type="text"
                           value={editingCommentText}
-                          onChange={(e) => setEditingCommentText(e.target.value)}
+                          onChange={(e) =>
+                            setEditingCommentText(e.target.value)
+                          }
                           className="w-full input-field text-sm"
                           autoFocus
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
+                            if (e.key === "Enter") {
                               handleSaveEdit(comment.id);
-                            } else if (e.key === 'Escape') {
+                            } else if (e.key === "Escape") {
                               handleCancelEdit();
                             }
                           }}
@@ -1700,7 +1753,7 @@ const TaskDetails = () => {
                     </label>
                     <Youtube className="h-4 w-4 text-gray-400" />
                   </div>
-                  
+
                   {task.videoMetadata ? (
                     <div className="bg-gray-50 rounded-lg p-3">
                       {renderVideoMetadata(task.videoMetadata)}
@@ -1708,7 +1761,8 @@ const TaskDetails = () => {
                   ) : (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                       <p className="text-sm text-yellow-800">
-                        Video metadata not set. Required for moving to scheduled/uploaded status.
+                        Video metadata not set. Required for moving to
+                        scheduled/uploaded status.
                       </p>
                       <button
                         onClick={() => setShowVideoMetadataModal(true)}

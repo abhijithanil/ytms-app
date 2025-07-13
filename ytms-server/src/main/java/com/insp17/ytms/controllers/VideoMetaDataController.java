@@ -65,6 +65,10 @@ public class VideoMetaDataController {
     @GetMapping("/task/{taskId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
     public ResponseEntity<VideoMetadataResponseDTO> getVideoMetadata(@PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
+        if (userPrincipal == null) {
+            log.error("UserPrincipal is null for task ID: {}. This indicates an authentication issue.", taskId);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         try {
             log.info("Retrieving video metadata for task ID: {}", taskId);
             VideoMetadataResponseDTO response = videoMetadataService.getVideoMetadata(taskId);
