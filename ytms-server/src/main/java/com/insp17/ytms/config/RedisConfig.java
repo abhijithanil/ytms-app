@@ -1,6 +1,7 @@
 package com.insp17.ytms.config;
 
-
+import io.lettuce.core.RedisClient;
+import io.lettuce.core.RedisURI;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,7 +21,11 @@ public class RedisConfig {
     @Value("${spring.redis.password}")
     private String redisPassword;
 
-
+    /**
+     * This bean is used by Spring Data Redis components like RedisTemplate.
+     * It's good to keep it for general Redis operations.
+     * @return A configured LettuceConnectionFactory.
+     */
     @Bean
     public LettuceConnectionFactory redisConnectionFactory() {
         validateRedisConfig();
@@ -31,6 +36,25 @@ public class RedisConfig {
         redisConfig.setPassword(redisPassword);
 
         return new LettuceConnectionFactory(redisConfig);
+    }
+
+    /**
+     * This new bean provides the raw Lettuce RedisClient.
+     * It is specifically required by Bucket4j's LettuceBasedProxyManager in your RatelimiterConfig.
+     * The destroyMethod ensures the client's resources are released when the application shuts down.
+     * @return A configured RedisClient instance.
+     */
+    @Bean(destroyMethod = "shutdown")
+    public RedisClient redisClient() {
+        validateRedisConfig();
+
+        RedisURI redisURI = RedisURI.builder()
+                .withHost(redisHost)
+                .withPort(redisPort)
+                .withPassword(redisPassword.toCharArray())
+                .build();
+
+        return RedisClient.create(redisURI);
     }
 
 

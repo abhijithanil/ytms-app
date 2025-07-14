@@ -1,5 +1,6 @@
 package com.insp17.ytms.controllers;
 
+import com.insp17.ytms.components.Ratelimited;
 import com.insp17.ytms.dtos.*;
 import com.insp17.ytms.entity.User;
 import com.insp17.ytms.entity.UserRole;
@@ -149,6 +150,7 @@ public class AuthController {
         return ResponseEntity.ok(new UserDTO(user));
     }
 
+    @Ratelimited
     @PostMapping("/validate-token")
     public ResponseEntity<Map<String, String>> validateToken(@RequestBody ValidateTokenRequest validateTokenRequest) {
         Optional<InviteRequest> inviteRequestOp = uuidService.getUserInviteRequest(validateTokenRequest.getToken());
