@@ -14,7 +14,7 @@ import Dashboard from "./pages/Dashboard";
 import TaskBoard from "./pages/TaskBoard";
 import TaskDetails from "./pages/TaskDetails";
 import UploadVideo from "./pages/UploadVideo";
-
+import Settings from "./pages/Settings";
 import Team from "./pages/Team";
 import "./App.css";
 
@@ -90,6 +90,7 @@ function App() {
                       <Route path="/tasks/:id" element={<TaskDetails />} />
                       <Route path="/upload" element={<UploadVideo />} />
                       <Route path="/team" element={<Team />} />
+                      <Route path="/settings" element={<Settings />} />
                       <Route path="/" element={<Navigate to="/dashboard" />} />
                     </Routes>
                   </Layout>

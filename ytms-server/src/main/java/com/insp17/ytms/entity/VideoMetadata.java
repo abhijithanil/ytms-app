@@ -40,7 +40,6 @@ public class VideoMetadata {
 
     // NOTE: @ElementCollection is the standard JPA way to store a collection of basic types like String.
     @ElementCollection(fetch = FetchType.EAGER) // EAGER is often fine for a small set of strings
-    @CollectionTable(name = "video_metadata_tags", joinColumns = @JoinColumn(name = "metadata_id"))
     @Column(name = "tag")
     private Set<String> tags = new HashSet<>();
 

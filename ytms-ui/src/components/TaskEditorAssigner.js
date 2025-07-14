@@ -26,7 +26,6 @@ const TaskEditorAssigner = ({ task, onTaskUpdate }) => {
         setEditors(response.data || []);
       } catch (error) {
         console.error('Failed to fetch editors:', error);
-        toast.error('Could not load editors.');
       }
     };
     fetchEditors();

@@ -92,6 +92,10 @@ export const authAPI = {
   refreshToken: () => api.post("/auth/refresh"),
 };
 
+export const teamAPI = {
+   getAllUsers: () => api.get("/team"),
+}
+
 // Users API
 export const usersAPI = {
   getAllUsers: () => api.get("/users"),
@@ -101,6 +105,10 @@ export const usersAPI = {
   deleteUser: (id) => api.delete(`/users/${id}`),
   getEditors: () => api.get("/users/editors"),
   getAdmins: () => api.get("/users/admins"),
+  updateUserProfile: (id, profileData) =>
+    api.put(`/users/${id}/profile`, profileData),
+  changePassword: (id, passwordData) =>
+    api.put(`/users/${id}/password`, passwordData),
 };
 
 // Tasks API

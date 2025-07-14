@@ -12,9 +12,13 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
+
     Optional<User> findByEmail(String email);
+
     List<User> findByRole(UserRole role);
+
     boolean existsByUsername(String username);
+
     boolean existsByEmail(String email);
 
     @Query("SELECT u FROM User u WHERE u.role IN ('EDITOR', 'ADMIN')")
@@ -22,4 +26,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT u FROM User u WHERE u.role = 'VIEWER'")
     List<User> findViewers();
+
+    Optional<User> findFirstByRoleOrderByIdAsc(UserRole role);
+
+    @Query("SELECT u FROM User u WHERE u.userStatus = 'ACTIVE'")
+    List<User> findAllActiveUsers();
 }

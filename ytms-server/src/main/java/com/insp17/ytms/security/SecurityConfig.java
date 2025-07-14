@@ -74,7 +74,9 @@ public class SecurityConfig {
 
                         // Admin only endpoints
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/users/**").hasRole("ADMIN")
+                        .requestMatchers("/api/user/**").hasRole("ADMIN")
+
+                        .requestMatchers("/api/team/**").hasAnyRole("ADMIN", "EDITOR", "VIEWER")
 
                         // Editor and Admin endpoints
                         .requestMatchers("/api/revisions/**").hasAnyRole("EDITOR", "ADMIN")

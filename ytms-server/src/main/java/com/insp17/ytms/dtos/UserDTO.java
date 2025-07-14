@@ -8,6 +8,8 @@ import java.time.LocalDateTime;
 // UserDTO
 public class UserDTO {
     private Long id;
+    private String firstName;
+    private String lastName;
     private String username;
     private String email;
     private UserRole role;
@@ -18,6 +20,8 @@ public class UserDTO {
     public UserDTO(User user) {
         this.id = user.getId();
         this.username = user.getUsername();
+        this.firstName = user.getFistName();
+        this.lastName = user.getLastName();
         this.email = user.getEmail();
         this.role = user.getRole();
         this.createdAt = user.getCreatedAt();
@@ -38,4 +42,20 @@ public class UserDTO {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
 }

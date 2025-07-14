@@ -35,8 +35,11 @@ public class DataLoader implements CommandLineRunner {
         // Create admin user
         User admin = new User();
         admin.setUsername("admin");
+        admin.setFistName("Abhi");
+        admin.setLastName("Anil");
         admin.setEmail("admin@example.com");
         admin.setPassword(passwordEncoder.encode("password123"));
+        admin.setUserStatus(UserStatus.ACTIVE);
         admin.setRole(UserRole.ADMIN);
         admin.setCreatedAt(LocalDateTime.now());
         userRepository.save(admin);
@@ -45,6 +48,9 @@ public class DataLoader implements CommandLineRunner {
         User editor1 = new User();
         editor1.setUsername("editor1");
         editor1.setEmail("editor1@example.com");
+        editor1.setFistName("Achu");
+        editor1.setLastName("Abhi");
+        editor1.setUserStatus(UserStatus.ACTIVE);
         editor1.setPassword(passwordEncoder.encode("password123"));
         editor1.setRole(UserRole.EDITOR);
         editor1.setCreatedAt(LocalDateTime.now());
@@ -53,6 +59,9 @@ public class DataLoader implements CommandLineRunner {
         User editor2 = new User();
         editor2.setUsername("editor2");
         editor2.setEmail("editor2@example.com");
+        editor2.setFistName("Arjun");
+        editor2.setLastName("S");
+        editor2.setUserStatus(UserStatus.ACTIVE);
         editor2.setPassword(passwordEncoder.encode("password123"));
         editor2.setRole(UserRole.EDITOR);
         editor2.setCreatedAt(LocalDateTime.now());
@@ -62,6 +71,9 @@ public class DataLoader implements CommandLineRunner {
         User viewer = new User();
         viewer.setUsername("viewer1");
         viewer.setEmail("viewer1@example.com");
+        viewer.setFistName("Niranjan");
+        viewer.setLastName("S");
+        viewer.setUserStatus(UserStatus.ACTIVE);
         viewer.setPassword(passwordEncoder.encode("password123"));
         viewer.setRole(UserRole.VIEWER);
         viewer.setCreatedAt(LocalDateTime.now());

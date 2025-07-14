@@ -16,16 +16,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      fetchCurrentUser();
-    } else {
-      setLoading(false);
-    }
-  }, []);
-
   const fetchCurrentUser = async () => {
     try {
       const response = await api.get('/auth/me');
@@ -38,6 +28,18 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      fetchCurrentUser();
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+
 
   const login = async (credentials) => {
     try {
@@ -82,6 +84,7 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    fetchCurrentUser,
     isAdmin: user?.role === 'ADMIN',
     isEditor: user?.role === 'EDITOR',
   };

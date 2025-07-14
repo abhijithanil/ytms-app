@@ -1221,6 +1221,31 @@ const TaskDetails = () => {
     );
   };
 
+  const renderApprovalTab = () => {
+    if (task.status === "REVIEW" && user.role === "ADMIN") {
+      return (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Approval</h3>
+          <div className="flex space-x-4">
+            <button
+              onClick={() => handleStatusUpdate("READY")}
+              className="btn-primary"
+            >
+              Approve
+            </button>
+            <button
+              onClick={() => handleStatusUpdate("IN_PROGRESS")}
+              className="btn-secondary"
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   if (loading) {
     return (
       <div className="animate-pulse space-y-6">
@@ -1407,6 +1432,8 @@ const TaskDetails = () => {
               </div>
             )}
           </div>
+
+          {renderApprovalTab()}
 
           {/* Comments */}
 
@@ -1745,7 +1772,7 @@ const TaskDetails = () => {
               )}
 
               {/* Video Metadata Section - Only show for admins */}
-              {user.role === "ADMIN" && (
+              {(user.role === "ADMIN" || user.role == "EDITOR") && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-medium text-gray-500">
@@ -1754,7 +1781,10 @@ const TaskDetails = () => {
                     <Youtube className="h-4 w-4 text-gray-400" />
                   </div>
 
-                  {metadata && Object.keys(metadata).length > 0 && metadata.title && metadata.title.trim() !== "" ? (
+                  {metadata &&
+                  Object.keys(metadata).length > 0 &&
+                  metadata.title &&
+                  metadata.title.trim() !== "" ? (
                     <div className="bg-gray-50 rounded-lg p-3">
                       {renderVideoMetadata(metadata)}
                       <button
@@ -1780,7 +1810,6 @@ const TaskDetails = () => {
                   )}
                 </div>
               )}
-
             </div>
           </div>
 

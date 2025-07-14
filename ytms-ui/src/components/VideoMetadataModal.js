@@ -129,9 +129,7 @@ const VideoMetadataModal = ({
         };
         setFormData(data);
         setOriginalData(JSON.parse(JSON.stringify(data))); // Deep copy
-        debugger
         if (initialData.thumbnail_url) {
-            debugger
           setThumbnailPreview(initialData.thumbnail_url);
         }
       } else {

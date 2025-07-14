@@ -124,8 +124,8 @@ public class AuthController {
 
     @GetMapping("/me")
     @PreAuthorize("hasRole('USER') or hasRole('ADMIN') or hasRole('EDITOR')")
-    public ResponseEntity<?> getCurrentUser(@CurrentUser UserPrincipal userPrincipal) {
+    public ResponseEntity<UserDTO> getCurrentUser(@CurrentUser UserPrincipal userPrincipal) {
         User user = userService.getUserById(userPrincipal.getId());
-        return ResponseEntity.ok(new UserSummary(user.getId(), user.getUsername(), user.getEmail(), user.getRole().name()));
+        return ResponseEntity.ok(new UserDTO(user));
     }
 }

@@ -31,14 +31,11 @@ public class VideoMetadataDTO {
     @JsonProperty("thumbnail_url")
     private String thumbnailUrl;
 
-    @NotBlank(message = "Category is required")
     private String category;
 
-    @NotBlank(message = "Language is required")
     private String language;
 
     @JsonProperty("privacy_status")
-    @NotBlank(message = "Privacy status is required")
     private String privacyStatus;
 
     @JsonProperty("age_restriction")
@@ -48,13 +45,11 @@ public class VideoMetadataDTO {
     private Boolean madeForKids = false;
 
     @JsonProperty("recording_details")
-    @Valid
     private RecordingDetailsDTO recordingDetails;
 
     private String license;
 
     @JsonProperty("video_chapters")
-    @Valid
     private List<VideoChapterDTO> videoChapters;
 
     @Data

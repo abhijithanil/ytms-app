@@ -109,7 +109,7 @@ public class VideoMetaDataController {
     @PreAuthorize("hasRole('ADMIN') or (hasRole('EDITOR') and @taskService.isAssignedEditor(#taskId, authentication.name)) or @taskService.isTaskCreator(#taskId, authentication.name)")
     public ResponseEntity<VideoMetadataResponseDTO> createOrUpdateVideoMetadata(
             @PathVariable Long taskId,
-            @Valid @RequestBody VideoMetadataDTO metadataDTO) {
+             @RequestBody VideoMetadataDTO metadataDTO) {
 
         try {
             log.info("Creating or updating video metadata for task ID: {}", taskId);

@@ -1,4 +1,3 @@
-// Updated User Entity with VIEWER role
 package com.insp17.ytms.entity;
 
 import jakarta.persistence.*;
@@ -11,6 +10,12 @@ public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(nullable = false)
+    private String fistName;
+
+    @Column(nullable = false)
+    private String lastName;
 
     @Column(nullable = false, unique = true)
     private String username;
@@ -26,6 +31,9 @@ public class User {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    @Enumerated(EnumType.STRING)
+    private UserStatus userStatus;
 
     // Constructors, getters, setters
     public User() {}
@@ -56,6 +64,30 @@ public class User {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public String getFistName() {
+        return fistName;
+    }
+
+    public void setFistName(String fistName) {
+        this.fistName = fistName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
+    public UserStatus getUserStatus() {
+        return userStatus;
+    }
+
+    public void setUserStatus(UserStatus userStatus) {
+        this.userStatus = userStatus;
+    }
 }
 
 
