@@ -18,12 +18,12 @@ import java.util.function.Supplier;
 
 @Aspect
 @Component
-public class RatelimiterAspect {
+public class RateLimiterAspect {
 
     private final ProxyManager<String> proxyManager;
     private final Supplier<BucketConfiguration> bucketConfigurationSupplier;
 
-    public RatelimiterAspect(ProxyManager<String> proxyManager, Supplier<BucketConfiguration> bucketConfigurationSupplier) {
+    public RateLimiterAspect(ProxyManager<String> proxyManager, Supplier<BucketConfiguration> bucketConfigurationSupplier) {
         this.proxyManager = proxyManager;
         this.bucketConfigurationSupplier = bucketConfigurationSupplier;
     }
