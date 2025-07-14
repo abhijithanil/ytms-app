@@ -8,12 +8,12 @@ import {
   Mail,
   MoreVertical,
   Edit,
-  Trash2,
-  X
+  Trash2
 } from 'lucide-react';
 import { usersAPI, teamAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import InviteMemberModal from '../components/InviteMemberModal'; // Import the new modal
 
 // A simple modal component for editing user roles
 const EditRoleModal = ({ member, onClose, onSave }) => {
@@ -69,6 +69,7 @@ const Team = () => {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [editingMember, setEditingMember] = useState(null);
   const [deletingMember, setDeletingMember] = useState(null);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false); // State for invite modal
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -242,7 +243,7 @@ const Team = () => {
         </div>
         
         {user?.role === 'ADMIN' && (
-          <button className="btn-primary flex items-center space-x-2">
+          <button onClick={() => setIsInviteModalOpen(true)} className="btn-primary flex items-center space-x-2">
             <UserPlus className="h-4 w-4" />
             <span>Invite Member</span>
           </button>
@@ -300,7 +301,7 @@ const Team = () => {
               <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500">No team members found</p>
               {user?.role === 'ADMIN' && (
-                <button className="btn-primary mt-4 flex items-center space-x-2 mx-auto">
+                <button onClick={() => setIsInviteModalOpen(true)} className="btn-primary mt-4 flex items-center space-x-2 mx-auto">
                   <UserPlus className="h-4 w-4" />
                   <span>Invite First Member</span>
                 </button>
@@ -323,6 +324,13 @@ const Team = () => {
             member={deletingMember}
             onClose={() => setDeletingMember(null)}
             onConfirm={handleDeleteUser}
+        />
+      )}
+
+      {isInviteModalOpen && (
+        <InviteMemberModal
+          onClose={() => setIsInviteModalOpen(false)}
+          onInviteSent={fetchTeamMembers}
         />
       )}
     </div>

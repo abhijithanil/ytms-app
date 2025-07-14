@@ -84,17 +84,33 @@ export const authAPI = {
     console.log("Attempting login with:", credentials);
     return api.post("/auth/login", credentials);
   },
+
   register: (userData) => api.post("/auth/register", userData),
   getCurrentUser: () => {
     console.log("Fetching current user...");
     return api.get("/auth/me");
   },
   refreshToken: () => api.post("/auth/refresh"),
+
+  getInviteDetails: (token) => {
+   const body = {
+      token: token,
+    };
+    return api.post("/auth/validate-token", body);
+  },
+
+  acceptInvite: (token, userDetails) => {
+    return api.post(`/auth/accept-invite/${token}`, userDetails);
+  },
+
+  declineInvite: (token) => api.post(`/auth/decline-invite/${token}`),
 };
 
+// --- TEAM ---
 export const teamAPI = {
-   getAllUsers: () => api.get("/team"),
-}
+  getAllUsers: () => api.get("/team"),
+  inviteUser: (inviteRequest) => api.post("/team/invite", inviteRequest),
+};
 
 // Users API
 export const usersAPI = {

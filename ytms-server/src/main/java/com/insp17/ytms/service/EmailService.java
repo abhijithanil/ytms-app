@@ -1,8 +1,11 @@
 package com.insp17.ytms.service;
 
-import com.insp17.ytms.entity.TaskStatus;
-import com.insp17.ytms.entity.User;
-import com.insp17.ytms.entity.VideoTask;
+import com.insp17.ytms.dtos.InviteRequest;
+import com.insp17.ytms.dtos.SignUpRequest;
+import com.insp17.ytms.entity.*;
+import com.insp17.ytms.repository.UserRepository;
+import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
@@ -10,7 +13,11 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Optional;
+
 @Service
+@Slf4j
 public class EmailService {
 
     @Autowired
@@ -18,6 +25,21 @@ public class EmailService {
 
     @Value("${spring.mail.from}")
     private String fromEmail;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Value("${company.name:YTMSTeam}")
+    private String companyName;
+
+    @Value("${company.logo:https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.pngegg.com%2Fen%2Fpng-konuz&psig=AOvVaw2sLrqBYzY330mc3iK_swYU&ust=1752578649513000&source=images&cd=vfe&opi=89978449&ved=0CBQQjRxqFwoTCPCi4rOevI4DFQAAAAAdAAAAABAE}")
+    private String companyLogo;
+
+    @Value("${HOST_URL:http://localhost:8080}") // Default to localhost for local dev
+    private String hostUrl;
+
+    @Value("${UI_HOST_URL:http://localhost:3000/admin}") // Default to localhost for local dev
+    private String consoleUrl;
 
     @Async("verificationEmailTaskExecutor")
     public void sendTaskAssignedEmail(VideoTask task, User editor) {
@@ -199,5 +221,97 @@ public class EmailService {
             // Log the error but don't fail the main operation
             System.err.println("Failed to send email to: " + to + ", Error: " + e.getMessage());
         }
+    }
+
+    public void sendUserVerificationEmail(String email, String token) {
+    }
+
+    @Async("verificationEmailTaskExecutor")
+    public void notifyAdminsForApproval(@Valid SignUpRequest signupRequest) {
+        try {
+
+
+            List<User> activeAdmins = userRepository.findByRoleAndUserStatus(UserRole.ADMIN, UserStatus.ACTIVE);
+
+            if (activeAdmins.isEmpty()) {
+                log.warn("No active admins found. Approval emails will not be sent.");
+                return;
+            }
+
+            for (User admin : activeAdmins) {
+                String subject = "🔔 New User Signup Request - Admin Approval Needed";
+
+                String content = "<html><body style='font-family:Arial, sans-serif; text-align:center;'>"
+                        + "<div style='max-width: 600px; margin: auto; padding: 20px; border-radius: 10px; background-color: #f9f9f9;'>"
+                        + "<img src='" + companyLogo + "' alt='Logo' style='width:120px; margin-bottom:20px;' />"
+                        + "<h2 style='color: #333;'>New User Signup Request</h2>"
+                        + "<p style='color: #555; font-size:16px;'>A new user: <b style='color:#007BFF;'>" + signupRequest.getEmail() + "</p>"
+                        + "<p style='color: #555; font-size:14px;'>Please log in to your admin panel to approve or reject this request.</p>"
+                        + "<a href='" + consoleUrl + "' style='display:inline-block; padding: 12px 24px; font-size: 16px; "
+                        + "color: #fff; background-color: #007BFF; text-decoration: none; border-radius: 5px; margin:20px 0;'>"
+                        + "🔑 Login to Admin Panel</a>"
+                        + "<hr style='margin: 20px 0;'>"
+                        + "<p style='color: #aaa; font-size:12px;'>© 2025 " + companyName + ". All rights reserved.</p>"
+                        + "</div>"
+                        + "</body></html>";
+                sendEmail(admin.getEmail(), subject, content);
+                log.info("Approval email sent to admin: {}", admin.getEmail());
+            }
+        } catch (Exception e) {
+            log.error("Failed to send email: {}", e.getMessage());
+        }
+    }
+
+    @Async("verificationEmailTaskExecutor")
+    public void sendUserInviteEmail(String url, InviteRequest inviteRequest) {
+        try {
+            String subject = "🎉 You're Invited to Join " + companyName;
+
+            // Using a more robust HTML structure for email compatibility
+            String content = "<!DOCTYPE html>" // 1. Added DOCTYPE for better rendering consistency
+                    + "<html lang='en'>"
+                    + "<head>"
+                    + "<meta charset='UTF-8'>"
+                    + "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+                    + "<title>" + subject + "</title>"
+                    + "</head>"
+                    + "<body style='font-family:Arial, sans-serif; margin:0; padding:0; background-color:#f4f4f4;'>" // 2. Reset body margin/padding
+                    + "<div style='max-width: 600px; margin: 20px auto; padding: 20px; border-radius: 10px; background-color: #ffffff; border: 1px solid #ddd;'>"
+                    + "<div style='text-align:center;'>" // Centering the logo
+                    + "<img src='" + companyLogo + "' alt='Logo' style='width:120px; margin-bottom:20px;' />"
+                    + "</div>"
+                    + "<h2 style='color: #333; text-align:center;'>Welcome to " + companyName + "!</h2>"
+                    + "<p style='color: #555; font-size:16px;'>Hi there,</p>"
+                    + "<p style='color: #555; font-size:16px;'>You've been invited to join <b style='color:#007BFF;'>" + companyName + "</b> platform.</p>"
+                    + "<p style='color: #555; font-size:14px;'>Click the button below to create your account and get started:</p>"
+                    + "<div style='text-align:center;'>" // 3. Centering the button
+                    + "<a href='" + url + "' style='display:inline-block; padding: 12px 24px; font-size: 16px; "
+                    + "color: #fff; background-color: #28a745; text-decoration: none; border-radius: 5px; margin:20px 0;'>"
+                    + "🚀 Create My Account</a>"
+                    + "</div>"
+                    + "<div style='margin: 20px 0; padding: 15px; background-color: #f9f9f9; border-radius: 5px; border: 1px solid #eee;'>"
+                    + "<p style='color: #666; font-size:14px; margin:0;'><b>Invitation Details:</b></p>"
+                    + "<p style='color: #666; font-size:14px; margin:10px 0 5px;'>Email: <b>" + inviteRequest.getEmail() + "</b></p>"
+                    + "<p style='color: #666; font-size:14px; margin:5px 0;'>Role: <b>" + inviteRequest.getUserRole() + "</b></p>"
+                    + "</div>"
+                    + "<p style='color: #dc3545; font-size:12px; text-align:center;'>⚠️ This invitation link will expire in 24 hours.</p>"
+                    + "<hr style='margin: 20px 0; border:none; border-top: 1px solid #eee;'>"
+                    + "<div style='text-align:center; color: #aaa; font-size:12px;'>"
+                    + "<p style='margin:5px 0;'>If you didn't expect this invitation, please ignore this email.</p>"
+                    + "<p style='margin:5px 0;'>© " + java.time.Year.now().getValue() + " " + companyName + ". All rights reserved.</p>" // 4. Dynamically set the year
+                    + "</div>"
+                    + "</div>"
+                    + "</body></html>";
+
+            sendEmail(inviteRequest.getEmail(), subject, content);
+            log.info("Invitation email sent to: {}", inviteRequest.getEmail());
+
+        } catch (Exception e) {
+            log.error("Failed to send invitation email to {}: {}", inviteRequest.getEmail(), e.getMessage());
+        }
+    }
+
+    @Async("verificationEmailTaskExecutor")
+    public void sendUserInvitationDeclineEmail(String invitor, InviteRequest inviteRequestOp) {
     }
 }

@@ -36,34 +36,68 @@ public class User {
     private UserStatus userStatus;
 
     // Constructors, getters, setters
-    public User() {}
+    public User() {
+    }
 
-    public User(String username, String email, String password, UserRole role) {
+    public User(String firstName, String lastName, String username, String email, String password, UserRole role, UserStatus userStatus) {
+        this.fistName = firstName;
+        this.lastName = lastName;
         this.username = username;
         this.email = email;
         this.password = password;
         this.role = role;
         this.createdAt = LocalDateTime.now();
+        this.userStatus = userStatus;
     }
 
     // Getters and setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public String getUsername() { return username; }
-    public void setUsername(String username) { this.username = username; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
+    public String getUsername() {
+        return username;
+    }
 
-    public String getPassword() { return password; }
-    public void setPassword(String password) { this.password = password; }
+    public void setUsername(String username) {
+        this.username = username;
+    }
 
-    public UserRole getRole() { return role; }
-    public void setRole(UserRole role) { this.role = role; }
+    public String getEmail() {
+        return email;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public UserRole getRole() {
+        return role;
+    }
+
+    public void setRole(UserRole role) {
+        this.role = role;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
 
     public String getFistName() {
         return fistName;
@@ -89,11 +123,6 @@ public class User {
         this.userStatus = userStatus;
     }
 }
-
-
-
-
-
 
 
 // TaskPermission Entity

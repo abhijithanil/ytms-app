@@ -11,6 +11,7 @@ public class UserDTO {
     private String firstName;
     private String lastName;
     private String username;
+    private String password;
     private String email;
     private UserRole role;
     private LocalDateTime createdAt;
@@ -57,5 +58,13 @@ public class UserDTO {
 
     public void setLastName(String lastName) {
         this.lastName = lastName;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
     }
 }

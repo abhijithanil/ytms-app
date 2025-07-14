@@ -39,11 +39,15 @@ public class UserController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<User> createUser(@RequestBody CreateUserRequest request) {
         User user = new User(
+                request.getFirstName(),
+                request.getLastName(),
                 request.getUsername(),
                 request.getEmail(),
                 request.getPassword(),
-                request.getRole()
+                request.getRole(),
+                request.getUserStatus()
         );
+
         User createdUser = userService.createUser(user);
         return ResponseEntity.ok(createdUser);
     }

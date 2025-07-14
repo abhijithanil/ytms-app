@@ -2,6 +2,7 @@ package com.insp17.ytms.repository;
 
 import com.insp17.ytms.entity.User;
 import com.insp17.ytms.entity.UserRole;
+import com.insp17.ytms.entity.UserStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -31,4 +32,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT u FROM User u WHERE u.userStatus = 'ACTIVE'")
     List<User> findAllActiveUsers();
+
+    List<User> findByRoleAndUserStatus(UserRole role, UserStatus userStatus);
+
 }
