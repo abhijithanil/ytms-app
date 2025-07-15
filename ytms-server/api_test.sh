@@ -19,7 +19,7 @@ API_URL="http://localhost:8080/api/auth/validate-token"
 
 # The token to be sent in the request body.
 # Replace this with a valid or invalid token you want to test with.
-TOKEN_TO_TEST="22f70c4f-bc22-4ad1-89ee-6413690b60f0"
+TOKEN_TO_TEST="210404c1-d779-4f91-8d90-c41c9d2222c0"
 
 # The number of requests to send.
 REQUEST_COUNT=100
@@ -69,3 +69,5 @@ done
 
 echo "----------------------------------------"
 echo "Test finished."
+
+GET http://myserver.com/page/1

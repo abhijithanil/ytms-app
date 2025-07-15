@@ -6,6 +6,7 @@ import io.github.bucket4j.ConsumptionProbe;
 import io.github.bucket4j.distributed.proxy.ProxyManager;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -18,6 +19,7 @@ import java.util.function.Supplier;
 
 @Aspect
 @Component
+@Slf4j
 public class RateLimiterAspect {
 
     private final ProxyManager<String> proxyManager;
@@ -28,16 +30,16 @@ public class RateLimiterAspect {
         this.bucketConfigurationSupplier = bucketConfigurationSupplier;
     }
 
-    // Corrected the path to your annotation
     @Around("@annotation(com.insp17.ytms.components.Ratelimited)")
-    public Object ratelimit(ProceedingJoinPoint joinPoint) throws Throwable {
+    public Object rateLimit(ProceedingJoinPoint joinPoint) throws Throwable {
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        assert attributes != null;
         HttpServletRequest request = attributes.getRequest();
         HttpServletResponse response = attributes.getResponse();
+        String clientKey = request.getRemoteAddr();
 
-        String clientKey = request.getRemoteAddr(); // Using IP address is a common strategy
+        log.warn("Too many request to {} from {}", request.getPathInfo(), clientKey);
 
-        // Get or create the bucket from Redis via the ProxyManager
         Bucket bucket = proxyManager.builder().build(clientKey, bucketConfigurationSupplier);
 
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);

@@ -16,10 +16,10 @@ import java.time.Duration;
 import java.util.function.Supplier;
 
 @Configuration
-public class RatelimiterConfig {
+public class RateLimiterConfig {
     @Bean
     public ProxyManager<String>
-    lettuceBasedProxyManager(RedisClient redisClient) { //(2)
+    lettuceBasedProxyManager(RedisClient redisClient) {
         StatefulRedisConnection<String, byte[]> redisConnection = redisClient.
                 connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE));
         return LettuceBasedProxyManager.builderFor(redisConnection)
@@ -27,7 +27,7 @@ public class RatelimiterConfig {
     }
 
     @Bean
-    public Supplier<BucketConfiguration> bucketConfiguration() { //(3)
+    public Supplier<BucketConfiguration> bucketConfiguration() {
         return () -> BucketConfiguration.builder()
                 .addLimit(Bandwidth.simple(10L, Duration.ofMinutes(1L)))
                 .build();
