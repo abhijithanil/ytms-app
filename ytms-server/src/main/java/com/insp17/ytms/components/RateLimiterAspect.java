@@ -30,15 +30,16 @@ public class RateLimiterAspect {
         this.bucketConfigurationSupplier = bucketConfigurationSupplier;
     }
 
-    @Around("@annotation(com.insp17.ytms.components.Ratelimited)")
+    @Around("@annotation(com.insp17.ytms.components.RateLimited)")
     public Object rateLimit(ProceedingJoinPoint joinPoint) throws Throwable {
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
         assert attributes != null;
         HttpServletRequest request = attributes.getRequest();
         HttpServletResponse response = attributes.getResponse();
+
         String clientKey = request.getRemoteAddr();
 
-        log.warn("Too many request to {} from {}", request.getPathInfo(), clientKey);
+        log.warn("Too many request to {}:{} from {}", request.getMethod(), request.getRequestURI(), clientKey);
 
         Bucket bucket = proxyManager.builder().build(clientKey, bucketConfigurationSupplier);
 
