@@ -396,6 +396,8 @@ body {
   transform: scale(1.02);
 }
 
+
+
 /* Custom button styles */
 .btn-primary {
   @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
@@ -416,4 +418,63 @@ body {
 
 .input-field:focus {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* MFA switch */
+.mfa-switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+.mfa-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.mfa-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 34px;
+}
+
+.mfa-slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+.mfa-switch input:checked + .mfa-slider {
+  background-color: #6366f1;
+}
+
+.mfa-switch input:focus + .mfa-slider {
+  box-shadow: 0 0 1px #6366f1;
+}
+
+.mfa-switch input:checked + .mfa-slider:before {
+  transform: translateX(26px);
+}
+
+.mfa-switch input:disabled + .mfa-slider {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mfa-switch input:disabled + .mfa-slider:before {
+  cursor: not-allowed;
 }

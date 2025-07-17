@@ -1,47 +1,197 @@
-import React, { useState } from 'react';
-import { Video, Eye, EyeOff, User, Mail, Lock, UserSquare } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import React, { useState } from "react";
+import {
+  Video,
+  Eye,
+  EyeOff,
+  User,
+  Mail,
+  Lock,
+  UserSquare,
+  Shield,
+  X,
+} from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { useNavigate, Link } from "react-router-dom";
+import toast from "react-hot-toast";
+import api, { authAPI } from "../services/api";
+
+// MFA Setup Modal Component
+const MfaSetupModal = ({
+  isOpen,
+  onClose,
+  qrCodeImageUri,
+  userId,
+  onMfaEnabled,
+}) => {
+  const [otp, setOtp] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleVerify = async (e) => {
+    e.preventDefault();
+    setIsVerifying(true);
+    try {
+      const response = await authAPI.verifyMfa({
+        userId: userId,
+        token: parseInt(otp),
+      })
+
+      if (response.data.message) {
+        toast.success("Signup completed and MFA enabled successfully!");
+        onMfaEnabled();
+        onClose();
+      }
+    } catch (error) {
+      console.error("MFA verification error:", error);
+      toast.error(
+        error.response?.data?.message || "Invalid OTP. Please try again."
+      );
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleSkip = () => {
+    toast.success(
+      "Account created successfully! You can enable MFA later in settings."
+    );
+    onMfaEnabled();
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+        >
+          <X size={24} />
+        </button>
+
+        <div className="text-center mb-6">
+          <div className="flex justify-center mb-4">
+            <div className="flex items-center justify-center w-16 h-16 bg-primary-600 rounded-2xl shadow-lg">
+              <Shield className="w-8 h-8 text-white" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Setup Multi-Factor Authentication
+          </h2>
+          <p className="text-gray-600">
+            Scan this QR code with your authenticator app (Google Authenticator,
+            Authy, etc.)
+          </p>
+        </div>
+
+        <div className="flex justify-center mb-6 bg-gray-50 p-4 rounded-lg">
+          {qrCodeImageUri ? (
+            <img src={qrCodeImageUri} alt="MFA QR Code" className="w-48 h-48" />
+          ) : (
+            <div className="w-48 h-48 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
+              <p className="text-gray-500">Loading QR Code...</p>
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={handleVerify} className="space-y-4">
+          <div>
+            <label
+              htmlFor="otp"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
+              Enter 6-digit verification code
+            </label>
+            <input
+              id="otp"
+              type="text"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              className="input-field w-full text-center text-lg font-mono tracking-widest"
+              placeholder="000000"
+              maxLength="6"
+              required
+            />
+          </div>
+
+          <div className="flex space-x-3">
+            <button
+              type="button"
+              onClick={handleSkip}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            >
+              Skip for now
+            </button>
+            <button
+              type="submit"
+              disabled={isVerifying || otp.length !== 6}
+              className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isVerifying ? "Verifying..." : "Verify & Enable"}
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+          <h4 className="text-sm font-medium text-blue-900 mb-2">
+            Why enable MFA?
+          </h4>
+          <ul className="text-xs text-blue-800 space-y-1">
+            <li>• Adds an extra layer of security to your account</li>
+            <li>• Protects against unauthorized access</li>
+            <li>• You can always enable it later in Settings</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Signup = () => {
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '', // Corrected from secondName
-    username: '',
-    email: '',
-    password: '',
-    confirmPassword: ''
+    firstName: "",
+    lastName: "",
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const { register } = useAuth();
+  const [enableMfa, setEnableMfa] = useState(false);
+
+  // MFA Modal state
+  const [showMfaModal, setShowMfaModal] = useState(false);
+  const [qrCodeImageUri, setQrCodeImageUri] = useState("");
+  const [newUserId, setNewUserId] = useState(null);
+
   const navigate = useNavigate();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: value
+      [name]: value,
     });
-    // Clear specific error when user starts typing
     if (errors[name] || errors.general) {
-      setErrors(prev => ({ ...prev, [name]: '', general: '' }));
+      setErrors((prev) => ({ ...prev, [name]: "", general: "" }));
     }
   };
 
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.firstName) newErrors.firstName = 'First name is required.';
-    if (!formData.lastName) newErrors.lastName = 'Last name is required.'; // Corrected from secondName
-    if (!formData.username) newErrors.username = 'Username is required.';
-    if (!formData.email) newErrors.email = 'Email is required.';
-    if (!formData.password) newErrors.password = 'Password is required.';
-    else if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters.';
+    if (!formData.firstName) newErrors.firstName = "First name is required.";
+    if (!formData.lastName) newErrors.lastName = "Last name is required.";
+    if (!formData.username) newErrors.username = "Username is required.";
+    if (!formData.email) newErrors.email = "Email is required.";
+    if (!formData.password) newErrors.password = "Password is required.";
+    else if (formData.password.length < 6)
+      newErrors.password = "Password must be at least 6 characters.";
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match.';
+      newErrors.confirmPassword = "Passwords do not match.";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -53,32 +203,67 @@ const Signup = () => {
       return;
     }
     setIsLoading(true);
+
     try {
-      const { success, error } = await register({
+      const response = await api.post("/auth/register", {
         firstName: formData.firstName,
-        lastName: formData.lastName, // This will now correctly use the state value
+        lastName: formData.lastName,
         username: formData.username,
         email: formData.email,
         password: formData.password,
-        role: 'EDITOR' // Default role for new signups
+        role: "VIEWER",
       });
 
-      if (success) {
-        toast.success('Account created successfully! Please log in.');
-        navigate('/login');
+
+      if (response.data.success) {
+        // Get the user ID from response (you might need to adjust this based on your backend response)
+        const userId = response.data.userId || response.data.user?.id;
+        setNewUserId(userId);
+
+        if (enableMfa && userId) {
+          // Generate MFA QR code
+          try {
+            const mfaResponse = await authAPI.singUpMFAEnable({
+              userId: userId,
+            });
+            setQrCodeImageUri(mfaResponse.data.qrCodeImageUri);
+            setShowMfaModal(true);
+          } catch (mfaError) {
+            console.error("MFA setup error:", mfaError);
+            toast.error(
+              "Account created but MFA setup failed. You can enable it later in settings."
+            );
+            navigate("/login");
+          }
+        } else {
+          toast.success("Account created successfully!");
+          navigate("/login");
+        }
       } else {
-        const errorMessage = error?.response?.data?.message || 'Signup failed. Please try again.';
+        const errorMessage =
+          response.data.message || "Signup failed. Please try again.";
         setErrors({ general: errorMessage });
         toast.error(errorMessage);
       }
     } catch (err) {
-      console.error('Signup error:', err);
-      const errorMessage = 'An unexpected error occurred. Please try again.';
+      console.error("Signup error:", err);
+      const errorMessage =
+        err.response?.data?.message ||
+        "An unexpected error occurred. Please try again.";
       setErrors({ general: errorMessage });
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleMfaEnabled = () => {
+    navigate("/login");
+  };
+
+  const handleMfaModalClose = () => {
+    setShowMfaModal(false);
+    navigate("/login");
   };
 
   return (
@@ -93,9 +278,7 @@ const Signup = () => {
           <h2 className="mt-6 text-3xl font-bold text-gray-900">
             Create an Account
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Join YTManager Today
-          </p>
+          <p className="mt-2 text-sm text-gray-600">Join YTManager Today</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
@@ -122,10 +305,14 @@ const Signup = () => {
                 required
                 value={formData.firstName}
                 onChange={handleChange}
-                className={`input-field ${errors.firstName ? 'border-red-500' : ''}`}
+                className={`input-field ${
+                  errors.firstName ? "border-red-500" : ""
+                }`}
                 placeholder="First Name"
               />
-              {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName}</p>}
+              {errors.firstName && (
+                <p className="text-red-500 text-xs mt-1">{errors.firstName}</p>
+              )}
             </div>
 
             <div>
@@ -144,10 +331,14 @@ const Signup = () => {
                 required
                 value={formData.lastName}
                 onChange={handleChange}
-                className={`input-field ${errors.lastName ? 'border-red-500' : ''}`}
+                className={`input-field ${
+                  errors.lastName ? "border-red-500" : ""
+                }`}
                 placeholder="Last Name"
               />
-              {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>}
+              {errors.lastName && (
+                <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>
+              )}
             </div>
 
             <div>
@@ -166,10 +357,14 @@ const Signup = () => {
                 required
                 value={formData.username}
                 onChange={handleChange}
-                className={`input-field ${errors.username ? 'border-red-500' : ''}`}
+                className={`input-field ${
+                  errors.username ? "border-red-500" : ""
+                }`}
                 placeholder="Choose a username"
               />
-              {errors.username && <p className="text-red-500 text-xs mt-1">{errors.username}</p>}
+              {errors.username && (
+                <p className="text-red-500 text-xs mt-1">{errors.username}</p>
+              )}
             </div>
 
             <div>
@@ -188,10 +383,14 @@ const Signup = () => {
                 required
                 value={formData.email}
                 onChange={handleChange}
-                className={`input-field ${errors.email ? 'border-red-500' : ''}`}
+                className={`input-field ${
+                  errors.email ? "border-red-500" : ""
+                }`}
                 placeholder="Enter your email"
               />
-              {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+              {errors.email && (
+                <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+              )}
             </div>
 
             <div>
@@ -206,12 +405,14 @@ const Signup = () => {
                 <input
                   id="password"
                   name="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className={`input-field pr-10 ${errors.password ? 'border-red-500' : ''}`}
+                  className={`input-field pr-10 ${
+                    errors.password ? "border-red-500" : ""
+                  }`}
                   placeholder="Create a password (min. 6 characters)"
                 />
                 <button
@@ -226,7 +427,9 @@ const Signup = () => {
                   )}
                 </button>
               </div>
-              {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
+              {errors.password && (
+                <p className="text-red-500 text-xs mt-1">{errors.password}</p>
+              )}
             </div>
 
             <div>
@@ -241,12 +444,14 @@ const Signup = () => {
                 <input
                   id="confirmPassword"
                   name="confirmPassword"
-                  type={showConfirmPassword ? 'text' : 'password'}
+                  type={showConfirmPassword ? "text" : "password"}
                   autoComplete="new-password"
                   required
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className={`input-field pr-10 ${errors.confirmPassword ? 'border-red-500' : ''}`}
+                  className={`input-field pr-10 ${
+                    errors.confirmPassword ? "border-red-500" : ""
+                  }`}
                   placeholder="Confirm your password"
                 />
                 <button
@@ -262,8 +467,33 @@ const Signup = () => {
                 </button>
               </div>
               {errors.confirmPassword && (
-                <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.confirmPassword}
+                </p>
               )}
+            </div>
+
+            {/* MFA Enable Option */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center space-x-3">
+                <Shield className="h-5 w-5 text-blue-600" />
+                <div className="flex-1">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={enableMfa}
+                      onChange={(e) => setEnableMfa(e.target.checked)}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm font-medium text-gray-900">
+                      Enable Multi-Factor Authentication (Recommended)
+                    </span>
+                  </label>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Add an extra layer of security to your account
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div>
@@ -278,7 +508,7 @@ const Signup = () => {
                     <span>Creating Account...</span>
                   </div>
                 ) : (
-                  'Sign Up'
+                  "Sign Up"
                 )}
               </button>
             </div>
@@ -287,7 +517,7 @@ const Signup = () => {
 
         <div className="text-center text-sm text-gray-500">
           <p>
-            Already have an account?{' '}
+            Already have an account?{" "}
             <Link
               to="/login"
               className="font-medium text-primary-600 hover:text-primary-500 underline"
@@ -297,6 +527,15 @@ const Signup = () => {
           </p>
         </div>
       </div>
+
+      {/* MFA Setup Modal */}
+      <MfaSetupModal
+        isOpen={showMfaModal}
+        onClose={handleMfaModalClose}
+        qrCodeImageUri={qrCodeImageUri}
+        userId={newUserId}
+        onMfaEnabled={handleMfaEnabled}
+      />
     </div>
   );
 };
