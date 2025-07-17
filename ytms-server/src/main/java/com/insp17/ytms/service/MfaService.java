@@ -27,11 +27,9 @@ public class MfaService {
     @Value("${app.mfa.issuer:YTMS}")
     private String issuer;
 
-    @Value("${app.mfa.icon-url:}")
+    @Value("${app.mfa.icon-url:https://raw.githubusercontent.com/abhijithanil/ytms-app/refs/heads/mfa/ytms-server/src/main/resources/static/icon-8.png}")
     private String iconUrl;
 
-    @Value("${app.base-url:http://localhost:8080}")
-    private String baseUrl;
 
 
     public MfaService() {
@@ -90,9 +88,7 @@ public class MfaService {
                     .append("&period=30");
 
             // Add icon URL - use local resource
-            String iconUrl = baseUrl + "/icon.ico";
-            String encodedIconUrl = URLEncoder.encode(iconUrl, StandardCharsets.UTF_8);
-            urlBuilder.append("&image=").append(encodedIconUrl);
+            urlBuilder.append("&image=").append(iconUrl);
 
             return urlBuilder.toString();
 
