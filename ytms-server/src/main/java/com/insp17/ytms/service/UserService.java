@@ -74,12 +74,8 @@ public class UserService {
         return userRepository.findByRole(UserRole.ADMIN);
     }
 
-    public User updateUser(Long id, User userDetails) {
-        User user = getUserById(id);
-        user.setUsername(userDetails.getUsername());
-        user.setEmail(userDetails.getEmail());
-        user.setRole(userDetails.getRole());
-        return userRepository.save(user);
+    public User updateUser(User userDetails) {
+        return userRepository.save(userDetails);
     }
 
     public void deleteUser(Long id) {

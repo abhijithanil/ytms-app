@@ -35,6 +35,11 @@ public class User {
     @Enumerated(EnumType.STRING)
     private UserStatus userStatus;
 
+    private boolean mfaEnabled;
+
+    @Column(columnDefinition = "TEXT")
+    private String secret;
+
     // Constructors, getters, setters
     public User() {
     }
@@ -121,6 +126,22 @@ public class User {
 
     public void setUserStatus(UserStatus userStatus) {
         this.userStatus = userStatus;
+    }
+
+    public boolean isMfaEnabled() {
+        return mfaEnabled;
+    }
+
+    public void setMfaEnabled(boolean mfaEnabled) {
+        this.mfaEnabled = mfaEnabled;
+    }
+
+    public String getSecret() {
+        return secret;
+    }
+
+    public void setSecret(String secret) {
+        this.secret = secret;
     }
 }
 

@@ -1,21 +1,139 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Mail, Shield, Check, X, AlertCircle, User, UserSquare, Lock, Eye, EyeOff, Video } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authAPI } from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
+
+// MFA Setup Modal Component
+const MfaSetupModal = ({ isOpen, onClose, qrCodeImageUri, userId, onMfaEnabled }) => {
+  const [otp, setOtp] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleVerify = async (e) => {
+    e.preventDefault();
+    setIsVerifying(true);
+    try {
+      const response = await authAPI.verifyMfa("/auth/mfa/verify", { 
+        userId: userId, 
+        token: parseInt(otp) 
+      });
+      
+      if (response.data.message) {
+        onMfaEnabled();
+        onClose();
+      }
+    } catch (error) {
+      console.error("MFA verification error:", error);
+      toast.error(error.response?.data?.message || "Invalid OTP. Please try again.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleSkip = () => {
+    toast.success("Account created successfully! You can enable MFA later in settings.");
+    onMfaEnabled();
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+        >
+          <X size={24} />
+        </button>
+        
+        <div className="text-center mb-6">
+          <div className="flex justify-center mb-4">
+            <div className="flex items-center justify-center w-16 h-16 bg-primary-600 rounded-2xl shadow-lg">
+              <Shield className="w-8 h-8 text-white" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Setup Multi-Factor Authentication</h2>
+          <p className="text-gray-600">
+            Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+          </p>
+        </div>
+
+        <div className="flex justify-center mb-6 bg-gray-50 p-4 rounded-lg">
+          {qrCodeImageUri ? (
+            <img 
+              src={qrCodeImageUri} 
+              alt="MFA QR Code" 
+              className="w-48 h-48"
+            />
+          ) : (
+            <div className="w-48 h-48 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
+              <p className="text-gray-500">Loading QR Code...</p>
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={handleVerify} className="space-y-4">
+          <div>
+            <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-2">
+              Enter 6-digit verification code
+            </label>
+            <input
+              id="otp"
+              type="text"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              className="input-field w-full text-center text-lg font-mono tracking-widest"
+              placeholder="000000"
+              maxLength="6"
+              required
+            />
+          </div>
+
+          <div className="flex space-x-3">
+            <button
+              type="button"
+              onClick={handleSkip}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            >
+              Skip for now
+            </button>
+            <button
+              type="submit"
+              disabled={isVerifying || otp.length !== 6}
+              className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isVerifying ? "Verifying..." : "Verify & Enable"}
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+          <h4 className="text-sm font-medium text-blue-900 mb-2">
+            Why enable MFA?
+          </h4>
+          <ul className="text-xs text-blue-800 space-y-1">
+            <li>• Adds an extra layer of security to your account</li>
+            <li>• Protects against unauthorized access</li>
+            <li>• You can always enable it later in Settings</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AcceptInvite = () => {
   const { token } = useParams();
   const navigate = useNavigate();
 
-  const [step, setStep] = useState('details'); // 'details' or 'register'
+  const [step, setStep] = useState('details');
   const [inviteData, setInviteData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // State for the registration form
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -27,6 +145,12 @@ const AcceptInvite = () => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [enableMfa, setEnableMfa] = useState(false);
+
+  // MFA Modal state
+  const [showMfaModal, setShowMfaModal] = useState(false);
+  const [qrCodeImageUri, setQrCodeImageUri] = useState("");
+  const [newUserId, setNewUserId] = useState(null);
 
   useEffect(() => {
     const fetchInviteData = async () => {
@@ -49,7 +173,6 @@ const AcceptInvite = () => {
 
   const handleStartRegistration = () => {
     setStep('register');
-    // Pre-fill form if data is available from invite (optional)
     if (inviteData) {
         setFormData(prev => ({
             ...prev,
@@ -65,7 +188,6 @@ const AcceptInvite = () => {
     navigate('/login');
   };
 
-  // --- Registration Form Logic ---
   const handleFormChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
@@ -94,14 +216,37 @@ const AcceptInvite = () => {
     
     setIsRegistering(true);
     try {
-      await authAPI.acceptInvite(token, {
+      const response = await authAPI.acceptInvite(token, {
         firstName: formData.firstName,
         lastName: formData.lastName,
         username: formData.username,
         password: formData.password,
       });
-      toast.success('Your account has been created! Please log in.');
-      navigate('/login');
+
+      if (response.data.success) {
+        const userId = response.data.userId;
+        setNewUserId(userId);
+        
+        if (enableMfa && userId) {
+          // Generate MFA QR code
+          try {
+            const mfaResponse = await authAPI.singUpMFAEnable({ userId: userId })
+            setQrCodeImageUri(mfaResponse.data.qrCodeImageUri);
+            setShowMfaModal(true);
+          } catch (mfaError) {
+            console.error('MFA setup error:', mfaError);
+            toast.error('Account created but MFA setup failed. You can enable it later in settings.');
+            navigate('/login');
+          }
+        } else {
+          toast.success('Account created successfully! You can now log in.');
+          navigate('/login');
+        }
+      } else {
+        const errorMessage = response.data.message || 'Failed to create account.';
+        setFormErrors({ general: errorMessage });
+        toast.error(errorMessage);
+      }
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Failed to create account.';
       setFormErrors({ general: errorMessage });
@@ -111,7 +256,16 @@ const AcceptInvite = () => {
     }
   };
 
-  // --- Render Logic ---
+  const handleMfaEnabled = () => {
+    toast.success('Account created successfully! You can now log in.');
+    navigate('/login');
+  };
+
+  const handleMfaModalClose = () => {
+    setShowMfaModal(false);
+    navigate('/login');
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -192,52 +346,163 @@ const AcceptInvite = () => {
                   <p className="text-red-600 text-sm">{formErrors.general}</p>
                 </div>
               )}
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2"><UserSquare className="inline-block h-4 w-4 mr-1" />First Name</label>
-                  <input id="firstName" name="firstName" type="text" required value={formData.firstName} onChange={handleFormChange} className={`input-field ${formErrors.firstName ? 'border-red-500' : ''}`} placeholder="First Name" />
+                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2">
+                    <UserSquare className="inline-block h-4 w-4 mr-1" />First Name
+                  </label>
+                  <input 
+                    id="firstName" 
+                    name="firstName" 
+                    type="text" 
+                    required 
+                    value={formData.firstName} 
+                    onChange={handleFormChange} 
+                    className={`input-field ${formErrors.firstName ? 'border-red-500' : ''}`} 
+                    placeholder="First Name" 
+                  />
                   {formErrors.firstName && <p className="text-red-500 text-xs mt-1">{formErrors.firstName}</p>}
                 </div>
                 <div>
-                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-2"><UserSquare className="inline-block h-4 w-4 mr-1" />Last Name</label>
-                  <input id="lastName" name="lastName" type="text" required value={formData.lastName} onChange={handleFormChange} className={`input-field ${formErrors.lastName ? 'border-red-500' : ''}`} placeholder="Last Name" />
+                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-2">
+                    <UserSquare className="inline-block h-4 w-4 mr-1" />Last Name
+                  </label>
+                  <input 
+                    id="lastName" 
+                    name="lastName" 
+                    type="text" 
+                    required 
+                    value={formData.lastName} 
+                    onChange={handleFormChange} 
+                    className={`input-field ${formErrors.lastName ? 'border-red-500' : ''}`} 
+                    placeholder="Last Name" 
+                  />
                   {formErrors.lastName && <p className="text-red-500 text-xs mt-1">{formErrors.lastName}</p>}
                 </div>
               </div>
+
               <div>
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2"><User className="inline-block h-4 w-4 mr-1" />Username</label>
-                <input id="username" name="username" type="text" required value={formData.username} onChange={handleFormChange} className={`input-field ${formErrors.username ? 'border-red-500' : ''}`} placeholder="Choose a username" />
+                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+                  <User className="inline-block h-4 w-4 mr-1" />Username
+                </label>
+                <input 
+                  id="username" 
+                  name="username" 
+                  type="text" 
+                  required 
+                  value={formData.username} 
+                  onChange={handleFormChange} 
+                  className={`input-field ${formErrors.username ? 'border-red-500' : ''}`} 
+                  placeholder="Choose a username" 
+                />
                 {formErrors.username && <p className="text-red-500 text-xs mt-1">{formErrors.username}</p>}
               </div>
+
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2"><Lock className="inline-block h-4 w-4 mr-1" />Password</label>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                  <Lock className="inline-block h-4 w-4 mr-1" />Password
+                </label>
                 <div className="relative">
-                  <input id="password" name="password" type={showPassword ? 'text' : 'password'} required value={formData.password} onChange={handleFormChange} className={`input-field pr-10 ${formErrors.password ? 'border-red-500' : ''}`} placeholder="Create a password"/>
-                  <button type="button" className="absolute inset-y-0 right-0 pr-3 flex items-center" onClick={() => setShowPassword(!showPassword)}>
+                  <input 
+                    id="password" 
+                    name="password" 
+                    type={showPassword ? 'text' : 'password'} 
+                    required 
+                    value={formData.password} 
+                    onChange={handleFormChange} 
+                    className={`input-field pr-10 ${formErrors.password ? 'border-red-500' : ''}`} 
+                    placeholder="Create a password (min. 6 characters)"
+                  />
+                  <button 
+                    type="button" 
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center" 
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
                     {showPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
                   </button>
                 </div>
                 {formErrors.password && <p className="text-red-500 text-xs mt-1">{formErrors.password}</p>}
               </div>
+
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2"><Lock className="inline-block h-4 w-4 mr-1" />Confirm Password</label>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                  <Lock className="inline-block h-4 w-4 mr-1" />Confirm Password
+                </label>
                 <div className="relative">
-                  <input id="confirmPassword" name="confirmPassword" type={showConfirmPassword ? 'text' : 'password'} required value={formData.confirmPassword} onChange={handleFormChange} className={`input-field pr-10 ${formErrors.confirmPassword ? 'border-red-500' : ''}`} placeholder="Confirm your password" />
-                  <button type="button" className="absolute inset-y-0 right-0 pr-3 flex items-center" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
+                  <input 
+                    id="confirmPassword" 
+                    name="confirmPassword" 
+                    type={showConfirmPassword ? 'text' : 'password'} 
+                    required 
+                    value={formData.confirmPassword} 
+                    onChange={handleFormChange} 
+                    className={`input-field pr-10 ${formErrors.confirmPassword ? 'border-red-500' : ''}`} 
+                    placeholder="Confirm your password" 
+                  />
+                  <button 
+                    type="button" 
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center" 
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
                     {showConfirmPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
                   </button>
                 </div>
                 {formErrors.confirmPassword && <p className="text-red-500 text-xs mt-1">{formErrors.confirmPassword}</p>}
               </div>
+
+              {/* MFA Enable Option */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center space-x-3">
+                  <Shield className="h-5 w-5 text-blue-600" />
+                  <div className="flex-1">
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={enableMfa}
+                        onChange={(e) => setEnableMfa(e.target.checked)}
+                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      />
+                      <span className="ml-2 text-sm font-medium text-gray-900">
+                        Enable Multi-Factor Authentication (Recommended)
+                      </span>
+                    </label>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Add an extra layer of security to your account
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div>
-                <button type="submit" disabled={isRegistering} className="w-full btn-primary flex justify-center py-3 text-base font-medium">
-                  {isRegistering ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : 'Create Account & Join'}
+                <button 
+                  type="submit" 
+                  disabled={isRegistering} 
+                  className="w-full btn-primary flex justify-center py-3 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isRegistering ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <span>Creating Account...</span>
+                    </div>
+                  ) : (
+                    'Create Account & Join'
+                  )}
                 </button>
               </div>
             </form>
           </div>
         )}
       </div>
+
+      {/* MFA Setup Modal */}
+      <MfaSetupModal
+        isOpen={showMfaModal}
+        onClose={handleMfaModalClose}
+        qrCodeImageUri={qrCodeImageUri}
+        userId={newUserId}
+        onMfaEnabled={handleMfaEnabled}
+      />
     </div>
   );
 };

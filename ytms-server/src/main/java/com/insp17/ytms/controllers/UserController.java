@@ -66,12 +66,21 @@ public class UserController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody UpdateUserRequest request) {
-        User userDetails = new User();
-        userDetails.setUsername(request.getUsername());
-        userDetails.setEmail(request.getEmail());
-        userDetails.setRole(request.getRole());
-        User updatedUser = userService.updateUser(id, userDetails);
+    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody UpdateUserRequest updateUserRequest) {
+        User userDetails = userService.getUserById(id);
+        if (updateUserRequest.getUsername() != null) {
+            userDetails.setUsername(updateUserRequest.getUsername());
+        }
+
+        if (updateUserRequest.getEmail() != null) {
+            userDetails.setUsername(updateUserRequest.getEmail());
+        }
+
+        if (updateUserRequest.getRole() != null) {
+            userDetails.setRole(updateUserRequest.getRole());
+        }
+
+        User updatedUser = userService.updateUser(userDetails);
         return ResponseEntity.ok(updatedUser);
     }
 

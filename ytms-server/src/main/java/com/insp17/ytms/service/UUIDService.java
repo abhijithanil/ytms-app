@@ -18,6 +18,8 @@ public class UUIDService {
     @Autowired
     private StringRedisTemplate redisTemplate;
 
+    private static final String MFA_PREFIX = "MFA-";
+
     public String generateVerificationToken(String email) {
         String token = UUID.randomUUID().toString();
         redisTemplate.opsForValue().set("token:" + token, email, 30, TimeUnit.MINUTES); // Store for 30 mins
@@ -33,7 +35,6 @@ public class UUIDService {
     public Map<String, String> createUserInviteRequest(InviteRequest inviteRequest) {
         Map<String, String> re = new HashMap<>();
         String token = UUID.randomUUID().toString();
-        System.out.println(inviteRequest.toString());
         redisTemplate.opsForValue().set(token, inviteRequest.toString(), 4, TimeUnit.HOURS);
         re.put("token", token);
         re.put("url", generateInviteUrl(token));
@@ -78,5 +79,15 @@ public class UUIDService {
             return Optional.empty();
         }
         return Optional.of(GsonUtil.fromJsonString(val, InviteRequest.class));
+    }
+
+    public void saveUserMFASecretTemp(String uid, String secret) {
+        String key = MFA_PREFIX + uid;
+        redisTemplate.opsForValue().set(key, secret);
+    }
+
+    public String fetchAndDeleteUserMFASecretTemp(String uid) {
+        String key = MFA_PREFIX + uid;
+        return redisTemplate.opsForValue().getAndDelete(key);
     }
 }

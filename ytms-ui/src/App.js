@@ -19,6 +19,7 @@ import TaskDetails from "./pages/TaskDetails";
 import UploadVideo from "./pages/UploadVideo";
 import Settings from "./pages/Settings";
 import Team from "./pages/Team";
+import MfaSetup from "./pages/MfaSetup"; // Import the new MFA setup component
 import "./App.css";
 
 function ProtectedRoute({ children }) {
@@ -96,6 +97,9 @@ function App() {
             <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
             <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
             
+            {/* MFA Setup Route */}
+            <Route path="/mfa-setup" element={<MfaSetup />} />
+
             {/* Invite route accessible by both logged-in and logged-out users */}
             <Route path="/invite/:token" element={<InviteRoute><AcceptInvite /></InviteRoute>} />
 

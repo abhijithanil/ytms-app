@@ -80,10 +80,21 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
+  verifyMfa: (mfaVerifyRequest) => {
+    return api.post("/auth/mfa/verify", mfaVerifyRequest);
+  },
+
+  singUpMFAEnable: (mfaRequest) => {
+    return api.post("auth/mfa/signup/enable", mfaRequest);
+  },
+
   login: (credentials) => {
     console.log("Attempting login with:", credentials);
     return api.post("/auth/login", credentials);
   },
+
+  loginVerify: (verificationData) =>
+    api.post("/auth/login/verify", verificationData),
 
   register: (userData) => api.post("/auth/register", userData),
   getCurrentUser: () => {
@@ -93,7 +104,7 @@ export const authAPI = {
   refreshToken: () => api.post("/auth/refresh"),
 
   getInviteDetails: (token) => {
-   const body = {
+    const body = {
       token: token,
     };
     return api.post("/auth/validate-token", body);
@@ -104,6 +115,10 @@ export const authAPI = {
   },
 
   declineInvite: (token) => api.post(`/auth/decline-invite/${token}`),
+
+  enableMfa: (userId) => api.post("/auth/mfa/enable", { userId }),
+
+  disableMfa: (userId) => api.post("/auth/mfa/disable", { userId }),
 };
 
 // --- TEAM ---

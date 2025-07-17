@@ -6,10 +6,7 @@ import com.insp17.ytms.entity.User;
 import com.insp17.ytms.entity.UserRole;
 import com.insp17.ytms.entity.UserStatus;
 import com.insp17.ytms.security.JwtTokenUtil;
-import com.insp17.ytms.service.CustomUserDetailsService;
-import com.insp17.ytms.service.EmailService;
-import com.insp17.ytms.service.UUIDService;
-import com.insp17.ytms.service.UserService;
+import com.insp17.ytms.service.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,19 +48,22 @@ public class AuthController {
     @Autowired
     private UUIDService uuidService;
 
+    @Autowired
+    private MfaService mfaService;
+
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody SignUpRequest signUpRequest) {
         try {
             // Check if username already exists
             if (userService.existsByUsername(signUpRequest.getUsername())) {
                 return ResponseEntity.badRequest()
-                        .body(new ApiResponse(false, "Username is already taken!"));
+                        .body(new UserRegistrationResponse(false, "Username is already taken!"));
             }
 
             // Check if email already exists
             if (userService.existsByEmail(signUpRequest.getEmail())) {
                 return ResponseEntity.badRequest()
-                        .body(new ApiResponse(false, "Email Address already in use!"));
+                        .body(new UserRegistrationResponse(false, "Email Address already in use!"));
             }
 
             // Create new user
@@ -83,7 +83,7 @@ public class AuthController {
             emailService.sendUserVerificationEmail(signUpRequest.getEmail(), token);
             emailService.notifyAdminsForApproval(signUpRequest);
 
-            return ResponseEntity.ok(new ApiResponse(true, "User registered successfully"));
+            return ResponseEntity.ok(new UserRegistrationResponse(true, "User registered successfully", result.getId(), result.getUsername()));
 
         } catch (Exception e) {
             return ResponseEntity.badRequest()
@@ -104,6 +104,15 @@ public class AuthController {
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+            User user = userService.getUserById(userPrincipal.getId());
+
+            if (user.isMfaEnabled()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("mfaRequired", true);
+                response.put("username", user.getUsername());
+                return ResponseEntity.ok(response);
+            }
+
             String jwt = jwtTokenUtil.generateToken(userPrincipal);
 
             return ResponseEntity.ok(new JwtAuthenticationResponse(jwt, userPrincipal));
@@ -116,6 +125,151 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ApiResponse(false, "Authentication failed"));
         }
+    }
+
+    @PostMapping("/login/verify")
+    public ResponseEntity<?> verifyCode(@RequestBody MfaVerifyCodeRequest verifyCodeRequest) {
+        try {
+            User user = userService.getUserByUsername(verifyCodeRequest.getUsername());
+            if (!mfaService.verifyTotp(user.getSecret(), verifyCodeRequest.getToken())) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse(false, "Invalid OTP"));
+            }
+
+            UserDetails userDetails = userDetailsService.loadUserByUsername(verifyCodeRequest.getUsername());
+            String jwt = jwtTokenUtil.generateToken(userDetails);
+            return ResponseEntity.ok(new JwtAuthenticationResponse(jwt, (UserPrincipal) userDetails));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse(false, "Verification failed"));
+        }
+    }
+
+    @GetMapping("/mfa/status/{userId}")
+    @PreAuthorize("#userPrincipal.id == #userId")
+    public ResponseEntity<MfaStatusResponse> getMfaStatus(@CurrentUser UserPrincipal userPrincipal,
+                                                          @PathVariable Long userId) {
+        try {
+            User user = userService.getUserById(userId);
+            return ResponseEntity.ok(new MfaStatusResponse(
+                    user.isMfaEnabled(),
+                    user.getSecret() != null ? "Secret configured" : "No secret configured"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MfaStatusResponse(false, "Error checking MFA status"));
+        }
+    }
+
+    // Alternative: Get MFA status for current user
+    @GetMapping("/mfa/status")
+    public ResponseEntity<MfaStatusResponse> getCurrentUserMfaStatus(@CurrentUser UserPrincipal userPrincipal) {
+        try {
+            User user = userService.getUserById(userPrincipal.getId());
+            return ResponseEntity.ok(new MfaStatusResponse(
+                    user.isMfaEnabled(),
+                    user.getSecret() != null ? "Secret configured" : "No secret configured"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MfaStatusResponse(false, "Error checking MFA status"));
+        }
+    }
+
+    @RateLimited
+    @PostMapping("/mfa/signup/enable")
+    public ResponseEntity<?> enableMfaSingup(@RequestBody MfaGenericRequest enableMfaRequest) {
+        try {
+            User user = userService.getUserById(enableMfaRequest.getUserId());
+
+            if (user.isMfaEnabled()) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(new ErrorResponse("MFA already enabled for user"));
+            }
+
+            // Generate secret and enable MFA
+            String secret = mfaService.generateNewSecret();
+            uuidService.saveUserMFASecretTemp(String.valueOf(enableMfaRequest.getUserId()), secret);
+
+            // Generate QR code as base64 data URI
+            String qrCodeDataUri = mfaService.generateQrCodeImageAsDataUri(user.getUsername(), secret);
+
+            return ResponseEntity.ok(new MfaEnableResponse(qrCodeDataUri));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Failed to enable MFA: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/mfa/enable")
+    @PreAuthorize("#userPrincipal.id == #enableMfaRequest.userId")
+    public ResponseEntity<?> enableMfa(@CurrentUser UserPrincipal userPrincipal, @RequestBody MfaGenericRequest enableMfaRequest) {
+        try {
+            User user = userService.getUserById(userPrincipal.getId());
+
+            if (user.isMfaEnabled()) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(new ErrorResponse("MFA already enabled for user"));
+            }
+
+            // Generate secret and enable MFA
+            String secret = mfaService.generateNewSecret();
+            uuidService.saveUserMFASecretTemp(String.valueOf(userPrincipal.getId()), secret);
+
+            // Generate QR code as base64 data URI
+            String qrCodeDataUri = mfaService.generateQrCodeImageAsDataUri(user.getUsername(), secret);
+
+            return ResponseEntity.ok(new MfaEnableResponse(qrCodeDataUri));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Failed to enable MFA: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/mfa/verify")
+    public ResponseEntity<?> verifyMfa(@RequestBody MfaVerifyCodeRequest verifyRequest) {
+        try {
+            User user = userService.getUserById(verifyRequest.getUserId());
+
+            if (user.isMfaEnabled()) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(new ErrorResponse("MFA already enabled for user"));
+            }
+
+            String secret = uuidService.fetchAndDeleteUserMFASecretTemp(String.valueOf(verifyRequest.getUserId()));
+
+            if (secret == null) {
+                return ResponseEntity.badRequest()
+                        .body(new ErrorResponse("MFA setup not initiated"));
+            }
+
+
+            // Verify the TOTP code
+            boolean isValid = mfaService.verifyTotp(secret, verifyRequest.getToken());
+
+            if (isValid) {
+                // Enable MFA now that verification is successful
+                user.setMfaEnabled(true);
+                user.setSecret(secret);
+                userService.updateUser(user);
+
+                return ResponseEntity.ok(new MfaVerifyResponse("MFA enabled successfully"));
+            } else {
+                return ResponseEntity.badRequest()
+                        .body(new ErrorResponse("Invalid verification code"));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Failed to verify MFA: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/mfa/disable")
+    @PreAuthorize("#userPrincipal.id == #disableMfaRequest.userId")
+    public ResponseEntity<?> disableMfa(@CurrentUser UserPrincipal userPrincipal, @RequestBody MfaGenericRequest disableMfaRequest) {
+        User user = userService.getUserById(userPrincipal.getId());
+        user.setMfaEnabled(false);
+        userService.updateUser(user);
+        return ResponseEntity.ok(new ApiResponse(true, "MFA disabled successfully"));
     }
 
     @PostMapping("/refresh")
@@ -169,8 +323,7 @@ public class AuthController {
 
     @RateLimited
     @PostMapping("/accept-invite/{token}")
-    public ResponseEntity<Map<String, String>> acceptInvitation(@RequestBody UserDTO userDTO, @PathVariable String token) {
-        Map<String, String> resp = new HashMap<>();
+    public ResponseEntity<UserRegistrationResponse> acceptInvitation(@RequestBody UserDTO userDTO, @PathVariable String token) {
         Optional<InviteRequest> inviteRequestOp = uuidService.getUserInviteRequest(token);
         if (inviteRequestOp.isPresent()) {
             InviteRequest inviteRequest = inviteRequestOp.get();
@@ -189,11 +342,11 @@ public class AuthController {
 
             User result = userService.createUser(user);
             uuidService.removeInviteRequest(token);
-            resp.put("message", "User created");
-            return ResponseEntity.ok(resp);
+            UserRegistrationResponse response = new UserRegistrationResponse(true, "User registered successfully",result.getId(), result.getUsername());
+            return ResponseEntity.ok(response);
         } else {
-            resp.put("error", "Invalid token, or expired");
-            return ResponseEntity.status(401).body(resp);
+            UserRegistrationResponse response = new UserRegistrationResponse(false, "Invalid acceptance token, or expired");
+            return ResponseEntity.status(401).body(response);
         }
     }
 
