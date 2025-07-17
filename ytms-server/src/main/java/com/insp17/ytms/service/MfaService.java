@@ -27,9 +27,8 @@ public class MfaService {
     @Value("${app.mfa.issuer:YTMS}")
     private String issuer;
 
-    @Value("${app.mfa.icon-url:https://raw.githubusercontent.com/abhijithanil/ytms-app/refs/heads/mfa/ytms-server/src/main/resources/static/icon-8.png}")
+    @Value("${app.mfa.icon-url=https://cdn.jsdelivr.net/gh/abhijithanil/ytms-app@mfa/ytms-server/src/main/resources/static/icon-8.png}")
     private String iconUrl;
-
 
 
     public MfaService() {
@@ -87,17 +86,34 @@ public class MfaService {
                     .append("&digits=6")
                     .append("&period=30");
 
-            // Add icon URL - use local resource
-            urlBuilder.append("&image=").append(iconUrl);
+            // Add GitHub icon URL
+            String finalIconUrl = getGitHubIconUrl();
+            if (finalIconUrl != null) {
+                urlBuilder.append("&image=").append(finalIconUrl);
+                System.out.println("Using GitHub icon URL: " + finalIconUrl);
+            }
 
             return urlBuilder.toString();
 
         } catch (Exception e) {
-            // Fallback to basic URL if encoding fails
+            System.err.println("Error building OTP auth URL: " + e.getMessage());
             return String.format("otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30",
                     issuer, username, secret, issuer);
         }
     }
+
+    private String getGitHubIconUrl() {
+        String[] githubUrls = {
+                // jsDelivr CDN (best option)
+                "https://cdn.jsdelivr.net/gh/abhijithanil/ytms-app@mfa/ytms-server/src/main/resources/static/icon-8.png",
+                // Raw GitHub
+                "https://raw.githubusercontent.com/abhijithanil/ytms-app/refs/heads/mfa/ytms-server/src/main/resources/static/icon-8.png"
+        };
+
+
+        return githubUrls[0];
+    }
+
 
     public boolean verifyTotp(String secret, int code) {
         try {
