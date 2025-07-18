@@ -243,9 +243,7 @@ const TaskBoard = () => {
     <div className="space-y-6 animate-fadeIn">
       {/* Header with View Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-4 sm:space-y-0">
-        <div className="flex items-center space-x-4">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Task Board</h1>
-          
+        <div className="flex items-center space-x-4">          
           {/* View Mode Toggle - Mobile */}
           <div className="sm:hidden">
             <select

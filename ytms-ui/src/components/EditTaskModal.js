@@ -1,18 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Calendar} from 'lucide-react';
+import { X, Save, Calendar, Flag } from 'lucide-react';
 
 const EditTaskModal = ({ isOpen, onClose, onSubmit, task }) => {
   const [formData, setFormData] = useState({
     description: '',
     deadline: '',
+    priority: 'MEDIUM'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const priorities = [
+    { value: 'LOW', label: 'Low', color: 'text-green-600' },
+    { value: 'MEDIUM', label: 'Medium', color: 'text-yellow-600' },
+    { value: 'HIGH', label: 'High', color: 'text-red-600' }
+  ];
 
   useEffect(() => {
     if (task && isOpen) {
       setFormData({
         description: task.description || '',
         deadline: task.deadline ? task.deadline.split('T')[0] : '',
+        priority: task.priority || 'MEDIUM'
       });
     }
   }, [task, isOpen]);
@@ -24,7 +32,8 @@ const EditTaskModal = ({ isOpen, onClose, onSubmit, task }) => {
     try {
       const submitData = {
         deadline: formData.deadline ? new Date(formData.deadline).toISOString() : null,
-        description: formData.description ? formData.description: null
+        description: formData.description ? formData.description : null,
+        priority: formData.priority
       };
       await onSubmit(submitData);
     } catch (error) {
@@ -42,7 +51,7 @@ const EditTaskModal = ({ isOpen, onClose, onSubmit, task }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-lg font-semibold text-gray-900">Edit Task</h2>
@@ -55,6 +64,7 @@ const EditTaskModal = ({ isOpen, onClose, onSubmit, task }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Description
@@ -64,32 +74,59 @@ const EditTaskModal = ({ isOpen, onClose, onSubmit, task }) => {
               value={formData.description}
               onChange={handleInputChange}
               rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               placeholder="Enter task description..."
             />
           </div>
 
-          <div className="lg:col-span-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar className="inline h-4 w-4 mr-1" />
-                Deadline (Optional)
-              </label>
-              <input
-                type="datetime-local"
-                name="deadline"
-                value={formData.deadline}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                min={new Date().toISOString().slice(0, 16)}
-              />
-            </div>
+          {/* Priority */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Flag className="inline h-4 w-4 mr-1" />
+              Priority
+            </label>
+            <select
+              name="priority"
+              value={formData.priority}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            >
+              {priorities.map((priority) => (
+                <option key={priority.value} value={priority.value}>
+                  {priority.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Set the task priority level
+            </p>
+          </div>
 
+          {/* Deadline */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Calendar className="inline h-4 w-4 mr-1" />
+              Deadline (Optional)
+            </label>
+            <input
+              type="date"
+              name="deadline"
+              value={formData.deadline}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              min={new Date().toISOString().slice(0, 10)}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Set a deadline for this task
+            </p>
+          </div>
 
-          <div className="flex space-x-3 pt-4">
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-4">
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm"
             >
               <Save className="h-4 w-4 mr-2" />
               {isSubmitting ? 'Saving...' : 'Save Changes'}
@@ -97,7 +134,7 @@ const EditTaskModal = ({ isOpen, onClose, onSubmit, task }) => {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+              className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 text-sm"
             >
               Cancel
             </button>

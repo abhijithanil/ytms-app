@@ -1,156 +1,97 @@
 import React, { useState, useEffect, useRef } from "react";
-
-import {
-  ArrowLeft,
-  Play,
-  Pause,
-  Download,
-  Upload,
-  MessageCircle,
-  Send,
-  Mic,
-  Video,
-  User,
-  Calendar,
-  Shield,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  FileVideo,
-  Volume2,
-  X,
-  Save,
-  Settings,
-  Trash2,
-  Square,
-  RotateCcw,
-  Check,
-  Edit3,
-  MoreVertical,
-  Edit,
-  Youtube,
-} from "lucide-react";
-
 import { useParams, useNavigate } from "react-router-dom";
+import { formatDistanceToNow } from "date-fns";
+import toast from "react-hot-toast";
+import axios from "axios";
 
+// API imports
 import api, {
   tasksAPI,
   revisionsAPI,
   commentsAPI,
   metadataAPI,
-  fileAPI,
 } from "../services/api";
 
+// Context
 import { useAuth } from "../context/AuthContext";
 
-import { formatDistanceToNow } from "date-fns";
-
-import toast from "react-hot-toast";
-
-import TaskEditorAssigner from "../components/TaskEditorAssigner";
-
+// Component imports
+import TaskHeader from "../components/TaskHeader";
+import VideoPlayer from "../components/VideoPlayer";
+import CommentsSection from "../components/CommentsSection";
+import TaskInfoSidebar from "../components/TaskInfoSidebar";
+import RevisionsList from "../components/RevisionsList";
+import AudioInstructions from "../components/AudioInstructions";
+import ApprovalSection from "../components/ApprovalSection";
+import MobileCollapsibleSidebar from "../components/MobileCollapsibleSidebar";
 import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
-
 import VideoMetadataModal from "../components/VideoMetadataModal";
-
 import EditTaskModal from "../components/EditTaskModal";
 
-import axios from "axios";
+// Icons for loading state
+import { AlertCircle } from "lucide-react";
 
 const { isCancel, CancelToken } = axios;
 
 const TaskDetails = () => {
   const { id } = useParams();
-
   const navigate = useNavigate();
-
   const { user } = useAuth();
 
+  // Core state
   const [task, setTask] = useState(null);
-
   const [metadata, setMetadata] = useState({});
-
   const [revisions, setRevisions] = useState([]);
-
-  const [playing, setPlaying] = useState([]);
-
   const [comments, setComments] = useState([]);
-
   const [audioInstructions, setAudioInstructions] = useState([]);
-
-  const [selectedRevision, setSelectedRevision] = useState(null);
-
-  const [newComment, setNewComment] = useState("");
-
-  const [newRevisionFile, setNewRevisionFile] = useState(null);
-
-  const [newRevisionNotes, setNewRevisionNotes] = useState("");
-
-  const [newAudioFile, setNewAudioFile] = useState(null);
-
-  const [newAudioDescription, setNewAudioDescription] = useState("");
-
   const [loading, setLoading] = useState(true);
 
-  const [playingAudio, setPlayingAudio] = useState(null);
+  // Video state
+  const [selectedRevision, setSelectedRevision] = useState(null);
+  const [currentVideoUrl, setCurrentVideoUrl] = useState("");
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [videoError, setVideoError] = useState(null);
 
-  // Comment edit/delete state
+  // Comments state
+  const [newComment, setNewComment] = useState("");
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingCommentText, setEditingCommentText] = useState("");
-  const [commentMenuOpen, setCommentMenuOpen] = useState(null);
   const [deletingCommentId, setDeletingCommentId] = useState(null);
 
-  // Audio recording state
+  // Revisions state
+  const [showUploadRevision, setShowUploadRevision] = useState(false);
+  const [newRevisionFile, setNewRevisionFile] = useState(null);
+  const [newRevisionNotes, setNewRevisionNotes] = useState("");
+  const [isRevisionSubmitting, setIsRevisionSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadToastId, setUploadToastId] = useState(null);
+  const [cancelTokenSource, setCancelTokenSource] = useState(null);
+
+  // Audio state
+  const [showUploadAudio, setShowUploadAudio] = useState(false);
+  const [newAudioDescription, setNewAudioDescription] = useState("");
+  const [playingAudio, setPlayingAudio] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [currentAudioBlob, setCurrentAudioBlob] = useState(null);
+
+  // Modal states
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showVideoMetadataModal, setShowVideoMetadataModal] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Refs
   const mediaRecorderRef = useRef(null);
   const recordingIntervalRef = useRef(null);
   const audioChunksRef = useRef([]);
-
-  const [currentVideoUrl, setCurrentVideoUrl] = useState("");
-
-  const [showUploadRevision, setShowUploadRevision] = useState(false);
-
-  const [showUploadAudio, setShowUploadAudio] = useState(false);
-
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-
-  const [videoError, setVideoError] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const [isRevisionSubmitting, setIsRevisionSubmitting] = useState(false);
-  const [uploadToastId, setUploadToastId] = useState(null);
-  const [cancelTokenSource, setCancelTokenSource] = useState(null);
-
-  // Task settings dropdown and delete modal states
-  const [showTaskSettings, setShowTaskSettings] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  // Edit task modal state
-  const [showEditModal, setShowEditModal] = useState(false);
-
-  // Video metadata modal state
-  const [showVideoMetadataModal, setShowVideoMetadataModal] = useState(false);
-  const [pendingStatus, setPendingStatus] = useState(null);
-
-  const videoRef = useRef(null);
-
   const audioRefs = useRef({});
 
-  const taskSettingsRef = useRef(null);
-  const commentMenuRefs = useRef({});
-
-  const [revisionFormData, setRevisionFormData] = useState({
-    notes: "",
-    taskId: "",
-  });
-
+  // Effects
   useEffect(() => {
     fetchTaskDetails();
-
     return () => {
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
@@ -168,119 +109,10 @@ const TaskDetails = () => {
     }
   }, [task, revisions]);
 
-  // Close task settings dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        taskSettingsRef.current &&
-        !taskSettingsRef.current.contains(event.target)
-      ) {
-        setShowTaskSettings(false);
-      }
-
-      // Close comment menus when clicking outside
-      Object.keys(commentMenuRefs.current).forEach((commentId) => {
-        if (
-          commentMenuRefs.current[commentId] &&
-          !commentMenuRefs.current[commentId].contains(event.target)
-        ) {
-          setCommentMenuOpen(null);
-        }
-      });
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  const handleTaskUpdate = (updatedTask) => {
-    setTask(updatedTask);
-  };
-
-  const UploadProgressToast = ({ progress, fileName, onCancel }) => (
-    <div className="max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5">
-      <div className="flex-1 w-0 p-4">
-        <div className="flex items-start">
-          <div className="flex-shrink-0 pt-0.5">
-            <div className="relative">
-              <svg className="h-10 w-10" viewBox="0 0 36 36">
-                <path
-                  className="text-gray-200"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  fill="none"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-                <path
-                  className="text-primary-600"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeDasharray={`${progress}, 100`}
-                  fill="none"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-              </svg>
-              <div className="absolute top-0 left-0 h-full w-full flex items-center justify-center">
-                <span className="text-xs font-bold text-primary-600">
-                  {progress}%
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="ml-3 flex-1">
-            <p className="text-sm font-medium text-gray-900">
-              Uploading file...
-            </p>
-            <p className="mt-1 text-sm text-gray-500 truncate" title={fileName}>
-              {fileName}
-            </p>
-          </div>
-        </div>
-      </div>
-      <div className="flex border-l border-gray-200">
-        <button
-          onClick={onCancel}
-          className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-primary-600 hover:text-primary-500"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-
-  const fetchAndSetVideoUrl = async (url) => {
-    try {
-      setVideoError(null);
-
-      setCurrentVideoUrl("");
-      console.log(url);
-
-      const response = await api.get(url);
-
-      if (response.status !== 200) {
-        throw new Error(`Server responded with status ${response.status}`);
-      }
-
-      const signedUrl = response.data.url;
-
-      if (signedUrl) {
-        setCurrentVideoUrl(signedUrl);
-      } else {
-        throw new Error("Received an empty URL from the server.");
-      }
-    } catch (error) {
-      console.error("Failed to fetch video URL:", error);
-
-      setVideoError("Failed to load video. Please refresh and try again.");
-    }
-  };
-
+  // API Functions
   const fetchTaskDetails = async () => {
     try {
       setLoading(true);
-
       const [
         taskResponse,
         revisionsResponse,
@@ -289,13 +121,9 @@ const TaskDetails = () => {
         metadataResponse,
       ] = await Promise.all([
         tasksAPI.getTaskById(id),
-
         revisionsAPI.getRevisionsByTask(id),
-
         commentsAPI.getTaskComments(id),
-
         tasksAPI.getAudioInstructions(id),
-
         metadataAPI.getMetadata(id).catch((error) => {
           console.warn("Metadata fetch failed but was handled:", error);
           return { data: null };
@@ -303,60 +131,46 @@ const TaskDetails = () => {
       ]);
 
       setTask(taskResponse.data);
-
       setRevisions(revisionsResponse.data);
-
       setComments(commentsResponse.data);
-
       setAudioInstructions(audioResponse.data);
-
       setMetadata(metadataResponse.data);
-
-      // Set latest revision or raw video as current
-
-      if (revisionsResponse.data.length > 0) {
-        const latest = revisionsResponse.data[0];
-
-        setSelectedRevision(latest);
-
-        setCurrentVideoUrl(
-          createAuthenticatedVideoUrl(`/files/revision/${latest.id}`)
-        );
-      } else if (taskResponse.data.rawVideoUrl) {
-        handleRawVideoSelect();
-      }
-
-      console.log(metadataResponse.data.title);
     } catch (error) {
       console.error("Failed to fetch task details:", error);
-
       toast.error("Failed to load task details");
     } finally {
       setLoading(false);
     }
   };
 
-  // Create authenticated video URL that includes the token
+  const fetchAndSetVideoUrl = async (url) => {
+    try {
+      setVideoError(null);
+      setCurrentVideoUrl("");
+      
+      const response = await api.get(url);
+      if (response.status !== 200) {
+        throw new Error(`Server responded with status ${response.status}`);
+      }
 
-  const createAuthenticatedVideoUrl = (endpoint) => {
-    const token = localStorage.getItem("token");
-
-    const baseUrl =
-      process.env.REACT_APP_API_URL || "http://localhost:8080/api";
-
-    const url = new URL(endpoint, baseUrl);
-
-    if (token) {
-      url.searchParams.append("token", token);
+      const signedUrl = response.data.url;
+      if (signedUrl) {
+        setCurrentVideoUrl(signedUrl);
+      } else {
+        throw new Error("Received an empty URL from the server.");
+      }
+    } catch (error) {
+      console.error("Failed to fetch video URL:", error);
+      setVideoError("Failed to load video. Please refresh and try again.");
     }
+  };
 
-    console.log("Created authenticated video URL:", url.toString());
-
-    return url.toString();
+  // Task handlers
+  const handleTaskUpdate = (updatedTask) => {
+    setTask(updatedTask);
   };
 
   const handleStatusUpdate = async (newStatus) => {
-    // Check if video metadata is required for certain status transitions
     if (
       (newStatus === "SCHEDULED" || newStatus === "UPLOADED") &&
       task.status === "READY" &&
@@ -369,13 +183,10 @@ const TaskDetails = () => {
 
     try {
       await tasksAPI.updateStatus(id, newStatus);
-
       setTask((prev) => ({ ...prev, status: newStatus }));
-
       toast.success("Task status updated successfully");
     } catch (error) {
       console.error("Failed to update status:", error);
-
       toast.error("Failed to update task status");
     }
   };
@@ -387,11 +198,10 @@ const TaskDetails = () => {
       const { deleteStatus } = resp.data;
       if (deleteStatus) {
         toast.success("Task deleted successfully");
+        navigate("/tasks");
       } else {
         throw new Error("Failed to delete");
       }
-
-      navigate("/tasks");
     } catch (error) {
       console.error("Failed to delete task:", error);
       toast.error("Failed to delete task");
@@ -413,58 +223,103 @@ const TaskDetails = () => {
     }
   };
 
-  const handleVideoMetadataSubmit = async (metadataData) => {
+  // Video handlers
+  const handleRevisionSelect = async (revision) => {
+    if (!task) return;
+    setSelectedRevision(revision);
+    fetchAndSetVideoUrl(`/revisions/${revision.id}/task/${task.id}/video-url`);
+  };
+
+  const handleRawVideoSelect = async () => {
+    if (!task) return;
+    setSelectedRevision(null);
+    fetchAndSetVideoUrl(`/tasks/${task.id}/video-url`);
+  };
+
+  const handleVideoPlay = () => setIsVideoPlaying(true);
+  const handleVideoPause = () => setIsVideoPlaying(false);
+  const handleVideoError = (e) => {
+    console.error("Video error:", e);
+    setVideoError("Failed to load video. Please check your connection and try again.");
+    setIsVideoPlaying(false);
+  };
+
+  // Download handler
+  const handleDownload = async (endpoint) => {
     try {
-      const response = await metadataAPI.createMetadata(id, metadataData);
-      fetchTaskDetails();
+      const token = localStorage.getItem("token");
+      const baseUrl = process.env.REACT_APP_API_URL || "http://localhost:8080/api";
+
+      const signedUrlResponse = await fetch(`${baseUrl}${endpoint}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+      });
+
+      if (!signedUrlResponse.ok) {
+        throw new Error(`HTTP ${signedUrlResponse.status}: ${signedUrlResponse.statusText}`);
+      }
+
+      const { signedUrl, fileName } = await signedUrlResponse.json();
+      if (!signedUrl) {
+        throw new Error("No download URL received from server");
+      }
+
+      const fileResponse = await fetch(signedUrl);
+      if (!fileResponse.ok) {
+        throw new Error(`Download failed: ${fileResponse.status} ${fileResponse.statusText}`);
+      }
+
+      const blob = await fileResponse.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.URL.revokeObjectURL(downloadUrl);
+      toast.success("Download started");
     } catch (error) {
-      console.error("Failed to save video metadata:", error);
-      toast.error("Failed to save video metadata");
+      console.error("Download failed:", error);
+      toast.error("Download failed: " + error.message);
     }
   };
 
+  // Comment handlers
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
-
     if (!newComment.trim()) return;
 
     try {
       await commentsAPI.addTaskComment(id, {
         content: newComment,
-
         authorId: user.id,
       });
-
       setNewComment("");
-
-      fetchTaskDetails(); // Refresh comments
-
+      fetchTaskDetails();
       toast.success("Comment added successfully");
     } catch (error) {
       console.error("Failed to add comment:", error);
-
       toast.error("Failed to add comment");
     }
   };
 
-  // Comment edit/delete handlers
   const handleEditComment = (comment) => {
     setEditingCommentId(comment.id);
     setEditingCommentText(comment.content);
-    setCommentMenuOpen(null);
   };
 
   const handleSaveEdit = async (commentId) => {
     if (!editingCommentText.trim()) return;
 
     try {
-      await commentsAPI.updateComment(commentId, {
-        content: editingCommentText,
-      });
-
+      await commentsAPI.updateComment(commentId, { content: editingCommentText });
       setEditingCommentId(null);
       setEditingCommentText("");
-      fetchTaskDetails(); // Refresh comments
+      fetchTaskDetails();
       toast.success("Comment updated successfully");
     } catch (error) {
       console.error("Failed to update comment:", error);
@@ -481,27 +336,18 @@ const TaskDetails = () => {
     setDeletingCommentId(commentId);
     try {
       await commentsAPI.deleteComment(commentId);
-      fetchTaskDetails(); // Refresh comments
+      fetchTaskDetails();
       toast.success("Comment deleted successfully");
     } catch (error) {
       console.error("Failed to delete comment:", error);
       toast.error("Failed to delete comment");
     } finally {
       setDeletingCommentId(null);
-      setCommentMenuOpen(null);
     }
   };
 
-  const canEditOrDeleteComment = (comment) => {
-    return user.role === "ADMIN" || comment.author.id === user.id;
-  };
-
-  const uploadFileToGCS = async (
-    signedUrl,
-    file,
-    onProgress,
-    cancelTokenSource
-  ) => {
+  // Upload file to GCS helper
+  const uploadFileToGCS = async (signedUrl, file, onProgress, cancelTokenSource) => {
     const init = await fetch(signedUrl, {
       method: "POST",
       headers: {
@@ -512,9 +358,7 @@ const TaskDetails = () => {
 
     if (!init.ok) {
       const text = await init.text();
-      throw new Error(
-        `Failed to start resumable upload: ${init.status} ${init.statusText}\n${text}`
-      );
+      throw new Error(`Failed to start resumable upload: ${init.status} ${init.statusText}\n${text}`);
     }
 
     const sessionUri = init.headers.get("Location");
@@ -540,26 +384,47 @@ const TaskDetails = () => {
         if (xhr.status === 200 || xhr.status === 201) {
           resolve({ status: xhr.status });
         } else {
-          reject(
-            new Error(
-              `Upload failed: ${xhr.status} ${xhr.statusText}\n${xhr.responseText}`
-            )
-          );
+          reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}\n${xhr.responseText}`));
         }
       };
+      
       xhr.onerror = () => reject(new Error("Network error during upload"));
       xhr.onabort = () => reject(new Error("Upload cancelled"));
       xhr.ontimeout = () => reject(new Error("Upload timed out"));
-
       xhr.timeout = 30 * 60 * 1000;
       xhr.open("PUT", sessionUri);
-      xhr.setRequestHeader(
-        "Content-Type",
-        file.type || "application/octet-stream"
-      );
+      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
       xhr.send(file);
     });
   };
+
+  // Revision handlers
+  const UploadProgressToast = ({ progress, fileName, onCancel }) => (
+    <div className="max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5">
+      <div className="flex-1 w-0 p-4">
+        <div className="flex items-start">
+          <div className="flex-shrink-0 pt-0.5">
+            <div className="relative">
+              <svg className="h-10 w-10" viewBox="0 0 36 36">
+                <path className="text-gray-200" stroke="currentColor" strokeWidth="2" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path className="text-primary-600" stroke="currentColor" strokeWidth="2" strokeDasharray={`${progress}, 100`} fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+              <div className="absolute top-0 left-0 h-full w-full flex items-center justify-center">
+                <span className="text-xs font-bold text-primary-600">{progress}%</span>
+              </div>
+            </div>
+          </div>
+          <div className="ml-3 flex-1">
+            <p className="text-sm font-medium text-gray-900">Uploading file...</p>
+            <p className="mt-1 text-sm text-gray-500 truncate" title={fileName}>{fileName}</p>
+          </div>
+        </div>
+      </div>
+      <div className="flex border-l border-gray-200">
+        <button onClick={onCancel} className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-primary-600 hover:text-primary-500">Cancel</button>
+      </div>
+    </div>
+  );
 
   const handleCancelUpload = () => {
     if (cancelTokenSource) {
@@ -572,17 +437,14 @@ const TaskDetails = () => {
 
   const handleRevisionUpload = async (e) => {
     e.preventDefault();
-
     if (!newRevisionFile) {
       toast.error("Please select a video file.");
       return;
     }
 
     setIsRevisionSubmitting(true);
-
     const source = CancelToken.source();
     setCancelTokenSource(source);
-
     let currentToastId;
 
     try {
@@ -626,26 +488,17 @@ const TaskDetails = () => {
       };
 
       await uploadFileToGCS(signedUrl, newRevisionFile, handleProgress, source);
-
       toast.dismiss(currentToastId);
-      const revisionUploadFormData = new FormData();
 
+      const revisionUploadFormData = new FormData();
       revisionUploadFormData.append("notes", newRevisionNotes);
       revisionUploadFormData.append("videoTaskId", task.id);
 
-      const gcsUrl = `gs://${
-        process.env.REACT_APP_GCP_BUCKET_NAME || "ytmthelper-inspire26"
-      }/${objectName}`;
-
+      const gcsUrl = `gs://${process.env.REACT_APP_GCP_BUCKET_NAME || "ytmthelper-inspire26"}/${objectName}`;
       revisionUploadFormData.append("editedVideoUrl", gcsUrl);
-      revisionUploadFormData.append(
-        "editedVideoFilename",
-        newRevisionFile.name
-      );
+      revisionUploadFormData.append("editedVideoFilename", newRevisionFile.name);
 
-      const response = await revisionsAPI.createRevision(
-        revisionUploadFormData
-      );
+      await revisionsAPI.createRevision(revisionUploadFormData);
       toast.success("Revision created successfully!");
       fetchTaskDetails();
 
@@ -657,69 +510,13 @@ const TaskDetails = () => {
         toast.error("Upload cancelled.");
       } else {
         if (currentToastId) toast.dismiss(currentToastId);
-        toast.error("Failed to create task. Please try again.");
+        toast.error("Failed to create revision. Please try again.");
       }
       setUploadProgress(0);
     } finally {
       setIsRevisionSubmitting(false);
       setCancelTokenSource(null);
       setUploadToastId(null);
-    }
-  };
-
-  const handleAudioUpload = async (e) => {
-    e.preventDefault();
-
-    if (!currentAudioBlob) {
-      toast.error("Please record an audio instruction first.");
-      return;
-    }
-
-    try {
-      // Upload the audio blob
-      const audioFile = new File(
-        [currentAudioBlob],
-        `instruction-${Date.now()}.webm`,
-        {
-          type: currentAudioBlob.type,
-        }
-      );
-
-      const signedUrlResponse = await tasksAPI.generateUploadUrl(
-        audioFile.name,
-        audioFile.type,
-        "audio-instructions"
-      );
-      const { signedUrl, objectName } = signedUrlResponse.data;
-
-      // Upload to GCS
-      await uploadFileToGCS(signedUrl, audioFile, null, null);
-
-      const gcsUrl = `gs://${
-        process.env.REACT_APP_GCP_BUCKET_NAME || "ytmthelper-inspire26"
-      }/${objectName}`;
-
-      // Create audio instruction using the existing method
-      const audioInstruction = {
-        videoTaskId: task.id,
-        audioUrl: gcsUrl,
-        audioFilename: audioFile.name,
-        description: newAudioDescription || "",
-        uploadedById: user.id,
-      };
-
-      await tasksAPI.addAudioInstruction(audioInstruction);
-
-      toast.success("Audio instruction added successfully!");
-      fetchTaskDetails(); // Refresh to show new audio
-
-      // Reset form
-      setShowUploadAudio(false);
-      setNewAudioDescription("");
-      resetRecording();
-    } catch (error) {
-      console.error("Failed to upload audio:", error);
-      toast.error("Failed to add audio instruction");
     }
   };
 
@@ -734,25 +531,11 @@ const TaskDetails = () => {
     }
   };
 
-  const handleAudioDelete = async (audioId) => {
-    try {
-      await tasksAPI.deleteAudioInstruction(audioId);
-      toast.success("Audio instruction deleted successfully");
-      fetchTaskDetails();
-    } catch (error) {
-      console.error("Failed to delete audio instruction:", error);
-      toast.error("Failed to delete audio instruction");
-    }
-  };
-
-  // --- Audio Recording Handlers ---
-
+  // Audio recording handlers
   const formatTime = (seconds) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
-      .toString()
-      .padStart(2, "0")}`;
+    return `${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
   const startRecording = async () => {
@@ -767,11 +550,8 @@ const TaskDetails = () => {
       };
 
       mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/webm",
-        });
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         setCurrentAudioBlob(audioBlob);
-        // Stop all tracks on the stream to turn off the mic indicator
         stream.getTracks().forEach((track) => track.stop());
       };
 
@@ -821,59 +601,67 @@ const TaskDetails = () => {
     }
   };
 
-  const handleRevisionSelect = async (revision) => {
-    if (!task) return;
+  const handleAudioUpload = async (e) => {
+    e.preventDefault();
+    if (!currentAudioBlob) {
+      toast.error("Please record an audio instruction first.");
+      return;
+    }
 
-    console.log("Selecting revision:", revision.id);
+    try {
+      const audioFile = new File([currentAudioBlob], `instruction-${Date.now()}.webm`, {
+        type: currentAudioBlob.type,
+      });
 
-    setSelectedRevision(revision);
+      const signedUrlResponse = await tasksAPI.generateUploadUrl(
+        audioFile.name,
+        audioFile.type,
+        "audio-instructions"
+      );
+      const { signedUrl, objectName } = signedUrlResponse.data;
 
-    fetchAndSetVideoUrl(`/revisions/${revision.id}/task/${task.id}/video-url`);
-  };
+      await uploadFileToGCS(signedUrl, audioFile, null, null);
 
-  const handleRawVideoSelect = async () => {
-    if (!task) return;
+      const gcsUrl = `gs://${process.env.REACT_APP_GCP_BUCKET_NAME || "ytmthelper-inspire26"}/${objectName}`;
 
-    console.log("Selecting raw video for task:", task.id);
+      const audioInstruction = {
+        videoTaskId: task.id,
+        audioUrl: gcsUrl,
+        audioFilename: audioFile.name,
+        description: newAudioDescription || "",
+        uploadedById: user.id,
+      };
 
-    setSelectedRevision(null);
+      await tasksAPI.addAudioInstruction(audioInstruction);
+      toast.success("Audio instruction added successfully!");
+      fetchTaskDetails();
 
-    fetchAndSetVideoUrl(`/tasks/${task.id}/video-url`);
+      setShowUploadAudio(false);
+      setNewAudioDescription("");
+      resetRecording();
+    } catch (error) {
+      console.error("Failed to upload audio:", error);
+      toast.error("Failed to add audio instruction");
+    }
   };
 
   const handlePlayAudio = async (audioId) => {
     if (playingAudio === audioId) {
-      // Pause current audio
-
       const audio = audioRefs.current[audioId];
-
-      if (audio) {
-        audio.pause();
-      }
-
+      if (audio) audio.pause();
       setPlayingAudio(null);
     } else {
-      // Stop other audio and play new one
-
       Object.values(audioRefs.current).forEach((audio) => {
         if (audio) audio.pause();
       });
 
       try {
-        // Load audio with authentication
-
         const token = localStorage.getItem("token");
-
-        const baseUrl =
-          process.env.REACT_APP_API_URL || "http://localhost:8080";
+        const baseUrl = process.env.REACT_APP_API_URL || "http://localhost:8080";
 
         const response = await fetch(`${baseUrl}/files/audio/${audioId}`, {
           method: "GET",
-
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-
+          headers: { Authorization: `Bearer ${token}` },
           credentials: "include",
         });
 
@@ -882,200 +670,54 @@ const TaskDetails = () => {
         }
 
         const blob = await response.blob();
-
         const audioUrl = URL.createObjectURL(blob);
 
         if (!audioRefs.current[audioId]) {
           audioRefs.current[audioId] = new Audio(audioUrl);
-
           audioRefs.current[audioId].addEventListener("ended", () => {
             setPlayingAudio(null);
-
-            URL.revokeObjectURL(audioUrl); // Clean up blob URL
+            URL.revokeObjectURL(audioUrl);
           });
-
           audioRefs.current[audioId].addEventListener("error", (e) => {
             console.error("Audio error:", e);
-
             toast.error("Failed to load audio file");
-
             setPlayingAudio(null);
-
-            URL.revokeObjectURL(audioUrl); // Clean up blob URL
+            URL.revokeObjectURL(audioUrl);
           });
         }
 
         await audioRefs.current[audioId].play();
-
         setPlayingAudio(audioId);
       } catch (error) {
         console.error("Failed to play audio:", error);
-
         toast.error("Failed to play audio");
       }
     }
   };
 
-  const handleVideoPlay = () => {
-    setIsVideoPlaying(true);
-  };
-
-  const handleVideoPause = () => {
-    setIsVideoPlaying(false);
-  };
-
-  const handleVideoError = (e) => {
-    console.error("Video error:", e);
-
-    setVideoError(
-      "Failed to load video. Please check your connection and try again."
-    );
-
-    setIsVideoPlaying(false);
-  };
-
-  const handleDownload = async (endpoint) => {
+  const handleAudioDelete = async (audioId) => {
     try {
-      const token = localStorage.getItem("token");
-      const baseUrl =
-        process.env.REACT_APP_API_URL || "http://localhost:8080/api";
-
-      const signedUrlResponse = await fetch(`${baseUrl}${endpoint}`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
-      });
-
-      if (!signedUrlResponse.ok) {
-        throw new Error(
-          `HTTP ${signedUrlResponse.status}: ${signedUrlResponse.statusText}`
-        );
-      }
-
-      const { signedUrl: signedUrl, fileName: filename } =
-        await signedUrlResponse.json();
-
-      if (!signedUrl) {
-        throw new Error("No download URL received from server");
-      }
-
-      const fileResponse = await fetch(signedUrl);
-
-      if (!fileResponse.ok) {
-        throw new Error(
-          `Download failed: ${fileResponse.status} ${fileResponse.statusText}`
-        );
-      }
-
-      const blob = await fileResponse.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      window.URL.revokeObjectURL(downloadUrl);
-      toast.success("Download started");
+      await tasksAPI.deleteAudioInstruction(audioId);
+      toast.success("Audio instruction deleted successfully");
+      fetchTaskDetails();
     } catch (error) {
-      console.error("Download failed:", error);
-      toast.error("Download failed: " + error.message);
+      console.error("Failed to delete audio instruction:", error);
+      toast.error("Failed to delete audio instruction");
     }
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      DRAFT: "bg-gray-100 text-gray-800",
-
-      ASSIGNED: "bg-blue-100 text-blue-800",
-
-      IN_PROGRESS: "bg-orange-100 text-orange-800",
-
-      REVIEW: "bg-purple-100 text-purple-800",
-
-      READY: "bg-green-100 text-green-800",
-
-      SCHEDULED: "bg-indigo-100 text-indigo-800",
-
-      UPLOADED: "bg-emerald-100 text-emerald-800",
-    };
-
-    return colors[status] || "bg-gray-100 text-gray-800";
-  };
-
-  const getPriorityColor = (priority) => {
-    const colors = {
-      HIGH: "bg-red-100 text-red-800",
-
-      MEDIUM: "bg-yellow-100 text-yellow-800",
-
-      LOW: "bg-green-100 text-green-800",
-    };
-
-    return colors[priority] || "bg-gray-100 text-gray-800";
-  };
-
-  const getAvailableStatusTransitions = () => {
-    if (!task) return [];
-
-    const { status } = task;
-
-    const isAdmin = user.role === "ADMIN";
-
-    const isAssignedEditor = task.assignedEditor?.id === user.id;
-
-    if (isAdmin) {
-      // Admin can transition to any status
-
-      const allStatuses = [
-        "DRAFT",
-
-        "ASSIGNED",
-
-        "IN_PROGRESS",
-
-        "REVIEW",
-
-        "READY",
-
-        "SCHEDULED",
-
-        "UPLOADED",
-      ];
-
-      return allStatuses.filter((s) => s !== status);
+  // Video metadata handler
+  const handleVideoMetadataSubmit = async (metadataData) => {
+    try {
+      await metadataAPI.createMetadata(id, metadataData);
+      fetchTaskDetails();
+    } catch (error) {
+      console.error("Failed to save video metadata:", error);
+      toast.error("Failed to save video metadata");
     }
-
-    if (isAssignedEditor) {
-      switch (status) {
-        case "ASSIGNED":
-          return ["IN_PROGRESS"];
-
-        case "IN_PROGRESS":
-          return ["REVIEW", "READY"];
-
-        case "REVIEW":
-          return ["IN_PROGRESS", "READY"];
-
-        case "READY":
-          return ["IN_PROGRESS"];
-
-        default:
-          return [];
-      }
-    }
-
-    return [];
   };
 
-  const formatStatus = (status) => {
-    return status?.replace("_", " ").toLowerCase() || "draft";
-  };
-
+  // Permission helpers
   const canUploadRevision = () => {
     return user.role === "ADMIN" || task?.assignedEditor?.id === user.id;
   };
@@ -1096,177 +738,31 @@ const TaskDetails = () => {
     return user.role === "ADMIN" || task?.createdBy?.id === user.id;
   };
 
-  // Helper function to check if a revision is currently playing
-  const isRevisionPlaying = (revision) => {
-    return selectedRevision?.id === revision.id && isVideoPlaying;
-  };
-
-  // Helper function to check if raw video is currently playing
-  const isRawVideoPlaying = () => {
-    return !selectedRevision && isVideoPlaying;
-  };
-
-  // Helper function to render video metadata
-  const renderVideoMetadata = (metadata) => {
-    if (!metadata) return null;
-
-    return (
-      <div className="space-y-3">
-        <div>
-          <label className="text-sm font-medium text-gray-500">
-            Video Title
-          </label>
-          <p className="text-gray-900 mt-1">{metadata.title || "Not set"}</p>
-        </div>
-
-        <div>
-          <label className="text-sm font-medium text-gray-500">
-            Video Description
-          </label>
-          <p className="text-gray-900 mt-1 whitespace-pre-wrap">
-            {metadata.description || "Not set"}
-          </p>
-        </div>
-
-        {metadata.tags && metadata.tags.length > 0 && (
-          <div>
-            <label className="text-sm font-medium text-gray-500">Tags</label>
-            <div className="flex flex-wrap gap-1 mt-1">
-              {metadata.tags.map((tag, index) => (
-                <span
-                  key={index}
-                  className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium text-gray-500">
-              Category
-            </label>
-            <p className="text-gray-900 mt-1">
-              {metadata.category || "Not set"}
-            </p>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-gray-500">
-              Language
-            </label>
-            <p className="text-gray-900 mt-1">
-              {metadata.language || "Not set"}
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium text-gray-500">
-              Privacy Status
-            </label>
-            <p className="text-gray-900 mt-1 capitalize">
-              {metadata.privacy_status || "Not set"}
-            </p>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-gray-500">License</label>
-            <p className="text-gray-900 mt-1">
-              {metadata.license || "Not set"}
-            </p>
-          </div>
-        </div>
-
-        {metadata.recording_details && (
-          <div>
-            <label className="text-sm font-medium text-gray-500">
-              Recording Details
-            </label>
-            <div className="mt-1 text-sm text-gray-700">
-              {metadata.recording_details.location_description && (
-                <p>
-                  Location: {metadata.recording_details.location_description}
-                </p>
-              )}
-              {metadata.recording_details.recording_date && (
-                <p>
-                  Date:{" "}
-                  {new Date(
-                    metadata.recording_details.recording_date
-                  ).toLocaleDateString()}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {metadata.video_chapters && metadata.video_chapters.length > 0 && (
-          <div>
-            <label className="text-sm font-medium text-gray-500">
-              Video Chapters
-            </label>
-            <div className="mt-1 space-y-1">
-              {metadata.video_chapters.map((chapter, index) => (
-                <div key={index} className="text-sm text-gray-700">
-                  <strong>{chapter.timestamp}</strong> - {chapter.title}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderApprovalTab = () => {
-    if (task.status === "REVIEW" && user.role === "ADMIN") {
-      return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Approval</h3>
-          <div className="flex space-x-4">
-            <button
-              onClick={() => handleStatusUpdate("READY")}
-              className="btn-primary"
-            >
-              Approve
-            </button>
-            <button
-              onClick={() => handleStatusUpdate("IN_PROGRESS")}
-              className="btn-secondary"
-            >
-              Reject
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
+  // Loading state
   if (loading) {
     return (
-      <div className="animate-pulse space-y-6">
+      <div className="animate-pulse space-y-6 max-w-7xl mx-auto p-4">
         <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-
-        <div className="grid grid-cols-3 gap-6">
-          <div className="col-span-2 bg-gray-200 rounded-xl h-96"></div>
-
-          <div className="bg-gray-200 rounded-xl h-96"></div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-gray-200 rounded-xl h-64 lg:h-96"></div>
+            <div className="bg-gray-200 rounded-xl h-48"></div>
+          </div>
+          <div className="space-y-6">
+            <div className="bg-gray-200 rounded-xl h-64"></div>
+            <div className="bg-gray-200 rounded-xl h-48"></div>
+          </div>
         </div>
       </div>
     );
   }
 
+  // Error state
   if (!task) {
     return (
-      <div className="text-center py-12">
+      <div className="text-center py-12 max-w-7xl mx-auto p-4">
         <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-
         <p className="text-gray-500">Task not found</p>
-
         <button onClick={() => navigate(-1)} className="btn-primary mt-4">
           Go Back
         </button>
@@ -1275,971 +771,190 @@ const TaskDetails = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 animate-fadeIn">
-      {/* Header */}
+    <div className="max-w-7xl mx-auto space-y-6 animate-fadeIn p-4 lg:p-6">
+      {/* Task Header */}
+      <TaskHeader
+        task={task}
+        user={user}
+        onTaskUpdate={handleTaskUpdate}
+      />
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5 text-gray-600" />
-          </button>
-
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{task.title}</h1>
-
-            <div className="flex items-center space-x-4 mt-2">
-              <span
-                className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
-                  task.status
-                )}`}
-              >
-                {formatStatus(task.status)}
-              </span>
-
-              <span
-                className={`px-3 py-1 rounded-full text-sm font-medium ${getPriorityColor(
-                  task.priority
-                )}`}
-              >
-                {task.priority?.toLowerCase()}
-              </span>
-
-              {task.privacyLevel === "SELECTED" && (
-                <span className="flex items-center text-sm text-gray-500">
-                  <Shield className="h-4 w-4 mr-1" />
-                  Private
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Status Update Buttons */}
-
-        {getAvailableStatusTransitions().length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {getAvailableStatusTransitions().map((status) => (
-              <button
-                key={status}
-                onClick={() => handleStatusUpdate(status)}
-                className="btn-secondary text-sm whitespace-nowrap"
-              >
-                Move to {formatStatus(status)}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
+      {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Video Player and Comments */}
-
+        {/* Left Column - Video and Comments */}
         <div className="lg:col-span-2 space-y-6">
           {/* Video Player */}
+          <VideoPlayer
+            task={task}
+            selectedRevision={selectedRevision}
+            currentVideoUrl={currentVideoUrl}
+            videoError={videoError}
+            isVideoPlaying={isVideoPlaying}
+            onVideoPlay={handleVideoPlay}
+            onVideoPause={handleVideoPause}
+            onVideoError={handleVideoError}
+            onDownload={handleDownload}
+            onRawVideoSelect={handleRawVideoSelect}
+            onRevisionSelect={handleRevisionSelect}
+          />
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {selectedRevision
-                  ? `Revision #${selectedRevision.revisionNumber}`
-                  : "Raw Video (Original)"}
-              </h3>
+          {/* Approval Section */}
+          <ApprovalSection
+            task={task}
+            user={user}
+            onStatusUpdate={handleStatusUpdate}
+          />
 
-              <div className="flex space-x-2">
-                {currentVideoUrl && (
-                  <button
-                    onClick={() =>
-                      handleDownload(
-                        selectedRevision
-                          ? `/files/download/revision/${selectedRevision.id}`
-                          : `/files/download/video/${task.id}`
-                      )
-                    }
-                    className="btn-secondary text-sm flex items-center space-x-2"
-                  >
-                    <Download className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {videoError ? (
-              <div className="flex flex-col items-center justify-center h-64 bg-red-50 rounded-lg border border-red-200">
-                <AlertCircle className="h-12 w-12 text-red-400 mb-4" />
-
-                <p className="text-red-600 text-center">{videoError}</p>
-
-                <button
-                  onClick={
-                    selectedRevision
-                      ? () => handleRevisionSelect(selectedRevision)
-                      : handleRawVideoSelect
-                  }
-                  className="btn-primary mt-4 text-sm"
-                >
-                  Retry Loading Video
-                </button>
-              </div>
-            ) : currentVideoUrl ? (
-              <div className="relative">
-                <video
-                  ref={videoRef}
-                  src={currentVideoUrl}
-                  controls
-                  className="w-full rounded-lg bg-black"
-                  style={{ maxHeight: "500px" }}
-                  onPlay={handleVideoPlay}
-                  onPause={handleVideoPause}
-                  onError={handleVideoError}
-                  onLoadStart={() => console.log("Video loading started")}
-                  onLoadedData={() => console.log("Video data loaded")}
-                  onCanPlay={() => console.log("Video can play")}
-                >
-                  Your browser does not support the video tag.
-                </video>
-
-                {isVideoPlaying && (
-                  <div className="absolute top-4 right-4 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
-                    Playing
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-lg">
-                <FileVideo className="h-12 w-12 text-gray-400 mb-4" />
-
-                <p className="text-gray-500">No video available</p>
-
-                {task.rawVideoUrl && (
-                  <button
-                    onClick={handleRawVideoSelect}
-                    className="btn-primary mt-4 text-sm"
-                  >
-                    Load Raw Video
-                  </button>
-                )}
-              </div>
-            )}
-
-            {selectedRevision && selectedRevision.notes && (
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  <strong>Revision Note:</strong> {selectedRevision.notes}
-                </p>
-              </div>
-            )}
+          {/* Mobile Sidebar - Shows before comments on mobile */}
+          <div className="lg:hidden">
+            <MobileCollapsibleSidebar
+              task={task}
+              user={user}
+              metadata={metadata}
+              revisions={revisions}
+              audioInstructions={audioInstructions}
+            >
+              <TaskInfoSidebar
+                task={task}
+                user={user}
+                metadata={metadata}
+                revisions={revisions}
+                onTaskUpdate={handleTaskUpdate}
+                onShowEditModal={() => setShowEditModal(true)}
+                onShowDeleteModal={() => setShowDeleteModal(true)}
+                onShowVideoMetadataModal={() => setShowVideoMetadataModal(true)}
+                canDeleteTask={canDeleteTask}
+                canEditTask={canEditTask}
+                isMobile={true}
+              />
+              <RevisionsList
+                task={task}
+                revisions={revisions}
+                selectedRevision={selectedRevision}
+                user={user}
+                showUploadRevision={showUploadRevision}
+                setShowUploadRevision={setShowUploadRevision}
+                newRevisionFile={newRevisionFile}
+                setNewRevisionFile={setNewRevisionFile}
+                newRevisionNotes={newRevisionNotes}
+                setNewRevisionNotes={setNewRevisionNotes}
+                isVideoPlaying={isVideoPlaying}
+                onRevisionSelect={handleRevisionSelect}
+                onRawVideoSelect={handleRawVideoSelect}
+                onRevisionUpload={handleRevisionUpload}
+                onRevisionDelete={handleRevisionDelete}
+                onDownload={handleDownload}
+                canUploadRevision={canUploadRevision}
+                isMobile={true}
+              />
+              <AudioInstructions
+                audioInstructions={audioInstructions}
+                user={user}
+                task={task}
+                showUploadAudio={showUploadAudio}
+                setShowUploadAudio={setShowUploadAudio}
+                newAudioDescription={newAudioDescription}
+                setNewAudioDescription={setNewAudioDescription}
+                playingAudio={playingAudio}
+                isRecording={isRecording}
+                isPaused={isPaused}
+                recordingTime={recordingTime}
+                currentAudioBlob={currentAudioBlob}
+                onAudioUpload={handleAudioUpload}
+                onPlayAudio={handlePlayAudio}
+                onAudioDelete={handleAudioDelete}
+                onStartRecording={startRecording}
+                onStopRecording={stopRecording}
+                onTogglePauseResume={togglePauseResume}
+                onResetRecording={resetRecording}
+                canAddAudioInstruction={canAddAudioInstruction}
+                isMobile={true}
+              />
+            </MobileCollapsibleSidebar>
           </div>
 
-          {renderApprovalTab()}
-
-          {/* Comments */}
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Comments
-            </h3>
-
-            {/* Add Comment Form */}
-
-            <form onSubmit={handleCommentSubmit} className="mb-4">
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Add a comment..."
-                  className="flex-1 input-field"
-                />
-
-                <button
-                  type="submit"
-                  disabled={!newComment.trim()}
-                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Send className="h-4 w-4" />
-                </button>
-              </div>
-            </form>
-
-            {/* Comments List */}
-
-            <div className="space-y-4">
-              {comments.map((comment) => (
-                <div key={comment.id} className="flex space-x-3">
-                  <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center text-sm font-medium text-primary-600">
-                    {comment.author.username.charAt(0).toUpperCase()}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <span className="font-medium text-gray-900">
-                          {comment.author.username}
-                        </span>
-
-                        <span className="text-sm text-gray-500">
-                          {formatDistanceToNow(new Date(comment.createdAt), {
-                            addSuffix: true,
-                          })}
-                          {comment.updatedAt !== comment.createdAt && (
-                            <span className="ml-1 text-xs text-gray-400">
-                              (edited)
-                            </span>
-                          )}
-                        </span>
-                      </div>
-
-                      {/* Comment Menu */}
-                      {canEditOrDeleteComment(comment) && (
-                        <div
-                          className="relative"
-                          ref={(el) =>
-                            (commentMenuRefs.current[comment.id] = el)
-                          }
-                        >
-                          <button
-                            onClick={() =>
-                              setCommentMenuOpen(
-                                commentMenuOpen === comment.id
-                                  ? null
-                                  : comment.id
-                              )
-                            }
-                            className="p-1 hover:bg-gray-100 rounded transition-colors"
-                          >
-                            <MoreVertical className="h-4 w-4 text-gray-400" />
-                          </button>
-
-                          {commentMenuOpen === comment.id && (
-                            <div className="absolute right-0 top-6 mt-1 w-32 bg-white rounded-md shadow-lg border border-gray-200 z-10">
-                              <div className="py-1">
-                                <button
-                                  onClick={() => handleEditComment(comment)}
-                                  className="flex items-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                                >
-                                  <Edit3 className="h-3 w-3 mr-2" />
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    handleDeleteComment(comment.id)
-                                  }
-                                  disabled={deletingCommentId === comment.id}
-                                  className="flex items-center w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-                                >
-                                  <Trash2 className="h-3 w-3 mr-2" />
-                                  {deletingCommentId === comment.id
-                                    ? "Deleting..."
-                                    : "Delete"}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {editingCommentId === comment.id ? (
-                      <div className="mt-2 space-y-2">
-                        <input
-                          type="text"
-                          value={editingCommentText}
-                          onChange={(e) =>
-                            setEditingCommentText(e.target.value)
-                          }
-                          className="w-full input-field text-sm"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              handleSaveEdit(comment.id);
-                            } else if (e.key === "Escape") {
-                              handleCancelEdit();
-                            }
-                          }}
-                        />
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleSaveEdit(comment.id)}
-                            disabled={!editingCommentText.trim()}
-                            className="btn-primary text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <Check className="h-3 w-3 mr-1" />
-                            Save
-                          </button>
-                          <button
-                            onClick={handleCancelEdit}
-                            className="btn-secondary text-xs"
-                          >
-                            <X className="h-3 w-3 mr-1" />
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-gray-700 mt-1 break-words">
-                        {comment.content}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {comments.length === 0 && (
-              <div className="text-center py-8">
-                <MessageCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-
-                <p className="text-gray-500">No comments yet</p>
-
-                <p className="text-sm text-gray-400 mt-1">
-                  Start the discussion by adding a comment
-                </p>
-              </div>
-            )}
-          </div>
+          {/* Comments Section */}
+          <CommentsSection
+            comments={comments}
+            newComment={newComment}
+            setNewComment={setNewComment}
+            user={user}
+            onCommentSubmit={handleCommentSubmit}
+            onEditComment={handleEditComment}
+            onDeleteComment={handleDeleteComment}
+            onSaveEdit={handleSaveEdit}
+            onCancelEdit={handleCancelEdit}
+            editingCommentId={editingCommentId}
+            editingCommentText={editingCommentText}
+            setEditingCommentText={setEditingCommentText}
+            deletingCommentId={deletingCommentId}
+          />
         </div>
 
-        {/* Sidebar */}
-
-        <div className="space-y-6">
-          {/* Task Info */}
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Task Information
-              </h3>
-
-              {(canDeleteTask() || canEditTask()) && (
-                <div className="relative" ref={taskSettingsRef}>
-                  <button
-                    onClick={() => setShowTaskSettings(!showTaskSettings)}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="Task Settings"
-                  >
-                    <Settings className="h-5 w-5 text-gray-600" />
-                  </button>
-
-                  {showTaskSettings && (
-                    <div className="absolute right-0 top-10 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-10">
-                      <div className="py-1">
-                        {canEditTask() && (
-                          <button
-                            onClick={() => {
-                              setShowTaskSettings(false);
-                              setShowEditModal(true);
-                            }}
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-                          >
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit Task
-                          </button>
-                        )}
-                        {user.role === "ADMIN" && (
-                          <button
-                            onClick={() => {
-                              setShowTaskSettings(false);
-                              setShowVideoMetadataModal(true);
-                            }}
-                            className="flex items-center w-full px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
-                          >
-                            <Youtube className="h-4 w-4 mr-2" />
-                            Edit Video Metadata
-                          </button>
-                        )}
-                        {canDeleteTask() && (
-                          <button
-                            onClick={() => {
-                              setShowTaskSettings(false);
-                              setShowDeleteModal(true);
-                            }}
-                            className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Task
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-gray-500">
-                  Description
-                </label>
-
-                <p className="text-gray-900 mt-1">
-                  {task.description || "No description provided"}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Created by
-                  </label>
-
-                  <div className="flex items-center space-x-2 mt-1">
-                    <User className="h-4 w-4 text-gray-400" />
-
-                    <span className="text-gray-900">
-                      {task.createdBy.username}
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Assigned to
-                  </label>
-
-                  <div className="flex items-center space-x-2 mt-1">
-                    <TaskEditorAssigner
-                      task={task}
-                      onTaskUpdate={handleTaskUpdate}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-500">
-                  Created
-                </label>
-
-                <div className="flex items-center space-x-2 mt-1">
-                  <Calendar className="h-4 w-4 text-gray-400" />
-
-                  <span className="text-gray-900">
-                    {formatDistanceToNow(new Date(task.createdAt), {
-                      addSuffix: true,
-                    })}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-500">
-                  Updated
-                </label>
-
-                <div className="flex items-center space-x-2 mt-1">
-                  <Calendar className="h-4 w-4 text-gray-400" />
-
-                  <span className="text-gray-900">
-                    {formatDistanceToNow(new Date(task.updatedAt), {
-                      addSuffix: true,
-                    })}
-                  </span>
-                </div>
-              </div>
-
-              {task.deadline && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Deadline
-                  </label>
-
-                  <div className="flex items-center space-x-2 mt-1">
-                    <Clock className="h-4 w-4 text-gray-400" />
-
-                    <span className="text-gray-900">
-                      {new Date(task.deadline).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {revisions.length > 0 && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Total Revisions
-                  </label>
-
-                  <div className="flex items-center space-x-2 mt-1">
-                    <FileVideo className="h-4 w-4 text-gray-400" />
-
-                    <span className="text-gray-900">{revisions.length}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Video Metadata Section - Only show for admins */}
-              {(user.role === "ADMIN" || user.role == "EDITOR") && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium text-gray-500">
-                      Video Metadata
-                    </label>
-                    <Youtube className="h-4 w-4 text-gray-400" />
-                  </div>
-
-                  {metadata &&
-                  Object.keys(metadata).length > 0 &&
-                  metadata.title &&
-                  metadata.title.trim() !== "" ? (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      {renderVideoMetadata(metadata)}
-                      <button
-                        onClick={() => setShowVideoMetadataModal(true)}
-                        className="btn-primary text-xs mt-3 w-full"
-                      >
-                        View Video Metadata
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                      <p className="text-sm text-yellow-800">
-                        Video metadata not set. Required for moving to
-                        scheduled/uploaded status.
-                      </p>
-                      <button
-                        onClick={() => setShowVideoMetadataModal(true)}
-                        className="btn-primary text-xs mt-2"
-                      >
-                        Add Video Metadata
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+        {/* Right Column - Desktop Sidebar */}
+        <div className="hidden lg:block space-y-6">
+          {/* Task Information */}
+          <TaskInfoSidebar
+            task={task}
+            user={user}
+            metadata={metadata}
+            revisions={revisions}
+            onTaskUpdate={handleTaskUpdate}
+            onShowEditModal={() => setShowEditModal(true)}
+            onShowDeleteModal={() => setShowDeleteModal(true)}
+            onShowVideoMetadataModal={() => setShowVideoMetadataModal(true)}
+            canDeleteTask={canDeleteTask}
+            canEditTask={canEditTask}
+          />
 
           {/* Revisions List */}
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Revisions History
-              </h3>
-
-              {canUploadRevision() && (
-                <button
-                  onClick={() => setShowUploadRevision(!showUploadRevision)}
-                  className="btn-primary text-sm flex items-center space-x-2"
-                >
-                  <Upload className="h-4 w-4" />
-
-                  <span>Upload Revision</span>
-                </button>
-              )}
-            </div>
-
-            {/* Upload Revision Form */}
-
-            {showUploadRevision && (
-              <form
-                onSubmit={handleRevisionUpload}
-                className="mb-6 p-4 bg-gray-50 rounded-lg"
-              >
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Video File *
-                    </label>
-
-                    <input
-                      type="file"
-                      accept="video/*"
-                      onChange={(e) => setNewRevisionFile(e.target.files[0])}
-                      className="input-field"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Notes (Optional)
-                    </label>
-
-                    <textarea
-                      value={newRevisionNotes}
-                      onChange={(e) => setNewRevisionNotes(e.target.value)}
-                      rows={3}
-                      className="input-field"
-                      placeholder="Add notes about this revision..."
-                    />
-                  </div>
-
-                  <div className="flex space-x-2">
-                    <button type="submit" className="btn-primary text-sm">
-                      <Save className="h-4 w-4 mr-2" />
-                      Upload Revision
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowUploadRevision(false)}
-                      className="btn-secondary text-sm"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </form>
-            )}
-
-            {/* Raw Video */}
-
-            {task.rawVideoUrl && (
-              <div
-                className={`p-4 border rounded-lg cursor-pointer transition-all mb-3 ${
-                  !selectedRevision
-                    ? "border-primary-500 bg-primary-50 shadow-sm"
-                    : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                }`}
-                onClick={handleRawVideoSelect}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <Video className="h-5 w-5 text-blue-500" />
-
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        Raw Video (Original)
-                      </p>
-
-                      <p className="text-sm text-gray-500">
-                        Uploaded{" "}
-                        {formatDistanceToNow(new Date(task.createdAt), {
-                          addSuffix: true,
-                        })}
-                        {isRawVideoPlaying() && (
-                          <span className="ml-2 text-green-600 font-medium">
-                            • Playing...
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  {!selectedRevision && (
-                    <CheckCircle className="h-5 w-5 text-primary-500" />
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Revision List */}
-
-            <div className="space-y-3">
-              {revisions.map((revision) => (
-                <div
-                  key={revision.id}
-                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                    selectedRevision?.id === revision.id
-                      ? "border-primary-500 bg-primary-50 shadow-sm"
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                  }`}
-                  onClick={() => handleRevisionSelect(revision)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <FileVideo className="h-5 w-5 text-purple-500" />
-
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          Revision #{revision.revisionNumber}
-                        </p>
-
-                        <p className="text-sm text-gray-500">
-                          {formatDistanceToNow(new Date(revision.createdAt), {
-                            addSuffix: true,
-                          })}
-                          by {revision.uploadedBy.username}
-                          {isRevisionPlaying(revision) && (
-                            <span className="ml-2 text-green-600 font-medium">
-                              • Playing...
-                            </span>
-                          )}
-                        </p>
-
-                        {revision.notes && (
-                          <p className="text-sm text-gray-600 mt-1 italic">
-                            "{revision.notes}"
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      {selectedRevision?.id === revision.id && (
-                        <CheckCircle className="h-5 w-5 text-primary-500" />
-                      )}
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-
-                          handleDownload(
-                            `/files/download/revision/${revision.id}`
-                          );
-                        }}
-                        className="p-1 hover:bg-gray-200 rounded transition-colors"
-                        title="Download"
-                      >
-                        <Download className="h-4 w-4 text-gray-500" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRevisionDelete(revision.id);
-                        }}
-                        className="p-1 hover:bg-red-100 rounded transition-colors"
-                        title="Delete Revision"
-                      >
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {revisions.length === 0 && (
-              <div className="text-center py-8">
-                <FileVideo className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-
-                <p className="text-gray-500">No revisions uploaded yet</p>
-
-                {canUploadRevision() && (
-                  <button
-                    onClick={() => setShowUploadRevision(true)}
-                    className="btn-primary mt-4 text-sm"
-                  >
-                    Upload First Revision
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          <RevisionsList
+            task={task}
+            revisions={revisions}
+            selectedRevision={selectedRevision}
+            user={user}
+            showUploadRevision={showUploadRevision}
+            setShowUploadRevision={setShowUploadRevision}
+            newRevisionFile={newRevisionFile}
+            setNewRevisionFile={setNewRevisionFile}
+            newRevisionNotes={newRevisionNotes}
+            setNewRevisionNotes={setNewRevisionNotes}
+            isVideoPlaying={isVideoPlaying}
+            onRevisionSelect={handleRevisionSelect}
+            onRawVideoSelect={handleRawVideoSelect}
+            onRevisionUpload={handleRevisionUpload}
+            onRevisionDelete={handleRevisionDelete}
+            onDownload={handleDownload}
+            canUploadRevision={canUploadRevision}
+          />
 
           {/* Audio Instructions */}
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Audio Instructions
-              </h3>
-
-              {canAddAudioInstruction() && (
-                <button
-                  onClick={() => setShowUploadAudio(!showUploadAudio)}
-                  className="btn-primary text-sm flex items-center space-x-2"
-                >
-                  <Mic className="h-4 w-4" />
-
-                  <span>Add Audio</span>
-                </button>
-              )}
-            </div>
-
-            {/* Upload Audio Form */}
-
-            {showUploadAudio && (
-              <form
-                onSubmit={handleAudioUpload}
-                className="mb-4 p-4 bg-gray-50 rounded-lg"
-              >
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-4">
-                      <Mic className="inline h-4 w-4 mr-1" />
-                      Record Audio Instruction *
-                    </label>
-
-                    <div className="border border-gray-200 rounded-xl p-4 space-y-4">
-                      {!isRecording && !currentAudioBlob && (
-                        <button
-                          type="button"
-                          onClick={startRecording}
-                          className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-                        >
-                          <Mic className="h-5 w-5" />
-                          <span>Start Recording</span>
-                        </button>
-                      )}
-
-                      {(isRecording || currentAudioBlob) && (
-                        <div className="bg-blue-50 rounded-lg p-4 space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <div className="flex items-center justify-center h-8 w-8 rounded-full bg-red-500 animate-pulse">
-                                <Mic className="h-4 w-4 text-white" />
-                              </div>
-                              <span className="font-mono text-lg text-gray-700">
-                                {formatTime(recordingTime)}
-                              </span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              {isRecording && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={togglePauseResume}
-                                    className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-100"
-                                  >
-                                    {isPaused ? (
-                                      <Play className="h-5 w-5 text-gray-700" />
-                                    ) : (
-                                      <Pause className="h-5 w-5 text-gray-700" />
-                                    )}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={stopRecording}
-                                    className="p-2 bg-red-500 text-white rounded-full shadow-sm hover:bg-red-600"
-                                  >
-                                    <Square className="h-5 w-5" />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          {currentAudioBlob && (
-                            <div className="space-y-3">
-                              <audio
-                                src={URL.createObjectURL(currentAudioBlob)}
-                                controls
-                                className="w-full"
-                              />
-                              <div className="flex justify-end space-x-2">
-                                <button
-                                  type="button"
-                                  onClick={resetRecording}
-                                  className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                                >
-                                  <RotateCcw className="h-4 w-4" />
-                                  <span>Record Again</span>
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Description (Optional)
-                    </label>
-
-                    <input
-                      type="text"
-                      value={newAudioDescription}
-                      onChange={(e) => setNewAudioDescription(e.target.value)}
-                      className="input-field"
-                      placeholder="Brief description of the instruction..."
-                    />
-                  </div>
-
-                  <div className="flex space-x-2">
-                    <button
-                      type="submit"
-                      className="btn-primary text-sm"
-                      disabled={!currentAudioBlob}
-                    >
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Audio Instruction
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowUploadAudio(false);
-                        resetRecording();
-                        setNewAudioDescription("");
-                      }}
-                      className="btn-secondary text-sm"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </form>
-            )}
-
-            {audioInstructions.length > 0 ? (
-              <div className="space-y-3">
-                {audioInstructions.map((audio) => (
-                  <div key={audio.id} className="p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-3">
-                        <button
-                          onClick={() => handlePlayAudio(audio.id)}
-                          className={`p-2 rounded-full transition-colors ${
-                            playingAudio === audio.id
-                              ? "bg-red-100 hover:bg-red-200"
-                              : "bg-blue-100 hover:bg-blue-200"
-                          }`}
-                        >
-                          {playingAudio === audio.id ? (
-                            <Pause className="h-4 w-4 text-red-600" />
-                          ) : (
-                            <Play className="h-4 w-4 text-blue-600" />
-                          )}
-                        </button>
-
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {audio.audioFilename}
-                          </p>
-
-                          <p className="text-xs text-gray-500">
-                            {formatDistanceToNow(new Date(audio.createdAt), {
-                              addSuffix: true,
-                            })}
-                            {" by "} {audio.uploadedBy.username}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleAudioDelete(audio.id)}
-                        className="p-1 hover:bg-red-100 rounded transition-colors"
-                        title="Delete Audio Instruction"
-                      >
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </button>
-                    </div>
-
-                    {audio.description && (
-                      <p className="text-sm text-gray-600 mt-2 italic">
-                        "{audio.description}"
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Volume2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-
-                <p className="text-gray-500">No audio instructions</p>
-
-                {canAddAudioInstruction() && (
-                  <button
-                    onClick={() => setShowUploadAudio(true)}
-                    className="btn-primary mt-4 text-sm"
-                  >
-                    Add First Audio Instruction
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          <AudioInstructions
+            audioInstructions={audioInstructions}
+            user={user}
+            task={task}
+            showUploadAudio={showUploadAudio}
+            setShowUploadAudio={setShowUploadAudio}
+            newAudioDescription={newAudioDescription}
+            setNewAudioDescription={setNewAudioDescription}
+            playingAudio={playingAudio}
+            isRecording={isRecording}
+            isPaused={isPaused}
+            recordingTime={recordingTime}
+            currentAudioBlob={currentAudioBlob}
+            onAudioUpload={handleAudioUpload}
+            onPlayAudio={handlePlayAudio}
+            onAudioDelete={handleAudioDelete}
+            onStartRecording={startRecording}
+            onStopRecording={stopRecording}
+            onTogglePauseResume={togglePauseResume}
+            onResetRecording={resetRecording}
+            canAddAudioInstruction={canAddAudioInstruction}
+          />
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
+      {/* Modals */}
       <ConfirmDeleteModal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
@@ -2248,7 +963,6 @@ const TaskDetails = () => {
         isDeleting={isDeleting}
       />
 
-      {/* Edit Task Modal */}
       <EditTaskModal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
@@ -2256,7 +970,6 @@ const TaskDetails = () => {
         task={task}
       />
 
-      {/* Video Metadata Modal */}
       <VideoMetadataModal
         isOpen={showVideoMetadataModal}
         onClose={() => {

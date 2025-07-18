@@ -80,21 +80,10 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
-  verifyMfa: (mfaVerifyRequest) => {
-    return api.post("/auth/mfa/verify", mfaVerifyRequest);
-  },
-
-  singUpMFAEnable: (mfaRequest) => {
-    return api.post("auth/mfa/signup/enable", mfaRequest);
-  },
-
   login: (credentials) => {
     console.log("Attempting login with:", credentials);
     return api.post("/auth/login", credentials);
   },
-
-  loginVerify: (verificationData) =>
-    api.post("/auth/login/verify", verificationData),
 
   register: (userData) => api.post("/auth/register", userData),
   getCurrentUser: () => {
@@ -115,10 +104,6 @@ export const authAPI = {
   },
 
   declineInvite: (token) => api.post(`/auth/decline-invite/${token}`),
-
-  enableMfa: (userId) => api.post("/auth/mfa/enable", { userId }),
-
-  disableMfa: (userId) => api.post("/auth/mfa/disable", { userId }),
 };
 
 // --- TEAM ---
@@ -426,6 +411,130 @@ export const fileUtils = {
     );
     return `${nameWithoutExt}_${timestamp}_${random}.${extension}`;
   },
+};
+
+
+export const youtubeChannelAPI = {
+  getAllChannels: () => {
+    console.log("Fetching all YouTube channels...");
+    return api.get("/youtube-channels");
+  },
+
+  getChannelById: (id) => {
+    console.log(`Fetching YouTube channel ${id}...`);
+    return api.get(`/youtube-channels/${id}`);
+  },
+
+  createChannel: (channelData) => {
+    console.log("Creating YouTube channel:", channelData);
+    return api.post("/youtube-channels", channelData);
+  },
+
+  updateChannel: (id, channelData) => {
+    console.log(`Updating YouTube channel ${id}:`, channelData);
+    return api.put(`/youtube-channels/${id}`, channelData);
+  },
+
+  deleteChannel: (id) => {
+    console.log(`Deleting YouTube channel ${id}`);
+    return api.delete(`/youtube-channels/${id}`);
+  },
+
+  manageChannelAccess: (id, accessData) => {
+    console.log(`Managing access for YouTube channel ${id}:`, accessData);
+    return api.post(`/youtube-channels/${id}/access`, accessData);
+  },
+
+  searchChannels: (query) => {
+    console.log(`Searching YouTube channels with query: ${query}`);
+    const params = query ? `?q=${encodeURIComponent(query)}` : "";
+    return api.get(`/youtube-channels/search${params}`);
+  },
+
+  getMyChannels: () => {
+    console.log("Fetching user's YouTube channels...");
+    return api.get("/youtube-channels/my-channels");
+  },
+
+  getChannelStats: () => {
+    console.log("Fetching YouTube channel stats...");
+    return api.get("/youtube-channels/stats");
+  },
+};
+
+// YouTube Channel utility functions
+export const youtubeChannelUtils = {
+  validateChannelId: (channelId) => {
+    // YouTube channel IDs typically start with 'UC' and are 24 characters long
+    const channelIdRegex = /^UC[a-zA-Z0-9_-]{22}$/;
+    return channelIdRegex.test(channelId);
+  },
+
+  validateChannelUrl: (url) => {
+    if (!url) return true; // URL is optional
+    const youtubeUrlPatterns = [
+      /^https?:\/\/(www\.)?youtube\.com\/channel\/UC[a-zA-Z0-9_-]{22}$/,
+      /^https?:\/\/(www\.)?youtube\.com\/c\/[a-zA-Z0-9_-]+$/,
+      /^https?:\/\/(www\.)?youtube\.com\/user\/[a-zA-Z0-9_-]+$/,
+      /^https?:\/\/(www\.)?youtube\.com\/@[a-zA-Z0-9_-]+$/
+    ];
+    return youtubeUrlPatterns.some(pattern => pattern.test(url));
+  },
+
+  extractChannelIdFromUrl: (url) => {
+    if (!url) return null;
+    const match = url.match(/\/channel\/(UC[a-zA-Z0-9_-]{22})/);
+    return match ? match[1] : null;
+  },
+
+  formatChannelUrl: (channelId) => {
+    if (!channelId) return "";
+    if (youtubeChannelUtils.validateChannelId(channelId)) {
+      return `https://www.youtube.com/channel/${channelId}`;
+    }
+    return "";
+  },
+
+  generateThumbnailUrl: (channelId) => {
+    if (!channelId || !youtubeChannelUtils.validateChannelId(channelId)) {
+      return null;
+    }
+    // YouTube channel thumbnail URL format
+    return `https://yt3.ggpht.com/ytc/default_${channelId}=s240-c-k-c0x00ffffff-no-rj`;
+  },
+
+  validateChannelData: (channelData) => {
+    const errors = [];
+
+    if (!channelData.channelName || channelData.channelName.trim().length === 0) {
+      errors.push("Channel name is required");
+    }
+
+    if (channelData.channelName && channelData.channelName.length > 100) {
+      errors.push("Channel name must not exceed 100 characters");
+    }
+
+    if (!channelData.channelId || !youtubeChannelUtils.validateChannelId(channelData.channelId)) {
+      errors.push("Valid YouTube channel ID is required (format: UC followed by 22 characters)");
+    }
+
+    if (channelData.channelUrl && !youtubeChannelUtils.validateChannelUrl(channelData.channelUrl)) {
+      errors.push("Invalid YouTube channel URL format");
+    }
+
+    if (channelData.description && channelData.description.length > 500) {
+      errors.push("Description must not exceed 500 characters");
+    }
+
+    if (channelData.thumbnailUrl && channelData.thumbnailUrl.length > 500) {
+      errors.push("Thumbnail URL must not exceed 500 characters");
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors: errors
+    };
+  }
 };
 
 export default api;

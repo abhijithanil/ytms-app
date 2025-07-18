@@ -1,5 +1,5 @@
-import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   KanbanSquare, 
@@ -7,13 +7,96 @@ import {
   Users, 
   Video,
   Settings,
-  LogOut
+  ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const Sidebar = ({ onNavigate }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef(null);
+
+  // Close profile dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+        setIsProfileDropdownOpen(false);
+      }
+    };
+    
+    if (isProfileDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isProfileDropdownOpen]);
+
+  const handleProfileDropdownToggle = (e) => {
+    e.stopPropagation();
+    setIsProfileDropdownOpen(!isProfileDropdownOpen);
+  };
+
+  const handleProfileDropdownItemClick = (action) => {
+    setIsProfileDropdownOpen(false);
+    if (onNavigate) {
+      onNavigate();
+    }
+    action();
+  };
+
+  const renderProfileDropdown = () => {
+    if (!isProfileDropdownOpen) return null;
+
+    const commonItems = [
+      { label: "Settings", onClick: () => navigate("/settings") },
+      { label: "Log out", onClick: logout },
+    ];
+
+    let roleSpecificItems = [];
+    if (user?.role === "ADMIN") {
+      roleSpecificItems = [
+        { label: "Dashboard", onClick: () => navigate("/dashboard") },
+        { label: "Team Management", onClick: () => navigate("/team") },
+        ...commonItems,
+      ];
+    } else if (user?.role === "EDITOR") {
+      roleSpecificItems = [
+        { label: "Dashboard", onClick: () => navigate("/dashboard") },
+        { label: "Team", onClick: () => navigate("/team") },
+        { label: "My Tasks", onClick: () => navigate("/tasks") },
+        ...commonItems,
+      ];
+    } else {
+      roleSpecificItems = [
+        { label: "Dashboard", onClick: () => navigate("/dashboard") },
+        { label: "Team", onClick: () => navigate("/team") },
+        ...commonItems,
+      ];
+    }
+
+    return (
+      <div className="absolute left-0 top-full mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200 z-50">
+        <div className="py-1">
+          {roleSpecificItems.map((item, index) => (
+            <button
+              key={index}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleProfileDropdownItemClick(item.onClick);
+              }}
+              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors text-left"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   const navigationItems = [
     {
@@ -54,16 +137,9 @@ const Sidebar = ({ onNavigate }) => {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    if (onNavigate) {
-      onNavigate();
-    }
-  };
-
   return (
     <div className="flex flex-col w-full lg:w-64 bg-white shadow-lg border-r border-gray-200 h-full">
-      {/* Logo - Hidden on mobile when in overlay mode */}
+      {/* Logo - Only visible on desktop */}
       <div className="hidden lg:flex items-center h-16 px-6 border-b border-gray-200">
         <div className="flex items-center space-x-3">
           <div className="flex items-center justify-center w-10 h-10 bg-primary-600 rounded-xl">
@@ -79,6 +155,8 @@ const Sidebar = ({ onNavigate }) => {
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 overflow-y-auto">
         <div className="space-y-1">
+        
+          
           <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
             NAVIGATION
           </h3>
@@ -109,32 +187,6 @@ const Sidebar = ({ onNavigate }) => {
           })}
         </div>
       </nav>
-
-      {/* User Profile */}
-      <div className="border-t border-gray-200 p-4">
-        <div className="flex items-center space-x-3 mb-3">
-          <div className="flex items-center justify-center w-10 h-10 bg-primary-600 rounded-full text-white font-medium">
-            {user?.username?.charAt(0).toUpperCase() || 'A'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
-              {user?.username || 'Anonymous'}
-            </p>
-            <p className="text-xs text-gray-500 capitalize">
-              {user?.role?.toLowerCase() || 'User'}
-            </p>
-          </div>
-        </div>
-        
-        {/* Logout Button */}
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center justify-center px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Logout
-        </button>
-      </div>
     </div>
   );
 };

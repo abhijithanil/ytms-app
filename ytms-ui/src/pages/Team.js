@@ -13,7 +13,7 @@ import {
 import { usersAPI, teamAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import InviteMemberModal from '../components/InviteMemberModal'; // Import the new modal
+import InviteMemberModal from '../components/InviteMemberModal';
 
 // A simple modal component for editing user roles
 const EditRoleModal = ({ member, onClose, onSave }) => {
@@ -24,7 +24,7 @@ const EditRoleModal = ({ member, onClose, onSave }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
         <h3 className="text-lg font-medium text-gray-900">Edit Role for {member.username}</h3>
         <div className="mt-4">
@@ -44,7 +44,7 @@ const EditRoleModal = ({ member, onClose, onSave }) => {
 
 // A simple confirmation modal for deleting a user
 const ConfirmDeleteModal = ({ member, onClose, onConfirm }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
         <h3 className="text-lg font-medium text-gray-900">Delete User</h3>
         <p className="mt-2 text-sm text-gray-600">Are you sure you want to remove {member.username}? This action cannot be undone.</p>
@@ -69,7 +69,7 @@ const Team = () => {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [editingMember, setEditingMember] = useState(null);
   const [deletingMember, setDeletingMember] = useState(null);
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false); // State for invite modal
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -128,11 +128,11 @@ const Team = () => {
   };
 
   const StatCard = ({ title, value, icon: Icon, color }) => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
+          <p className="text-2xl md:text-3xl font-bold text-gray-900 mt-2">{value}</p>
         </div>
         <div className={`p-3 rounded-xl ${color}`}>
           <Icon className="h-6 w-6 text-white" />
@@ -158,17 +158,17 @@ const Team = () => {
     }
 
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow">
         <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-primary-600 rounded-full flex items-center justify-center text-white font-medium text-lg">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-primary-600 rounded-full flex items-center justify-center text-white font-medium text-lg shrink-0">
               {getInitials(member.firstName, member.lastName, member.username)}
             </div>
-            <div>
-              <h3 className="font-semibold text-gray-900">{member.firstName && member.lastName ? `${member.firstName} ${member.lastName}` : member.username}</h3>
+            <div className='min-w-0'>
+              <h3 className="font-semibold text-gray-900 truncate">{member.firstName && member.lastName ? `${member.firstName} ${member.lastName}` : member.username}</h3>
               <div className="flex items-center space-x-2 mt-1">
-                <Mail className="h-4 w-4 text-gray-400" />
-                <span className="text-sm text-gray-600">{member.email}</span>
+                <Mail className="h-4 w-4 text-gray-400 shrink-0" />
+                <span className="text-sm text-gray-600 truncate">{member.email}</span>
               </div>
               <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-2 ${getRoleColor(member.role)}`}>
                 {member.role.toLowerCase()}
@@ -200,18 +200,18 @@ const Team = () => {
         </div>
 
         {/* Member Stats */}
-        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
+        <div className="grid grid-cols-3 gap-2 pt-4 border-t border-gray-100">
           <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900">0</p>
-            <p className="text-sm text-gray-600">Total</p>
+            <p className="text-xl md:text-2xl font-bold text-gray-900">0</p>
+            <p className="text-xs md:text-sm text-gray-600">Total</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-orange-600">0</p>
-            <p className="text-sm text-gray-600">Active</p>
+            <p className="text-xl md:text-2xl font-bold text-orange-600">0</p>
+            <p className="text-xs md:text-sm text-gray-600">Active</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-green-600">0</p>
-            <p className="text-sm text-gray-600">Done</p>
+            <p className="text-xl md:text-2xl font-bold text-green-600">0</p>
+            <p className="text-xs md:text-sm text-gray-600">Done</p>
           </div>
         </div>
       </div>
@@ -220,30 +220,30 @@ const Team = () => {
 
   if (loading) {
     return (
-      <div className="animate-pulse space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="animate-pulse space-y-6 p-4 md:p-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white rounded-xl h-32"></div>
+            <div key={i} className="bg-gray-200 rounded-xl h-28"></div>
           ))}
         </div>
-        <div className="bg-white rounded-xl h-64"></div>
+        <div className="bg-gray-200 rounded-xl h-64"></div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6 animate-fadeIn p-4 md:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Team</h1>
-          <p className="text-gray-600">
-            {stats.totalMembers} team member{stats.totalMembers !== 1 ? 's' : ''} • {stats.activeTasks} active task{stats.activeTasks !== 1 ? 's' : ''}
+          <p className="text-gray-600 mt-1">
+            {stats.totalMembers} team member{stats.totalMembers !== 1 ? 's' : ''}
           </p>
         </div>
         
         {user?.role === 'ADMIN' && (
-          <button onClick={() => setIsInviteModalOpen(true)} className="btn-primary flex items-center space-x-2">
+          <button onClick={() => setIsInviteModalOpen(true)} className="btn-primary flex items-center space-x-2 w-full sm:w-auto">
             <UserPlus className="h-4 w-4" />
             <span>Invite Member</span>
           </button>
@@ -251,7 +251,7 @@ const Team = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
         <StatCard
           title="Team Members"
           value={stats.totalMembers}
@@ -280,7 +280,7 @@ const Team = () => {
 
       {/* Team Members */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
+        <div className="px-4 md:px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Users className="h-5 w-5 text-primary-600" />
@@ -289,9 +289,9 @@ const Team = () => {
           </div>
         </div>
         
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           {teamMembers.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
               {teamMembers.map((member) => (
                 <TeamMemberCard key={member.id} member={member} />
               ))}

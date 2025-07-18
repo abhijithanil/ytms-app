@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import api, { usersAPI, L } from "../services/api";
 import toast from "react-hot-toast";
 import { User, Lock, Bell, Camera, Shield, AlertCircle } from "lucide-react";
+import ChannelManagement from "../components/ChannelManagement";
 
 const MfaSetupModal = ({
   isOpen,
@@ -40,11 +41,7 @@ const MfaSetupModal = ({
         </p>
         <div className="flex justify-center mb-6 bg-white p-4 rounded-lg">
           {qrCodeImageUri ? (
-            <img 
-              src={qrCodeImageUri} 
-              alt="MFA QR Code" 
-              className="w-48 h-48"
-            />
+            <img src={qrCodeImageUri} alt="MFA QR Code" className="w-48 h-48" />
           ) : (
             <div className="w-48 h-48 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
               <p className="text-gray-500">Loading QR Code...</p>
@@ -106,11 +103,10 @@ const Settings = () => {
   const [mfaStatus, setMfaStatus] = useState({
     enabled: false,
     loading: true,
-    error: null
+    error: null,
   });
 
-  useEffect(() => {
-  }, []);
+  useEffect(() => {}, []);
 
   useEffect(() => {
     if (user) {
@@ -126,21 +122,21 @@ const Settings = () => {
 
   const checkMfaStatus = async () => {
     if (!user?.id) return;
-    
-    setMfaStatus(prev => ({ ...prev, loading: true, error: null }));
+
+    setMfaStatus((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const response = await api.get(`/auth/mfa/status/${user.id}`);
       setMfaStatus({
         enabled: response.data.mfaEnabled,
         loading: false,
-        error: null
+        error: null,
       });
     } catch (error) {
       console.error("Error checking MFA status:", error);
       setMfaStatus({
         enabled: user?.mfaEnabled || false,
         loading: false,
-        error: null
+        error: null,
       });
     }
   };
@@ -150,10 +146,10 @@ const Settings = () => {
       // Enable MFA
       setIsEnablingMfa(true);
       try {
-        const response = await api.post("/auth/mfa/enable", { 
-          userId: user.id 
+        const response = await api.post("/auth/mfa/enable", {
+          userId: user.id,
         });
-        
+
         if (response.data.qrCodeImageUri) {
           setQrCodeImageUri(response.data.qrCodeImageUri);
           setIsMfaModalOpen(true);
@@ -168,10 +164,14 @@ const Settings = () => {
       }
     } else {
       // Disable MFA
-      if (!window.confirm("Are you sure you want to disable MFA? This will make your account less secure.")) {
+      if (
+        !window.confirm(
+          "Are you sure you want to disable MFA? This will make your account less secure."
+        )
+      ) {
         return;
       }
-      
+
       setIsDisablingMfa(true);
       try {
         await api.post("/auth/mfa/disable", { userId: user.id });
@@ -265,7 +265,9 @@ const Settings = () => {
           <div className="flex items-center space-x-3">
             <Shield className="h-5 w-5 text-gray-400" />
             <div>
-              <p className="text-gray-800 font-medium">Multi-Factor Authentication</p>
+              <p className="text-gray-800 font-medium">
+                Multi-Factor Authentication
+              </p>
               <p className="text-sm text-gray-500">Checking status...</p>
             </div>
           </div>
@@ -280,11 +282,13 @@ const Settings = () => {
           <div className="flex items-center space-x-3">
             <AlertCircle className="h-5 w-5 text-red-500" />
             <div>
-              <p className="text-gray-800 font-medium">Multi-Factor Authentication</p>
+              <p className="text-gray-800 font-medium">
+                Multi-Factor Authentication
+              </p>
               <p className="text-sm text-red-500">{mfaStatus.error}</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={checkMfaStatus}
             className="text-sm text-primary-600 hover:text-primary-800 underline"
           >
@@ -297,11 +301,19 @@ const Settings = () => {
     return (
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <Shield className={`h-5 w-5 ${mfaStatus.enabled ? 'text-green-600' : 'text-gray-400'}`} />
+          <Shield
+            className={`h-5 w-5 ${
+              mfaStatus.enabled ? "text-green-600" : "text-gray-400"
+            }`}
+          />
           <div>
-            <p className="text-gray-800 font-medium">Multi-Factor Authentication</p>
+            <p className="text-gray-800 font-medium">
+              Multi-Factor Authentication
+            </p>
             <p className="text-sm text-gray-500">
-              {mfaStatus.enabled ? 'Your account is secured with MFA' : 'Secure your account by enabling MFA'}
+              {mfaStatus.enabled
+                ? "Your account is secured with MFA"
+                : "Secure your account by enabling MFA"}
             </p>
           </div>
         </div>
@@ -353,7 +365,10 @@ const Settings = () => {
           </div>
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="firstName"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 First Name
               </label>
               <input
@@ -367,7 +382,10 @@ const Settings = () => {
               />
             </div>
             <div>
-              <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="lastName"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 Last Name
               </label>
               <input
@@ -381,7 +399,10 @@ const Settings = () => {
               />
             </div>
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="username"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 Username
               </label>
               <input
@@ -395,7 +416,10 @@ const Settings = () => {
               />
             </div>
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 Email Address
               </label>
               <input
@@ -429,10 +453,16 @@ const Settings = () => {
         </div>
 
         {/* Change Password Form */}
-        <form onSubmit={handlePasswordUpdate} className="space-y-4 max-w-md mb-8">
+        <form
+          onSubmit={handlePasswordUpdate}
+          className="space-y-4 max-w-md mb-8"
+        >
           <h3 className="text-md font-medium text-gray-800">Change Password</h3>
           <div>
-            <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="currentPassword"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Current Password
             </label>
             <input
@@ -446,7 +476,10 @@ const Settings = () => {
             />
           </div>
           <div>
-            <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="newPassword"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               New Password
             </label>
             <input
@@ -460,7 +493,10 @@ const Settings = () => {
             />
           </div>
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="confirmPassword"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Confirm New Password
             </label>
             <input
@@ -474,7 +510,11 @@ const Settings = () => {
             />
           </div>
           <div className="flex justify-end">
-            <button type="submit" className="btn-primary" disabled={isPasswordSubmitting}>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={isPasswordSubmitting}
+            >
               {isPasswordSubmitting ? "Changing..." : "Change Password"}
             </button>
           </div>
@@ -483,13 +523,14 @@ const Settings = () => {
         <hr className="my-6" />
 
         {/* MFA Section with Switch */}
-        <div className="py-4">
-          {renderMfaSection()}
-        </div>
+        <div className="py-4">{renderMfaSection()}</div>
       </div>
 
       {/* Notifications Section */}
-      <form onSubmit={handleNotificationSave} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <form
+        onSubmit={handleNotificationSave}
+        className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+      >
         <div className="flex items-center space-x-4 mb-6">
           <Bell className="h-6 w-6 text-primary-600" />
           <h2 className="text-xl font-semibold text-gray-900">Notifications</h2>
@@ -553,6 +594,8 @@ const Settings = () => {
           </button>
         </div>
       </form>
+
+      {user?.role === "ADMIN" && <ChannelManagement />}
 
       <MfaSetupModal
         isOpen={isMfaModalOpen}
