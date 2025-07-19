@@ -1,5 +1,20 @@
 -- PostgreSQL initialization script for YTMS
 
+-- Grant the ability for your user to connect to the database.
+GRANT CONNECT ON DATABASE ytms_db TO ytms_user;
+
+-- Grant the USAGE privilege on the public schema. This allows the user to access objects in the schema.
+GRANT USAGE ON SCHEMA public TO ytms_user;
+
+-- Grant the CREATE privilege on the public schema. This allows the user to create new tables, views, etc.
+GRANT CREATE ON SCHEMA public TO ytms_user;
+
+-- You might also want to grant permissions on all tables within the public schema.
+-- This is particularly useful for ongoing operations.
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ytms_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ytms_user;
+
+                            
 GRANT USAGE ON SCHEMA public TO ytms_user;
 GRANT CREATE ON SCHEMA public TO ytms_user;
 
