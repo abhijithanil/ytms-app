@@ -10,3 +10,9 @@ run-redis-server:
 # Restart Redis Server
 restart-redis:
 	make stop-redis && make run-redis-server
+
+start-ui:
+	nohup npm start -- --host=0.0.0.0 &
+
+start-server:
+	
