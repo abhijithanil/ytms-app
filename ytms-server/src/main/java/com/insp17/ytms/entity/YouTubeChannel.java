@@ -57,6 +57,10 @@ public class YouTubeChannel {
     @Column(name = "youtube_channel_owner_email")
     private String youtubeChannelOwnerEmail;
 
+    // NEW: Add refresh token key field for multi-channel support
+    @Column(name = "refresh_token_key")
+    private String refreshTokenKey; // e.g., "YT_REFRESH_TOKEN_MAIN", "YT_REFRESH_TOKEN_GAMING"
+
     public YouTubeChannel(String channelName, String channelId, String channelUrl, User addedBy, String youtubeChannelOwnerEmail) {
         this.channelName = channelName;
         this.channelId = channelId;
@@ -65,6 +69,8 @@ public class YouTubeChannel {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
         this.youtubeChannelOwnerEmail = youtubeChannelOwnerEmail;
+        // Set default refresh token key based on channel name
+        this.refreshTokenKey = "YT_REFRESH_TOKEN_" + channelName.toUpperCase().replaceAll("[^A-Z0-9]", "_");
     }
 
     @PreUpdate

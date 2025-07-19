@@ -13,7 +13,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -204,6 +206,43 @@ public class YouTubeChannelController {
             }
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
                     new YouTubeChannelResponse(false, "Failed to delete YouTube channel")
+            );
+        }
+    }
+
+    /**
+     * Get all channels grouped by YouTube account
+     */
+    @GetMapping("/grouped")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+    public ResponseEntity<YouTubeChannelsGroupedResponse> getChannelsGroupedByAccount(
+            @CurrentUser UserPrincipal userPrincipal) {
+        try {
+            Map<String, List<YouTubeChannel>> groupedChannels =
+                    youTubeChannelService.getChannelsGroupedByOwner(userPrincipal.getId());
+
+            YouTubeChannelsGroupedResponse response = new YouTubeChannelsGroupedResponse();
+            response.setSuccess(true);
+            response.setMessage("Channels fetched successfully");
+
+            for (Map.Entry<String, List<YouTubeChannel>> entry : groupedChannels.entrySet()) {
+                YouTubeAccountGroup accountGroup =
+                        new YouTubeAccountGroup();
+                accountGroup.setEmail(entry.getKey());
+                accountGroup.setChannelCount(entry.getValue().size());
+                accountGroup.setChannels(
+                        entry.getValue().stream()
+                                .map(YouTubeChannelDTO::new)
+                                .collect(Collectors.toList())
+                );
+                response.getAccounts().add(accountGroup);
+            }
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error fetching grouped channels for user {}: {}", userPrincipal.getId(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                    new YouTubeChannelsGroupedResponse(false, "Failed to fetch channels", new ArrayList<>())
             );
         }
     }

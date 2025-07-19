@@ -38,4 +38,30 @@ public interface YouTubeChannelRepository extends JpaRepository<YouTubeChannel, 
     @Query("SELECT yc FROM YouTubeChannel yc WHERE yc.isActive = true AND " +
             "LOWER(yc.channelName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))")
     List<YouTubeChannel> findByChannelNameContainingIgnoreCase(@Param("searchTerm") String searchTerm);
+
+    /**
+     * Find all active channels for a specific YouTube account email
+     */
+    List<YouTubeChannel> findByYoutubeChannelOwnerEmailAndIsActiveTrue(String youtubeChannelOwnerEmail);
+
+    /**
+     * Find all active channels for a list of YouTube account emails
+     */
+    List<YouTubeChannel> findByYoutubeChannelOwnerEmailInAndIsActiveTrue(List<String> emails);
+
+    /**
+     * Count channels for a specific YouTube account
+     */
+    long countByYoutubeChannelOwnerEmailAndIsActiveTrue(String youtubeChannelOwnerEmail);
+
+    /**
+     * Check if a channel exists for a specific account
+     */
+    boolean existsByChannelIdAndYoutubeChannelOwnerEmail(String channelId, String youtubeChannelOwnerEmail);
+
+    /**
+     * Get distinct YouTube account emails that have channels
+     */
+    @Query("SELECT DISTINCT yc.youtubeChannelOwnerEmail FROM YouTubeChannel yc WHERE yc.isActive = true")
+    List<String> findDistinctYoutubeAccountEmails();
 }

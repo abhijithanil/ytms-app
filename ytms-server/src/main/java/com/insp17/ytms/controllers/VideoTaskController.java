@@ -49,6 +49,9 @@ public class VideoTaskController {
     @Autowired
     private YouTubeChannelService youTubeChannelService;
 
+    @Autowired
+    private YouTubeAccountService youTubeAccountService;
+
 
     @GetMapping
     public ResponseEntity<List<VideoTaskDTO>> getAllTasks(@CurrentUser UserPrincipal userPrincipal) {
@@ -293,7 +296,8 @@ public class VideoTaskController {
 
     @PostMapping("/upload-to-youtube")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> uploadToYouTube(@RequestBody UploadVideoRequest uploadVideoRequest, @CurrentUser UserPrincipal userPrincipal) {
+    public ResponseEntity<?> uploadToYouTube(@RequestBody UploadVideoRequest uploadVideoRequest,
+                                             @CurrentUser UserPrincipal userPrincipal) {
         if (!videoTaskService.canUserAccessTask(uploadVideoRequest.getVideoId(), userPrincipal.getId())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
@@ -306,25 +310,93 @@ public class VideoTaskController {
                 return ResponseEntity.badRequest().body(Map.of("message", "Task is not in READY status."));
             }
 
-            YouTubeChannel channel = youTubeChannelService.getChannelById(uploadVideoRequest.getChannelId()).orElseThrow(() ->
-                    new RuntimeException("Channel doesn't exist"));
+            // Get the selected channel
+            YouTubeChannel channel = youTubeChannelService.getChannelById(uploadVideoRequest.getChannelId())
+                    .orElseThrow(() -> new RuntimeException("Channel doesn't exist"));
 
+            // Verify the channel is accessible to the user
+            if (!youTubeChannelService.canUserAccessChannel(uploadVideoRequest.getChannelId(), userPrincipal.getId())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("message", "You don't have access to this channel"));
+            }
+
+            // Check if the YouTube account is connected
+            if (!youTubeAccountService.isAccountConnected(channel.getYoutubeChannelOwnerEmail())) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "YouTube account not connected. Please connect the account first.",
+                        "accountEmail", channel.getYoutubeChannelOwnerEmail()
+                ));
+            }
 
             Video uploadedVideo = youTubeService.uploadVideo(task, channel);
 
             // Update task with YouTube video ID and set status to UPLOADED
-            videoTaskService.updateTaskAfterUpload(uploadVideoRequest.getVideoId(), uploadedVideo.getId(), userPrincipal.getId());
+            videoTaskService.updateTaskAfterUpload(uploadVideoRequest.getVideoId(),
+                    uploadedVideo.getId(), userPrincipal.getId());
 
             return ResponseEntity.ok(Map.of(
                     "message", "Successfully uploaded to YouTube!",
-                    "videoId", uploadedVideo.getId()
+                    "videoId", uploadedVideo.getId(),
+                    "channelName", channel.getChannelName(),
+                    "channelId", channel.getChannelId(),
+                    "videoUrl", "https://youtube.com/watch?v=" + uploadedVideo.getId()
             ));
 
         } catch (Exception e) {
             log.error("YouTube upload failed for task {}: {}", uploadVideoRequest.getVideoId(), e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", e.getMessage()));
         }
     }
 
+    /**
+     * Get available channels for video upload
+     */
+    @GetMapping("/{taskId}/available-channels")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+    public ResponseEntity<Map<String, Object>> getAvailableChannelsForTask(
+            @PathVariable Long taskId,
+            @CurrentUser UserPrincipal userPrincipal) {
+
+        if (!videoTaskService.canUserAccessTask(taskId, userPrincipal.getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        try {
+            // Get channels grouped by account
+            Map<String, List<YouTubeChannel>> groupedChannels =
+                    youTubeChannelService.getChannelsGroupedByOwner(userPrincipal.getId());
+
+            // Filter to only include connected accounts
+            Map<String, List<Map<String, Object>>> availableChannels = new HashMap<>();
+
+            for (Map.Entry<String, List<YouTubeChannel>> entry : groupedChannels.entrySet()) {
+                String accountEmail = entry.getKey();
+
+                if (youTubeAccountService.isAccountConnected(accountEmail)) {
+                    List<Map<String, Object>> channelList = entry.getValue().stream()
+                            .map(channel -> Map.<String, Object>of(
+                                    "id", channel.getId(),
+                                    "name", channel.getChannelName(),
+                                    "channelId", channel.getChannelId(),
+                                    "thumbnailUrl", channel.getThumbnailUrl()
+                            ))
+                            .collect(Collectors.toList());
+
+                    availableChannels.put(accountEmail, channelList);
+                }
+            }
+
+            return ResponseEntity.ok(Map.of(
+                    "taskId", taskId,
+                    "availableChannels", availableChannels
+            ));
+
+        } catch (Exception e) {
+            log.error("Error fetching available channels for task {}: {}", taskId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to fetch available channels"));
+        }
+    }
 
 }

@@ -40,3 +40,21 @@ GRANT USAGE ON TYPE task_status TO ytms_user;
 GRANT USAGE ON TYPE task_priority TO ytms_user;
 GRANT USAGE ON TYPE privacy_level TO ytms_user;
 GRANT USAGE ON TYPE user_status TO ytms_user;
+
+
+---
+
+-- Add refresh_token_key column to youtube_channels table
+ALTER TABLE youtube_channels
+    ADD COLUMN refresh_token_key VARCHAR(100)
+    AFTER youtube_channel_owner_email;
+
+-- Set default refresh token keys for existing channels
+UPDATE youtube_channels
+SET refresh_token_key = CONCAT('YT_REFRESH_TOKEN_',
+                               UPPER(REPLACE(REPLACE(REPLACE(channel_name, ' ', '_'), '-', '_'), '.', '_')))
+WHERE refresh_token_key IS NULL;
+
+-- Add index for better performance
+CREATE INDEX idx_youtube_channels_refresh_token_key
+    ON youtube_channels(refresh_token_key);

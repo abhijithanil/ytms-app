@@ -8,27 +8,23 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.youtube.YouTubeScopes;
 import com.google.cloud.secretmanager.v1.SecretManagerServiceClient;
 import com.google.cloud.secretmanager.v1.SecretVersionName;
+import com.insp17.ytms.dtos.RefreshTokenResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 
-/**
- * Utility class for setting up YouTube refresh tokens
- * This is a one-time setup process for each YouTube channel
- */
 @Component
 @Slf4j
 public class YouTubeRefreshTokenSetup {
 
-    private static final String REDIRECT_URI = "http://localhost:8080/oauth/callback";
+    // UPDATED: Use VM IP instead of localhost
+    private static final String REDIRECT_URI = "http://34.134.105.84.nip.io:8080/oauth/callback";
 
     @Value("${gcp.project-id}")
     private String projectId;
@@ -55,12 +51,9 @@ public class YouTubeRefreshTokenSetup {
     }
 
     /**
-     * Step 1: Generate authorization URL
-     * Send the user to this URL to authorize your application
+     * Generate authorization URL for specific channel
      */
-    public String generateAuthorizationUrl() throws IOException, GeneralSecurityException {
-
-
+    public String generateAuthorizationUrl(String channelName) throws IOException, GeneralSecurityException {
         final String clientSecretsJson = fetchClientDetails();
 
         GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(
@@ -73,30 +66,29 @@ public class YouTubeRefreshTokenSetup {
                 GsonFactory.getDefaultInstance(),
                 clientSecrets,
                 Collections.singletonList(YouTubeScopes.YOUTUBE))
-                .setAccessType("offline")           // Critical: This ensures we get a refresh token
-                .setApprovalPrompt("force")         // Forces consent screen even if previously authorized
+                .setAccessType("offline")
+                .setApprovalPrompt("force")
                 .build();
 
         String authorizationUrl = flow.newAuthorizationUrl()
                 .setRedirectUri(REDIRECT_URI)
-                .setState("youtube-setup")          // Optional: helps track the request
+                .setState("channel:" + channelName)  // Include channel info in state
                 .build();
 
-        log.info("=== YOUTUBE AUTHORIZATION SETUP ===");
+        log.info("=== YOUTUBE AUTHORIZATION SETUP FOR {} ===", channelName);
         log.info("1. Open this URL in your browser:");
         log.info("   {}", authorizationUrl);
         log.info("2. Sign in with the Google account that owns your YouTube channel");
-        log.info("3. Grant permissions to your ytms-app");
-        log.info("4. Copy the authorization code from the callback URL");
-        log.info("5. Use the code with exchangeCodeForRefreshToken() method");
-        log.info("=====================================");
+        log.info("3. Make sure you're switched to the correct channel: {}", channelName);
+        log.info("4. Grant permissions to your ytms-app");
+        log.info("5. You'll be redirected automatically with the refresh token");
+        log.info("===============================================");
 
         return authorizationUrl;
     }
 
     /**
-     * Step 2: Exchange authorization code for refresh token
-     * Use the code you get from the callback URL after user authorization
+     * Exchange authorization code for refresh token
      */
     public RefreshTokenResult exchangeCodeForRefreshToken(String authorizationCode)
             throws IOException, GeneralSecurityException {
@@ -139,50 +131,9 @@ public class YouTubeRefreshTokenSetup {
         log.info("Access Token: {}", accessToken.substring(0, 20) + "...");
         log.info("Expires In: {} seconds", expiresIn);
         log.info("=====================================");
-        log.info("IMPORTANT: Store the refresh token securely in Google Secret Manager:");
-        log.info("gcloud secrets create YT_REFRESH_TOKEN --data-string=\"{}\"", refreshToken);
-        log.info("=====================================");
 
         return new RefreshTokenResult(refreshToken, accessToken, expiresIn);
     }
 
-    /**
-     * Helper method to revoke existing tokens (if you need to start fresh)
-     */
-    public void revokeExistingTokens(String refreshToken) throws IOException {
-        // This will revoke the refresh token and all associated access tokens
-        String revokeUrl = "https://oauth2.googleapis.com/revoke?token=" + refreshToken;
 
-        // You can call this URL or use Google's client library
-        log.info("To revoke existing tokens, visit: {}", revokeUrl);
-        log.info("Or go to: https://myaccount.google.com/permissions");
-        log.info("And remove ytms-app permissions, then re-authorize");
-    }
-
-    /**
-     * Result class for refresh token exchange
-     */
-    public static class RefreshTokenResult {
-        private final String refreshToken;
-        private final String accessToken;
-        private final Long expiresInSeconds;
-
-        public RefreshTokenResult(String refreshToken, String accessToken, Long expiresInSeconds) {
-            this.refreshToken = refreshToken;
-            this.accessToken = accessToken;
-            this.expiresInSeconds = expiresInSeconds;
-        }
-
-        public String getRefreshToken() {
-            return refreshToken;
-        }
-
-        public String getAccessToken() {
-            return accessToken;
-        }
-
-        public Long getExpiresInSeconds() {
-            return expiresInSeconds;
-        }
-    }
 }

@@ -1,17 +1,13 @@
 package com.insp17.ytms.service;
 
 import com.google.api.client.auth.oauth2.Credential;
-import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
-import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
-import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.googleapis.media.MediaHttpUploader;
 import com.google.api.client.googleapis.media.MediaHttpUploaderProgressListener;
 import com.google.api.client.http.InputStreamContent;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.youtube.YouTube;
-import com.google.api.services.youtube.YouTubeScopes;
 import com.google.api.services.youtube.model.Video;
 import com.google.api.services.youtube.model.VideoSnippet;
 import com.google.api.services.youtube.model.VideoStatus;
@@ -19,6 +15,7 @@ import com.google.cloud.secretmanager.v1.SecretManagerServiceClient;
 import com.google.cloud.secretmanager.v1.SecretVersionName;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.insp17.ytms.dtos.ChannelTokenStatus;
 import com.insp17.ytms.dtos.VideoMetadataResponseDTO;
 import com.insp17.ytms.entity.Revision;
 import com.insp17.ytms.entity.VideoTask;
@@ -31,7 +28,6 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StringReader;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -57,6 +53,9 @@ public class YouTubeService {
     @Autowired
     private FileStorageService fileStorageService;
 
+    @Autowired
+    private YouTubeAccountService youTubeAccountService;
+
     // YouTube API constraints
     private static final long MAX_FILE_SIZE = 256L * 1024 * 1024 * 1024; // 256GB
     private static final int MAX_TITLE_LENGTH = 100;
@@ -69,6 +68,7 @@ public class YouTubeService {
 
     /**
      * Creates YouTube service with automatic token refresh
+     * Now uses the account email to fetch the correct refresh token
      */
     private YouTube getYouTubeService(YouTubeChannel channel) throws IOException, GeneralSecurityException {
         final JsonObject clientDetails = fetchClientDetails();
@@ -76,7 +76,9 @@ public class YouTubeService {
 
         final String clientId = secrets.get("client_id").getAsString();
         final String clientSecret = secrets.get("client_secret").getAsString();
-        final String refreshToken = fetchRefreshToken(channel);
+
+        // Get refresh token for the specific YouTube account
+        final String refreshToken = youTubeAccountService.getRefreshToken(channel.getYoutubeChannelOwnerEmail());
 
         // Create credential with automatic refresh capability
         Credential credential = new GoogleCredential.Builder()
@@ -93,8 +95,84 @@ public class YouTubeService {
                 GoogleNetHttpTransport.newTrustedTransport(),
                 GsonFactory.getDefaultInstance(),
                 credential)
-                .setApplicationName("Ytms-app")
+                .setApplicationName("ytms-app")
                 .build();
+    }
+
+    /**
+     * Upload video to specific channel
+     * The channel parameter now determines which YouTube account to use
+     */
+    public Video uploadVideo(VideoTask task, YouTubeChannel channel) throws IOException, GeneralSecurityException {
+        log.info("Starting video upload for task: {} to channel: {} (owner: {})",
+                task.getId(), channel.getChannelName(), channel.getYoutubeChannelOwnerEmail());
+
+        // Validation
+        if (channel.getYoutubeChannelOwnerEmail() == null) {
+            throw new IOException("YouTube channel owner email is not set");
+        }
+
+        // Check if the account is connected
+        if (!youTubeAccountService.isAccountConnected(channel.getYoutubeChannelOwnerEmail())) {
+            throw new IOException("YouTube account " + channel.getYoutubeChannelOwnerEmail() +
+                    " is not connected. Please connect the account first.");
+        }
+
+        // Rest of your upload logic remains the same...
+        // Get latest revision
+        Revision latestRevision = task.getRevisions().stream()
+                .max((r1, r2) -> r1.getRevisionNumber().compareTo(r2.getRevisionNumber()))
+                .orElseThrow(() -> new IOException("No revisions found for this task"));
+
+        // Get and validate metadata
+        VideoMetadataResponseDTO metadata = videoMetadataService.getVideoMetadata(task.getId());
+        if (metadata == null) {
+            throw new IOException("Video metadata is required for YouTube upload");
+        }
+        validateMetadata(metadata);
+
+        // Download and validate video file
+        log.info("Downloading video file from: {}", latestRevision.getEditedVideoUrl());
+        byte[] fileContent = fileStorageService.downloadFile(latestRevision.getEditedVideoUrl());
+        validateVideoFile(fileContent, latestRevision.getEditedVideoUrl());
+
+        // Create video object
+        Video videoObject = createVideoObject(metadata);
+
+        // Upload video
+        try (InputStream inputStream = new ByteArrayInputStream(fileContent)) {
+            InputStreamContent mediaContent = new InputStreamContent("video/*", inputStream);
+            mediaContent.setLength(fileContent.length);
+
+            YouTube youtubeService = getYouTubeService(channel);
+
+            YouTube.Videos.Insert videoInsert = youtubeService.videos()
+                    .insert(Collections.singletonList("snippet,status"), videoObject, mediaContent);
+
+            // Configure upload
+            MediaHttpUploader uploader = videoInsert.getMediaHttpUploader();
+            uploader.setDirectUploadEnabled(false);
+            uploader.setChunkSize(MediaHttpUploader.MINIMUM_CHUNK_SIZE);
+            uploader.setProgressListener(createProgressListener(metadata.getTitle()));
+
+            log.info("Uploading '{}' to channel: {} (account: {})",
+                    metadata.getTitle(), channel.getChannelName(), channel.getYoutubeChannelOwnerEmail());
+
+            Video uploadedVideo = videoInsert.execute();
+
+            log.info("Successfully uploaded video - ID: {}, Title: {}, Channel: {}, Status: {}",
+                    uploadedVideo.getId(),
+                    uploadedVideo.getSnippet().getTitle(),
+                    channel.getChannelName(),
+                    uploadedVideo.getStatus().getPrivacyStatus());
+
+            return uploadedVideo;
+
+        } catch (Exception e) {
+            log.error("Failed to upload video '{}' to channel '{}': {}",
+                    metadata.getTitle(), channel.getChannelName(), e.getMessage(), e);
+            throw new IOException("Video upload failed: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -132,23 +210,29 @@ public class YouTubeService {
     }
 
     /**
-     * Fetches refresh token for specific channel
-     * You can store different refresh tokens for different channels
+     * UPDATED: Fetches refresh token for specific channel using channel's refreshTokenKey
      */
     private String fetchRefreshToken(YouTubeChannel channel) {
         try {
-            // Use channel-specific refresh token key if available, otherwise use default
-            String refreshTokenKey = "YT_REFRESH_TOKEN";
+            // Use channel-specific refresh token key
+            String refreshTokenKey = channel.getRefreshTokenKey();
+            if (refreshTokenKey == null) {
+                // Fallback to default token key
+                refreshTokenKey = "YT_REFRESH_TOKEN";
+                log.warn("Channel {} has no specific refresh token key, using default", channel.getChannelName());
+            }
 
             SecretVersionName secretVersionName = SecretVersionName.of(projectId, refreshTokenKey, "latest");
             String refreshToken = secretManagerServiceClient.accessSecretVersion(secretVersionName)
                     .getPayload().getData().toStringUtf8();
 
-            log.info("Retrieved refresh token for channel: {}", channel.getYoutubeChannelOwnerEmail());
+            log.info("Retrieved refresh token for channel: {} using key: {}",
+                    channel.getChannelName(), refreshTokenKey);
             return refreshToken;
         } catch (Exception e) {
-            log.error("Failed to fetch refresh token for channel: {}", channel.getYoutubeChannelOwnerEmail(), e);
-            throw new RuntimeException("Unable to retrieve refresh token for channel", e);
+            log.error("Failed to fetch refresh token for channel: {} with key: {}",
+                    channel.getChannelName(), channel.getRefreshTokenKey(), e);
+            throw new RuntimeException("Unable to retrieve refresh token for channel: " + channel.getChannelName(), e);
         }
     }
 
@@ -248,70 +332,80 @@ public class YouTubeService {
         };
     }
 
-    /**
-     * Main video upload method
-     */
-    public Video uploadVideo(VideoTask task, YouTubeChannel channel) throws IOException, GeneralSecurityException {
-
-        log.info("Starting video upload process for task: {}", task.getId());
-
-        // Validation
-        if (channel.getYoutubeChannelOwnerEmail() == null) {
-            throw new IOException("YouTube channel owner email is not set");
-        }
-
-        // Get latest revision
-        Revision latestRevision = task.getRevisions().stream()
-                .max((r1, r2) -> r1.getRevisionNumber().compareTo(r2.getRevisionNumber()))
-                .orElseThrow(() -> new IOException("No revisions found for this task"));
-
-        // Get and validate metadata
-        VideoMetadataResponseDTO metadata = videoMetadataService.getVideoMetadata(task.getId());
-        if (metadata == null) {
-            throw new IOException("Video metadata is required for YouTube upload");
-        }
-        validateMetadata(metadata);
-
-        // Download and validate video file
-        log.info("Downloading video file from: {}", latestRevision.getEditedVideoUrl());
-        byte[] fileContent = fileStorageService.downloadFile(latestRevision.getEditedVideoUrl());
-        validateVideoFile(fileContent, latestRevision.getEditedVideoUrl());
-
-        // Create video object
-        Video videoObject = createVideoObject(metadata);
-
-        // Upload video
-        try (InputStream inputStream = new ByteArrayInputStream(fileContent)) {
-            InputStreamContent mediaContent = new InputStreamContent("video/*", inputStream);
-            mediaContent.setLength(fileContent.length);
-
-            YouTube youtubeService = getYouTubeService(channel);
-
-            YouTube.Videos.Insert videoInsert = youtubeService.videos()
-                    .insert(Collections.singletonList("snippet,status"), videoObject, mediaContent);
-
-            // Configure upload
-            MediaHttpUploader uploader = videoInsert.getMediaHttpUploader();
-            uploader.setDirectUploadEnabled(false);
-            uploader.setChunkSize(MediaHttpUploader.MINIMUM_CHUNK_SIZE);
-            uploader.setProgressListener(createProgressListener(metadata.getTitle()));
-
-            log.info("Uploading '{}' to channel: {}", metadata.getTitle(), channel.getYoutubeChannelOwnerEmail());
-
-            Video uploadedVideo = videoInsert.execute();
-
-            log.info("Successfully uploaded video - ID: {}, Title: {}, Status: {}",
-                    uploadedVideo.getId(),
-                    uploadedVideo.getSnippet().getTitle(),
-                    uploadedVideo.getStatus().getPrivacyStatus());
-
-            return uploadedVideo;
-
-        } catch (Exception e) {
-            log.error("Failed to upload video '{}': {}", metadata.getTitle(), e.getMessage(), e);
-            throw new IOException("Video upload failed: " + e.getMessage(), e);
-        }
-    }
+//    /**
+//     * Main video upload method with enhanced channel support
+//     */
+//    public Video uploadVideo(VideoTask task, YouTubeChannel channel) throws IOException, GeneralSecurityException {
+//
+//        log.info("Starting video upload process for task: {} to channel: {}",
+//                task.getId(), channel.getChannelName());
+//
+//        // Validation
+//        if (channel.getYoutubeChannelOwnerEmail() == null) {
+//            throw new IOException("YouTube channel owner email is not set");
+//        }
+//
+//        // Verify refresh token exists for this channel
+//        if (channel.getRefreshTokenKey() == null) {
+//            throw new IOException("No refresh token key configured for channel: " + channel.getChannelName() +
+//                    ". Please run OAuth setup for this channel first.");
+//        }
+//
+//        // Get latest revision
+//        Revision latestRevision = task.getRevisions().stream()
+//                .max((r1, r2) -> r1.getRevisionNumber().compareTo(r2.getRevisionNumber()))
+//                .orElseThrow(() -> new IOException("No revisions found for this task"));
+//
+//        // Get and validate metadata
+//        VideoMetadataResponseDTO metadata = videoMetadataService.getVideoMetadata(task.getId());
+//        if (metadata == null) {
+//            throw new IOException("Video metadata is required for YouTube upload");
+//        }
+//        validateMetadata(metadata);
+//
+//        // Download and validate video file
+//        log.info("Downloading video file from: {}", latestRevision.getEditedVideoUrl());
+//        byte[] fileContent = fileStorageService.downloadFile(latestRevision.getEditedVideoUrl());
+//        validateVideoFile(fileContent, latestRevision.getEditedVideoUrl());
+//
+//        // Create video object
+//        Video videoObject = createVideoObject(metadata);
+//
+//        // Upload video
+//        try (InputStream inputStream = new ByteArrayInputStream(fileContent)) {
+//            InputStreamContent mediaContent = new InputStreamContent("video/*", inputStream);
+//            mediaContent.setLength(fileContent.length);
+//
+//            YouTube youtubeService = getYouTubeService(channel);
+//
+//            YouTube.Videos.Insert videoInsert = youtubeService.videos()
+//                    .insert(Collections.singletonList("snippet,status"), videoObject, mediaContent);
+//
+//            // Configure upload
+//            MediaHttpUploader uploader = videoInsert.getMediaHttpUploader();
+//            uploader.setDirectUploadEnabled(false);
+//            uploader.setChunkSize(MediaHttpUploader.MINIMUM_CHUNK_SIZE);
+//            uploader.setProgressListener(createProgressListener(metadata.getTitle()));
+//
+//            log.info("Uploading '{}' to channel: {} ({})",
+//                    metadata.getTitle(), channel.getChannelName(), channel.getYoutubeChannelOwnerEmail());
+//
+//            Video uploadedVideo = videoInsert.execute();
+//
+//            log.info("Successfully uploaded video - ID: {}, Title: {}, Channel: {}, Status: {}",
+//                    uploadedVideo.getId(),
+//                    uploadedVideo.getSnippet().getTitle(),
+//                    channel.getChannelName(),
+//                    uploadedVideo.getStatus().getPrivacyStatus());
+//
+//            return uploadedVideo;
+//
+//        } catch (Exception e) {
+//            log.error("Failed to upload video '{}' to channel '{}': {}",
+//                    metadata.getTitle(), channel.getChannelName(), e.getMessage(), e);
+//            throw new IOException("Video upload failed: " + e.getMessage(), e);
+//        }
+//    }
 
     /**
      * Creates Video object with metadata
@@ -337,7 +431,57 @@ public class YouTubeService {
     }
 
     /**
-     * Updates existing video metadata
+     * Get all channels for authenticated user with their current token status
+     */
+    public List<ChannelTokenStatus> getChannelTokenStatus() {
+        // This would be called by an admin to see which channels have tokens
+        // Implementation depends on your channel repository
+        return Collections.emptyList(); // Placeholder
+    }
+
+    /**
+     * Test if a channel's refresh token is working
+     */
+    public boolean testChannelConnection(YouTubeChannel channel) {
+        try {
+            YouTube youtubeService = getYouTubeService(channel);
+
+            // Simple API call to test connectivity
+            YouTube.Channels.List request = youtubeService.channels()
+                    .list(Collections.singletonList("snippet"));
+            request.setMine(true);
+            request.setMaxResults(1L);
+
+            request.execute();
+
+            log.info("Successfully tested connection for channel: {}", channel.getChannelName());
+            return true;
+
+        } catch (Exception e) {
+            log.error("Failed to connect to channel: {} - Error: {}",
+                    channel.getChannelName(), e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get user's YouTube channels (requires valid token)
+     */
+    public List<com.google.api.services.youtube.model.Channel> getUserYouTubeChannels(YouTubeChannel channel)
+            throws IOException, GeneralSecurityException {
+
+        YouTube youtubeService = getYouTubeService(channel);
+
+        YouTube.Channels.List request = youtubeService.channels()
+                .list(Collections.singletonList("snippet,contentDetails,statistics"));
+        request.setMine(true);
+        request.setMaxResults(50L);
+
+        return request.execute().getItems();
+    }
+
+    /**
+     * Update existing video metadata on YouTube
      */
     public Video updateVideoMetadata(String videoId, VideoMetadataResponseDTO metadata, YouTubeChannel channel)
             throws IOException, GeneralSecurityException {
@@ -382,7 +526,7 @@ public class YouTubeService {
     }
 
     /**
-     * Deletes a video from YouTube
+     * Delete a video from YouTube
      */
     public void deleteVideo(String videoId, YouTubeChannel channel)
             throws IOException, GeneralSecurityException {
@@ -392,11 +536,11 @@ public class YouTubeService {
         YouTube.Videos.Delete deleteRequest = youtubeService.videos().delete(videoId);
         deleteRequest.execute();
 
-        log.info("Successfully deleted video: {}", videoId);
+        log.info("Successfully deleted video: {} from channel: {}", videoId, channel.getChannelName());
     }
 
     /**
-     * Gets video details from YouTube
+     * Get video details from YouTube
      */
     public Video getVideoDetails(String videoId, YouTubeChannel channel)
             throws IOException, GeneralSecurityException {
@@ -415,93 +559,4 @@ public class YouTubeService {
         return videos.get(0);
     }
 
-    /**
-     * Generates authorization URL for getting refresh token
-     * Use this for initial setup or when refresh token expires
-     */
-    public String generateAuthorizationUrl(String redirectUri) throws IOException, GeneralSecurityException {
-        final JsonObject clientDetails = fetchClientDetails();
-
-        GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(
-                GsonFactory.getDefaultInstance(),
-                new StringReader(clientDetails.toString())
-        );
-
-        GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-                GoogleNetHttpTransport.newTrustedTransport(),
-                GsonFactory.getDefaultInstance(),
-                clientSecrets,
-                Collections.singletonList(YouTubeScopes.YOUTUBE))
-                .setAccessType("offline")
-                .setApprovalPrompt("force") // Force to get refresh token
-                .build();
-
-        String authUrl = flow.newAuthorizationUrl()
-                .setRedirectUri(redirectUri)
-                .build();
-
-        log.info("Generated authorization URL for refresh token setup");
-        return authUrl;
-    }
-
-    /**
-     * Exchanges authorization code for refresh token
-     * Use this after user authorizes through the URL from generateAuthorizationUrl
-     */
-    public String exchangeCodeForRefreshToken(String authorizationCode, String redirectUri)
-            throws IOException, GeneralSecurityException {
-
-        final JsonObject clientDetails = fetchClientDetails();
-
-        GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(
-                GsonFactory.getDefaultInstance(),
-                new StringReader(clientDetails.toString())
-        );
-
-        GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-                GoogleNetHttpTransport.newTrustedTransport(),
-                GsonFactory.getDefaultInstance(),
-                clientSecrets,
-                Collections.singletonList(YouTubeScopes.YOUTUBE))
-                .setAccessType("offline")
-                .build();
-
-        GoogleTokenResponse tokenResponse = flow.newTokenRequest(authorizationCode)
-                .setRedirectUri(redirectUri)
-                .execute();
-
-        String refreshToken = tokenResponse.getRefreshToken();
-
-        if (refreshToken == null) {
-            throw new IOException("No refresh token received. Make sure to set access_type=offline and approval_prompt=force");
-        }
-
-        log.info("Successfully exchanged authorization code for refresh token");
-        return refreshToken;
-    }
-
-    /**
-     * Health check method to verify API connectivity
-     */
-    public boolean isApiHealthy(YouTubeChannel channel) {
-        try {
-            YouTube youtubeService = getYouTubeService(channel);
-
-            // Simple API call to verify connectivity
-            YouTube.Channels.List request = youtubeService.channels()
-                    .list(Collections.singletonList("snippet"));
-            request.setMine(true);
-            request.setMaxResults(1L);
-
-            request.execute();
-
-            log.info("YouTube API health check passed for channel: {}", channel.getYoutubeChannelOwnerEmail());
-            return true;
-
-        } catch (Exception e) {
-            log.error("YouTube API health check failed for channel: {}",
-                    channel.getYoutubeChannelOwnerEmail(), e);
-            return false;
-        }
-    }
 }

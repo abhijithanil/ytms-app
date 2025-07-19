@@ -33,4 +33,8 @@ public class CreateYouTubeChannelRequest {
 
     @NotBlank(message = "Youtube owner email is required")
     private String youtubeChannelOwnerEmail;
+
+    // NEW: Optional custom refresh token key
+    @Size(max = 100, message = "Refresh token key must not exceed 100 characters")
+    private String refreshTokenKey; // e.g., "YT_REFRESH_TOKEN_GAMING"
 }

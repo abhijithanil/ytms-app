@@ -1,20 +1,26 @@
 package com.insp17.ytms.service;
 
+import com.google.cloud.secretmanager.v1.SecretManagerServiceClient;
+import com.google.cloud.secretmanager.v1.SecretVersionName;
+import com.insp17.ytms.dtos.ChannelSetupStatusDTO;
 import com.insp17.ytms.dtos.CreateYouTubeChannelRequest;
 import com.insp17.ytms.dtos.UpdateYouTubeChannelRequest;
 import com.insp17.ytms.entity.User;
 import com.insp17.ytms.entity.UserRole;
 import com.insp17.ytms.entity.YouTubeChannel;
-import com.insp17.ytms.repository.YouTubeChannelRepository;
 import com.insp17.ytms.repository.UserRepository;
+import com.insp17.ytms.repository.YouTubeChannelRepository;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -27,6 +33,80 @@ public class YouTubeChannelService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private SecretManagerServiceClient secretManagerServiceClient;
+
+    @Autowired
+    private YouTubeService youTubeService;
+
+    @Value("${gcp.project-id}")
+    private String projectId;
+
+
+    /**
+     * Create or update a YouTube channel
+     */
+    public YouTubeChannel createOrUpdateChannel(String channelName, String channelId,
+                                                String channelUrl, String thumbnailUrl,
+                                                String ownerEmail, User addedBy) {
+        log.info("Creating/updating YouTube channel: {} for account: {}", channelName, ownerEmail);
+
+        // Check if channel already exists
+        Optional<YouTubeChannel> existingChannel = youTubeChannelRepository
+                .findByChannelIdAndIsActiveTrue(channelId);
+
+        if (existingChannel.isPresent()) {
+            // Update existing channel
+            YouTubeChannel channel = existingChannel.get();
+            channel.setChannelName(channelName);
+            channel.setChannelUrl(channelUrl);
+            channel.setThumbnailUrl(thumbnailUrl);
+            channel.setYoutubeChannelOwnerEmail(ownerEmail);
+            channel.setUpdatedAt(LocalDateTime.now());
+
+            return youTubeChannelRepository.save(channel);
+        } else {
+            // Create new channel
+            YouTubeChannel channel = new YouTubeChannel(
+                    channelName,
+                    channelId,
+                    channelUrl,
+                    addedBy,
+                    ownerEmail
+            );
+            channel.setThumbnailUrl(thumbnailUrl);
+
+            return youTubeChannelRepository.save(channel);
+        }
+    }
+
+    /**
+     * Get all channels for a specific YouTube account email
+     */
+    public List<YouTubeChannel> getChannelsByOwnerEmail(String ownerEmail) {
+        return youTubeChannelRepository.findByYoutubeChannelOwnerEmailAndIsActiveTrue(ownerEmail);
+    }
+
+    /**
+     * Get channels grouped by owner email for user
+     */
+    public Map<String, List<YouTubeChannel>> getChannelsGroupedByOwner(Long userId) {
+        List<YouTubeChannel> accessibleChannels = getChannelsAccessibleByUser(userId);
+
+        return accessibleChannels.stream()
+                .collect(Collectors.groupingBy(YouTubeChannel::getYoutubeChannelOwnerEmail));
+    }
+
+    /**
+     * Validate if a channel belongs to a specific YouTube account
+     */
+    public boolean isChannelOwnedByAccount(Long channelId, String ownerEmail) {
+        YouTubeChannel channel = youTubeChannelRepository.findById(channelId)
+                .orElseThrow(() -> new RuntimeException("Channel not found"));
+
+        return channel.getYoutubeChannelOwnerEmail().equals(ownerEmail);
+    }
 
     public List<YouTubeChannel> getAllActiveChannels() {
         return youTubeChannelRepository.findByIsActiveTrue();
@@ -75,9 +155,14 @@ public class YouTubeChannelService {
         channel.setDescription(request.getDescription());
         channel.setThumbnailUrl(request.getThumbnailUrl());
 
+        // Set custom refresh token key if provided, otherwise use default
+        if (request.getRefreshTokenKey() != null && !request.getRefreshTokenKey().trim().isEmpty()) {
+            channel.setRefreshTokenKey(request.getRefreshTokenKey());
+        }
+        // Default is set in the constructor
+
         // Set user access
         if (request.getUsersWithAccess() != null && !request.getUsersWithAccess().isEmpty()) {
-            // Validate all user IDs exist
             for (Long userId : request.getUsersWithAccess()) {
                 if (!userRepository.existsById(userId)) {
                     throw new RuntimeException("User with ID " + userId + " not found");
@@ -87,9 +172,65 @@ public class YouTubeChannelService {
         }
 
         YouTubeChannel savedChannel = youTubeChannelRepository.save(channel);
-        log.info("Successfully created YouTube channel with ID: {}", savedChannel.getId());
+        log.info("Successfully created YouTube channel with ID: {} and refresh token key: {}",
+                savedChannel.getId(), savedChannel.getRefreshTokenKey());
 
         return savedChannel;
+    }
+
+    public List<ChannelSetupStatusDTO> getChannelSetupStatus() {
+        List<YouTubeChannel> channels = getAllActiveChannels();
+        return channels.stream().map(this::checkChannelSetupStatus).toList();
+    }
+
+    private ChannelSetupStatusDTO checkChannelSetupStatus(YouTubeChannel channel) {
+        ChannelSetupStatusDTO status = new ChannelSetupStatusDTO();
+        status.setChannelId(channel.getId());
+        status.setChannelName(channel.getChannelName());
+        status.setYoutubeChannelOwnerEmail(channel.getYoutubeChannelOwnerEmail());
+        status.setRefreshTokenKey(channel.getRefreshTokenKey());
+        status.setSetupUrl("/oauth/start-youtube-setup/" + channel.getId());
+
+        try {
+            // Check if refresh token exists in Secret Manager
+            boolean hasToken = checkRefreshTokenExists(channel.getRefreshTokenKey());
+            status.setHasRefreshToken(hasToken);
+
+            if (hasToken) {
+                // Test if token works by making API call
+                boolean tokenWorks = youTubeService.testChannelConnection(channel);
+                status.setTokenWorking(tokenWorks);
+
+                if (tokenWorks) {
+                    status.setStatus("READY");
+                    status.setMessage("Channel is ready for uploads");
+                } else {
+                    status.setStatus("TOKEN_EXPIRED");
+                    status.setMessage("Refresh token exists but is not working. Re-authorization needed.");
+                }
+            } else {
+                status.setTokenWorking(false);
+                status.setStatus("NEEDS_SETUP");
+                status.setMessage("No refresh token found. OAuth setup required.");
+            }
+        } catch (Exception e) {
+            status.setHasRefreshToken(false);
+            status.setTokenWorking(false);
+            status.setStatus("ERROR");
+            status.setMessage("Error checking token status: " + e.getMessage());
+        }
+
+        return status;
+    }
+
+    private boolean checkRefreshTokenExists(String refreshTokenKey) {
+        try {
+            SecretVersionName secretVersionName = SecretVersionName.of(projectId, refreshTokenKey, "latest");
+            secretManagerServiceClient.accessSecretVersion(secretVersionName);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public YouTubeChannel updateChannel(Long channelId, UpdateYouTubeChannelRequest request, User updatedBy) {

@@ -1,5 +1,6 @@
 package com.insp17.ytms.dtos;
 
+import com.insp17.ytms.dtos.UserDTO;
 import com.insp17.ytms.entity.YouTubeChannel;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -8,10 +9,8 @@ import lombok.NoArgsConstructor;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Set;
 
-// Main DTO for YouTube Channel
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -42,6 +41,11 @@ public class YouTubeChannelDTO {
     private LocalDateTime updatedAt;
     private String youtubeChannelOwnerEmail;
 
+    // NEW: Add refresh token key and setup status
+    private String refreshTokenKey;
+    private Boolean hasRefreshToken; // Computed field
+    private Boolean tokenWorking;    // Computed field
+
     public YouTubeChannelDTO(YouTubeChannel channel) {
         this.id = channel.getId();
         this.channelName = channel.getChannelName();
@@ -55,5 +59,9 @@ public class YouTubeChannelDTO {
         this.createdAt = channel.getCreatedAt();
         this.updatedAt = channel.getUpdatedAt();
         this.youtubeChannelOwnerEmail = channel.getYoutubeChannelOwnerEmail();
+        this.refreshTokenKey = channel.getRefreshTokenKey();
+        // hasRefreshToken and tokenWorking will be set by service layer
+        this.hasRefreshToken = false;
+        this.tokenWorking = false;
     }
 }
