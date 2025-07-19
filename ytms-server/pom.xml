@@ -406,6 +406,9 @@
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
                 <version>9.0.9</version>
+                <configuration>
+                    <nvdApiKey>4b970d84-8831-4147-abb8-362519614de2</nvdApiKey>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
