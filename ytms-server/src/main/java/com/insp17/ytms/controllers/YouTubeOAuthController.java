@@ -63,11 +63,9 @@ class YouTubeOAuthController {
         }
 
         try {
-            // Path to your client_secrets.json file
-            String clientSecretsPath = "src/main/resources/client_secrets.json";
 
             YouTubeRefreshTokenSetup.RefreshTokenResult result =
-                    refreshTokenSetup.exchangeCodeForRefreshToken(authorizationCode, clientSecretsPath);
+                    refreshTokenSetup.exchangeCodeForRefreshToken(authorizationCode);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -106,10 +104,9 @@ class YouTubeOAuthController {
         }
 
         try {
-            String clientSecretsPath = "src/main/resources/client_secrets.json";
 
             YouTubeRefreshTokenSetup.RefreshTokenResult result =
-                    refreshTokenSetup.exchangeCodeForRefreshToken(authorizationCode, clientSecretsPath);
+                    refreshTokenSetup.exchangeCodeForRefreshToken(authorizationCode);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);

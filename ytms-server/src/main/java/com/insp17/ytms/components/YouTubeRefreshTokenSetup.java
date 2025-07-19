@@ -98,12 +98,14 @@ public class YouTubeRefreshTokenSetup {
      * Step 2: Exchange authorization code for refresh token
      * Use the code you get from the callback URL after user authorization
      */
-    public RefreshTokenResult exchangeCodeForRefreshToken(String authorizationCode, String clientSecretsPath)
+    public RefreshTokenResult exchangeCodeForRefreshToken(String authorizationCode)
             throws IOException, GeneralSecurityException {
+
+        final String clientSecretsJson = fetchClientDetails();
 
         GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(
                 GsonFactory.getDefaultInstance(),
-                new InputStreamReader(new FileInputStream(clientSecretsPath))
+                new StringReader(clientSecretsJson)
         );
 
         GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
