@@ -1,8 +1,10 @@
 package com.insp17.ytms.controllers;
 
+import com.google.api.services.youtube.model.Video;
 import com.insp17.ytms.dtos.*;
 import com.insp17.ytms.entity.*;
 import com.insp17.ytms.service.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +19,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 
+@Slf4j
 @RestController
 @RequestMapping("/api/tasks")
 @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
@@ -39,6 +42,12 @@ public class VideoTaskController {
 
     @Autowired
     private VideoMetadataService videoMetadataService;
+
+    @Autowired
+    private YouTubeService youTubeService;
+
+    @Autowired
+    private YouTubeChannelService youTubeChannelService;
 
 
     @GetMapping
@@ -280,6 +289,41 @@ public class VideoTaskController {
         response.put("objectName", objectName);
 
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/upload-to-youtube")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> uploadToYouTube(@RequestBody UploadVideoRequest uploadVideoRequest, @CurrentUser UserPrincipal userPrincipal) {
+        if (!videoTaskService.canUserAccessTask(uploadVideoRequest.getVideoId(), userPrincipal.getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        try {
+            VideoTask task = videoTaskService.getTaskByIdWithDetails(uploadVideoRequest.getVideoId())
+                    .orElseThrow(() -> new RuntimeException("Task not found."));
+
+            if (task.getTaskStatus() != TaskStatus.READY) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Task is not in READY status."));
+            }
+
+            YouTubeChannel channel = youTubeChannelService.getChannelById(uploadVideoRequest.getChannelId()).orElseThrow(() ->
+                    new RuntimeException("Channel doesn't exist"));
+
+
+            Video uploadedVideo = youTubeService.uploadVideo(task, channel);
+
+            // Update task with YouTube video ID and set status to UPLOADED
+            videoTaskService.updateTaskAfterUpload(uploadVideoRequest.getVideoId(), uploadedVideo.getId(), userPrincipal.getId());
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Successfully uploaded to YouTube!",
+                    "videoId", uploadedVideo.getId()
+            ));
+
+        } catch (Exception e) {
+            log.error("YouTube upload failed for task {}: {}", uploadVideoRequest.getVideoId(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", e.getMessage()));
+        }
     }
 
 

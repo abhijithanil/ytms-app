@@ -10,7 +10,8 @@ const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
     channelUrl: "",
     description: "",
     thumbnailUrl: "",
-    usersWithAccess: []
+    usersWithAccess: [],
+    youtubeChannelOwnerEmail: ""
   });
   const [users, setUsers] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,7 +80,8 @@ const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
       channelUrl: "",
       description: "",
       thumbnailUrl: "",
-      usersWithAccess: []
+      usersWithAccess: [],
+      youtubeChannelOwnerEmail: "",
     });
   };
 
@@ -179,6 +181,20 @@ const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
               onChange={(e) => setFormData(prev => ({ ...prev, thumbnailUrl: e.target.value }))}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               placeholder="https://..."
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Channel Owner
+            </label>
+            <input
+              type="youtubeChannelOwnerEmail"
+              value={formData.youtubeChannelOwnerEmail}
+              onChange={(e) => setFormData(prev => ({ ...prev, youtubeChannelOwnerEmail: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              placeholder="...@gmail.com"
               disabled={isSubmitting}
             />
           </div>

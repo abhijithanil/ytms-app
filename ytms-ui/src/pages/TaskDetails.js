@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+ import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
@@ -10,6 +10,7 @@ import api, {
   revisionsAPI,
   commentsAPI,
   metadataAPI,
+  youtubeChannelAPI, // Import the youtubeChannelAPI
 } from "../services/api";
 
 // Context
@@ -82,6 +83,12 @@ const TaskDetails = () => {
   const [showVideoMetadataModal, setShowVideoMetadataModal] = useState(false);
   const [pendingStatus, setPendingStatus] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleDateTime, setScheduleDateTime] = useState("");
+
+  // Channel state
+  const [channels, setChannels] = useState([]);
+  const [selectedChannelId, setSelectedChannelId] = useState("");
 
   // Refs
   const mediaRecorderRef = useRef(null);
@@ -91,7 +98,7 @@ const TaskDetails = () => {
 
   // Effects
   useEffect(() => {
-    fetchTaskDetails();
+    fetchTaskAndChannelDetails();
     return () => {
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
@@ -110,7 +117,7 @@ const TaskDetails = () => {
   }, [task, revisions]);
 
   // API Functions
-  const fetchTaskDetails = async () => {
+  const fetchTaskAndChannelDetails = async () => {
     try {
       setLoading(true);
       const [
@@ -119,6 +126,7 @@ const TaskDetails = () => {
         commentsResponse,
         audioResponse,
         metadataResponse,
+        channelsResponse, // Fetch channels
       ] = await Promise.all([
         tasksAPI.getTaskById(id),
         revisionsAPI.getRevisionsByTask(id),
@@ -128,6 +136,7 @@ const TaskDetails = () => {
           console.warn("Metadata fetch failed but was handled:", error);
           return { data: null };
         }),
+        youtubeChannelAPI.getAllChannels(), // API call to get channels
       ]);
 
       setTask(taskResponse.data);
@@ -135,19 +144,21 @@ const TaskDetails = () => {
       setComments(commentsResponse.data);
       setAudioInstructions(audioResponse.data);
       setMetadata(metadataResponse.data);
+      setChannels(channelsResponse.data); // Set channels in state
     } catch (error) {
-      console.error("Failed to fetch task details:", error);
-      toast.error("Failed to load task details");
+      console.error("Failed to fetch page details:", error);
+      toast.error("Failed to load page details");
     } finally {
       setLoading(false);
     }
   };
 
+
   const fetchAndSetVideoUrl = async (url) => {
     try {
       setVideoError(null);
       setCurrentVideoUrl("");
-      
+
       const response = await api.get(url);
       if (response.status !== 200) {
         throw new Error(`Server responded with status ${response.status}`);
@@ -170,16 +181,46 @@ const TaskDetails = () => {
     setTask(updatedTask);
   };
 
-  const handleStatusUpdate = async (newStatus) => {
-    if (
-      (newStatus === "SCHEDULED" || newStatus === "UPLOADED") &&
-      task.status === "READY" &&
-      !task.videoMetadata
-    ) {
-      setPendingStatus(newStatus);
-      setShowVideoMetadataModal(true);
+  const handleUploadVideo = async () => {
+    if (!selectedChannelId) {
+      toast.error("Please select a YouTube channel first.");
       return;
     }
+    debugger
+
+    const selectedChannel = channels.find(c => c.id == selectedChannelId);
+    if (!selectedChannel || !selectedChannel.youtubeChannelOwnerEmail) {
+        toast.error("Selected channel is invalid or missing an owner email.");
+        return;
+    }
+
+    try {
+      // Step 1: Update the task with the channel owner's email for impersonation
+      await tasksAPI.updateTask(id, { youtubeChannelOwnerEmail: selectedChannel.youtubeChannelOwnerEmail });
+
+      // Step 2: Trigger the YouTube upload
+      await tasksAPI.doYoutubeUpload({videoId:id, channelId: selectedChannel.id});
+
+      toast.success("YouTube upload initiated successfully!");
+      // Optionally, refresh task details
+      fetchTaskAndChannelDetails();
+    } catch (error) {
+      console.error("Failed to initiate YouTube upload:", error);
+      toast.error(error.response?.data?.message || "Failed to start YouTube upload.");
+    }
+  };
+
+
+  const handleStatusUpdate = async (newStatus) => {
+    // if (
+    //   (newStatus === "SCHEDULED" || newStatus === "UPLOADED") &&
+    //   task.status === "READY" &&
+    //   !task.videoMetadata
+    // ) {
+    //   setPendingStatus(newStatus);
+    //   setShowVideoMetadataModal(true);
+    //   return;
+    // }
 
     try {
       await tasksAPI.updateStatus(id, newStatus);
@@ -299,7 +340,7 @@ const TaskDetails = () => {
         authorId: user.id,
       });
       setNewComment("");
-      fetchTaskDetails();
+      fetchTaskAndChannelDetails();
       toast.success("Comment added successfully");
     } catch (error) {
       console.error("Failed to add comment:", error);
@@ -319,7 +360,7 @@ const TaskDetails = () => {
       await commentsAPI.updateComment(commentId, { content: editingCommentText });
       setEditingCommentId(null);
       setEditingCommentText("");
-      fetchTaskDetails();
+      fetchTaskAndChannelDetails();
       toast.success("Comment updated successfully");
     } catch (error) {
       console.error("Failed to update comment:", error);
@@ -336,7 +377,7 @@ const TaskDetails = () => {
     setDeletingCommentId(commentId);
     try {
       await commentsAPI.deleteComment(commentId);
-      fetchTaskDetails();
+      fetchTaskAndChannelDetails();
       toast.success("Comment deleted successfully");
     } catch (error) {
       console.error("Failed to delete comment:", error);
@@ -387,7 +428,7 @@ const TaskDetails = () => {
           reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}\n${xhr.responseText}`));
         }
       };
-      
+
       xhr.onerror = () => reject(new Error("Network error during upload"));
       xhr.onabort = () => reject(new Error("Upload cancelled"));
       xhr.ontimeout = () => reject(new Error("Upload timed out"));
@@ -500,7 +541,7 @@ const TaskDetails = () => {
 
       await revisionsAPI.createRevision(revisionUploadFormData);
       toast.success("Revision created successfully!");
-      fetchTaskDetails();
+      fetchTaskAndChannelDetails();
 
       setShowUploadRevision(false);
       setNewRevisionNotes("");
@@ -524,7 +565,7 @@ const TaskDetails = () => {
     try {
       await revisionsAPI.deleteRevision(revisionId);
       toast.success("Revision deleted successfully");
-      fetchTaskDetails();
+      fetchTaskAndChannelDetails();
     } catch (error) {
       console.error("Failed to delete revision:", error);
       toast.error("Failed to delete revision");
@@ -634,7 +675,7 @@ const TaskDetails = () => {
 
       await tasksAPI.addAudioInstruction(audioInstruction);
       toast.success("Audio instruction added successfully!");
-      fetchTaskDetails();
+      fetchTaskAndChannelDetails();
 
       setShowUploadAudio(false);
       setNewAudioDescription("");
@@ -699,7 +740,7 @@ const TaskDetails = () => {
     try {
       await tasksAPI.deleteAudioInstruction(audioId);
       toast.success("Audio instruction deleted successfully");
-      fetchTaskDetails();
+      fetchTaskAndChannelDetails();
     } catch (error) {
       console.error("Failed to delete audio instruction:", error);
       toast.error("Failed to delete audio instruction");
@@ -710,7 +751,7 @@ const TaskDetails = () => {
   const handleVideoMetadataSubmit = async (metadataData) => {
     try {
       await metadataAPI.createMetadata(id, metadataData);
-      fetchTaskDetails();
+      fetchTaskAndChannelDetails();
     } catch (error) {
       console.error("Failed to save video metadata:", error);
       toast.error("Failed to save video metadata");
@@ -737,6 +778,39 @@ const TaskDetails = () => {
   const canEditTask = () => {
     return user.role === "ADMIN" || task?.createdBy?.id === user.id;
   };
+
+  const handleScheduleUpload = async () => {
+    if (!selectedChannelId) {
+        toast.error("Please select a YouTube channel first.");
+        return;
+    }
+    if (!scheduleDateTime) {
+      toast.error("Please select a date and time for scheduling.");
+      return;
+    }
+
+    const selectedChannel = channels.find(c => c.id === selectedChannelId);
+    if (!selectedChannel || !selectedChannel.ownerEmail) {
+        toast.error("Selected channel is invalid or missing an owner email.");
+        return;
+    }
+
+    try {
+      // Step 1: Update the task with the channel owner's email for impersonation
+      await tasksAPI.updateTask(id, { youtubeChannelOwnerEmail: selectedChannel.ownerEmail });
+
+      // Step 2: Schedule the upload
+      await tasksAPI.scheduleYouTubeUpload(id, { uploadTime: scheduleDateTime });
+
+      setTask((prev) => ({ ...prev, status: "SCHEDULED" }));
+      toast.success("Video upload scheduled successfully");
+      setShowScheduleModal(false);
+    } catch (error) {
+      console.error("Failed to schedule upload:", error);
+      toast.error(error.response?.data?.message || "Failed to schedule upload.");
+    }
+  };
+
 
   // Loading state
   if (loading) {
@@ -804,6 +878,83 @@ const TaskDetails = () => {
             user={user}
             onStatusUpdate={handleStatusUpdate}
           />
+
+          {task.status === 'READY' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6 space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900">Final Actions</h3>
+
+              {/* Channel Selection Dropdown */}
+              <div>
+                <label htmlFor="channel-select" className="block text-sm font-medium text-gray-700 mb-1">
+                  Choose YouTube Channel
+                </label>
+                <select
+                  id="channel-select"
+                  value={selectedChannelId}
+                  onChange={(e) => setSelectedChannelId(e.target.value)}
+                  className="input-field w-full"
+                >
+                  <option value="" disabled>Select a channel...</option>
+                  {channels.map((channel) => (
+                    <option key={channel.id} value={channel.id}>
+                      {channel.channelName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={handleUploadVideo}
+                  disabled={!selectedChannelId}
+                  className="flex-1 bg-green-600 text-white px-4 py-3 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors flex items-center justify-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  <span>Upload Now</span>
+                </button>
+                <button
+                  onClick={() => setShowScheduleModal(true)}
+                  disabled={!selectedChannelId}
+                  className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors flex items-center justify-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  <span>Schedule Upload</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+
+          {showScheduleModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+                <h3 className="text-lg font-medium text-gray-900">Schedule Upload</h3>
+                <div className="mt-4">
+                  <input
+                    type="datetime-local"
+                    value={scheduleDateTime}
+                    onChange={(e) => setScheduleDateTime(e.target.value)}
+                    className="input-field w-full"
+                  />
+                </div>
+                <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                  <button
+                    type="button"
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm"
+                    onClick={handleScheduleUpload}
+                  >
+                    Schedule
+                  </button>
+                  <button
+                    type="button"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm"
+                    onClick={() => setShowScheduleModal(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
 
           {/* Mobile Sidebar - Shows before comments on mobile */}
           <div className="lg:hidden">
@@ -959,16 +1110,16 @@ const TaskDetails = () => {
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
         onConfirm={handleTaskDelete}
-        taskName={task.title}
+        taskName={task?.title}
         isDeleting={isDeleting}
       />
 
-      <EditTaskModal
+      {task && <EditTaskModal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         onSubmit={handleTaskEdit}
         task={task}
-      />
+      />}
 
       <VideoMetadataModal
         isOpen={showVideoMetadataModal}

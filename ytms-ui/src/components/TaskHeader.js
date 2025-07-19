@@ -34,7 +34,8 @@ const TaskHeader = ({ task, user, onTaskUpdate }) => {
     { from: 'ASSIGNED', to: ['IN_PROGRESS'], roles: ['ADMIN', 'EDITOR'] },
     { from: 'IN_PROGRESS', to: ['REVIEW', 'READY'], roles: ['ADMIN', 'EDITOR'] },
     { from: 'REVIEW', to: ['IN_PROGRESS', 'READY'], roles: ['ADMIN', 'EDITOR'] },
-    { from: 'READY', to: ['SCHEDULED', 'UPLOADED'], roles: ['ADMIN'] }
+    { from: 'READY', to: ['SCHEDULED', 'UPLOADED', 'REVIEW'], roles: ['ADMIN'] },
+    // { from: 'UPLOADED', to: ['REVIEW'], roles: ['ADMIN'] },
   ];
 
   useEffect(() => {

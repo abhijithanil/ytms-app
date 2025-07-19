@@ -6,15 +6,15 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "youtube_channels")
 @Getter
 @Setter
 @NoArgsConstructor
-public class YouTubeChannels {
+public class YouTubeChannel {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,13 +35,13 @@ public class YouTubeChannels {
     @Column(length = 500)
     private String thumbnailUrl;
 
-    @ElementCollection(fetch = FetchType.LAZY)
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "youtube_channel_user_access",
             joinColumns = @JoinColumn(name = "channel_id"))
     @Column(name = "user_id")
-    private List<Long> usersWithAccess = new ArrayList<>();
+    private Set<Long> usersWithAccess = new HashSet<>();
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "added_by_user_id", nullable = false)
     private User addedBy;
 
@@ -54,13 +54,17 @@ public class YouTubeChannels {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    public YouTubeChannels(String channelName, String channelId, String channelUrl, User addedBy) {
+    @Column(name = "youtube_channel_owner_email")
+    private String youtubeChannelOwnerEmail;
+
+    public YouTubeChannel(String channelName, String channelId, String channelUrl, User addedBy, String youtubeChannelOwnerEmail) {
         this.channelName = channelName;
         this.channelId = channelId;
         this.channelUrl = channelUrl;
         this.addedBy = addedBy;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        this.youtubeChannelOwnerEmail = youtubeChannelOwnerEmail;
     }
 
     @PreUpdate
@@ -79,7 +83,7 @@ public class YouTubeChannels {
     // Helper methods
     public void addUserAccess(Long userId) {
         if (this.usersWithAccess == null) {
-            this.usersWithAccess = new ArrayList<>();
+            this.usersWithAccess = new HashSet<>();
         }
         if (!this.usersWithAccess.contains(userId)) {
             this.usersWithAccess.add(userId);

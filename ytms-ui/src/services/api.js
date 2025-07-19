@@ -194,6 +194,9 @@ export const tasksAPI = {
     );
     return api.post(`/tasks/${taskId}/schedule-upload`, { uploadTime });
   },
+  doYoutubeUpload: (uploadRequest) => {
+    return api.post(`/tasks/upload-to-youtube`, uploadRequest)
+  },
   addAudioInstruction: (audioInstruction) => {
     console.log(
       `Adding audio instruction to task ${audioInstruction.videoTaskId}`

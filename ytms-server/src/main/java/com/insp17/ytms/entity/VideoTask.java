@@ -83,10 +83,6 @@ public class VideoTask {
     @OneToMany(mappedBy = "videoTask", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private Set<TaskPermission> permissions = new HashSet<>();
 
-    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
-    @JoinColumn(name = "video_metadata_id")
-    @JsonManagedReference
-    private VideoMetadata videoMetadata;
 
     // Constructors
     public VideoTask() {
@@ -270,17 +266,6 @@ public class VideoTask {
         this.taskPriority = taskPriority;
     }
 
-    public VideoMetadata getVideoMetadata() {
-        return videoMetadata;
-    }
-
-    public void setVideoMetadata(VideoMetadata videoMetadata) {
-        this.videoMetadata = videoMetadata;
-    }
-
-    public boolean hasVideoMetadata() {
-        return videoMetadata != null;
-    }
 
     public Set<String> getTags() {
         return tags;

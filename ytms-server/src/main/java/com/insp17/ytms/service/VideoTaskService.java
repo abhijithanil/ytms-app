@@ -43,6 +43,9 @@ public class VideoTaskService {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private UserService userService;
+
     public List<VideoTask> getAllTasks() {
         return videoTaskRepository.findAll();
     }
@@ -312,6 +315,14 @@ public class VideoTaskService {
         }
 
         return videoTask;
+    }
+
+    public void updateTaskAfterUpload(Long taskId, String youtubeVideoId, Long updatedByUserId) {
+        VideoTask task = getTaskById(taskId);
+        User updatedBy = userService.getUserById(updatedByUserId);
+
+        task.setYoutubeVideoId(youtubeVideoId);
+        updateTaskStatus(taskId, TaskStatus.UPLOADED, updatedBy);
     }
 
 
