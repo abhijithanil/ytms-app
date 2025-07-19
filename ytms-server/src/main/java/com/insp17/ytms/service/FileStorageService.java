@@ -1,5 +1,6 @@
 package com.insp17.ytms.service;
 
+import com.google.auth.oauth2.GoogleCredentials;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.cloud.storage.*;
 import com.insp17.ytms.dtos.ThumbnailUploadResult;
@@ -39,9 +40,6 @@ public class FileStorageService {
     @Value("${file.storage.path:/mnt/storage/ytms}")
     private String internalStoragePath;
 
-    @Value("${gcp.service-account-key-path}")
-    private String serviceAccountKeyPath;
-
     private Storage storage = null;
 
     private static final long MAX_VIDEO_SIZE = 10L * 1024 * 1024 * 1024; // 10GB
@@ -56,12 +54,10 @@ public class FileStorageService {
             System.err.println("Bucket name is not confugured properly");
             System.exit(1);
         }
-
-        ServiceAccountCredentials credentials = ServiceAccountCredentials
-                .fromStream(new FileInputStream(serviceAccountKeyPath));
+        GoogleCredentials applicationDefault = ServiceAccountCredentials.getApplicationDefault();
 
         this.storage = StorageOptions.newBuilder()
-                .setCredentials(credentials)
+                .setCredentials(applicationDefault)
                 .build()
                 .getService();
 
