@@ -63,6 +63,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authz -> authz
                         // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/youtube/oauth/callback").permitAll()
                         .requestMatchers("/oauth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()

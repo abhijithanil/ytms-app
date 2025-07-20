@@ -560,6 +560,7 @@ export const youtubeOAuthAPI = {
   startConnect: (channelName) => {
     return api.get("/youtube/oauth/connect", {
       params: { channelName },
+      timeout: 180000, // 3 minutes in milliseconds
     });
   },
 
@@ -577,9 +578,7 @@ export const youtubeOAuthAPI = {
    * @returns {Promise} Success message
    */
   disconnectAccount: (email) => {
-    return api.delete(
-      `/youtube/oauth/accounts/${encodeURIComponent(email)}`
-    );
+    return api.delete(`/youtube/oauth/accounts/${encodeURIComponent(email)}`);
   },
 
   /**

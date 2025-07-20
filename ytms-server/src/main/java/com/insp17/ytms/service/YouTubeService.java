@@ -8,9 +8,7 @@ import com.google.api.client.googleapis.media.MediaHttpUploaderProgressListener;
 import com.google.api.client.http.InputStreamContent;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.youtube.YouTube;
-import com.google.api.services.youtube.model.Video;
-import com.google.api.services.youtube.model.VideoSnippet;
-import com.google.api.services.youtube.model.VideoStatus;
+import com.google.api.services.youtube.model.*;
 import com.google.cloud.secretmanager.v1.SecretManagerServiceClient;
 import com.google.cloud.secretmanager.v1.SecretVersionName;
 import com.google.gson.JsonObject;
@@ -418,6 +416,11 @@ public class YouTubeService {
         if (metadata.getTags() != null && !metadata.getTags().isEmpty()) {
             snippet.setTags(new ArrayList<>(metadata.getTags()));
         }
+        Thumbnail thumbnail = new Thumbnail();
+        thumbnail.setUrl(metadata.getThumbnailUrl());
+        ThumbnailDetails thumbnailDetails = new ThumbnailDetails();
+        thumbnailDetails.setDefault(thumbnail);
+        snippet.setThumbnails(thumbnailDetails);
 
         VideoStatus status = new VideoStatus();
         status.setPrivacyStatus(metadata.getPrivacyStatus());

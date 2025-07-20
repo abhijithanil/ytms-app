@@ -24,7 +24,8 @@ import java.util.Collections;
 public class YouTubeRefreshTokenSetup {
 
     // UPDATED: Use VM IP instead of localhost
-    private static final String REDIRECT_URI = "http://34.134.105.84.nip.io:8080/oauth/callback";
+//    private static final String REDIRECT_URI = "http://34.173.178.188.nip.io:8080/api/youtube/oauth/callback";
+    private static final String REDIRECT_URI = "http://localhost:8080/api/youtube/oauth/callback";
 
     @Value("${gcp.project-id}")
     private String projectId;
@@ -53,7 +54,7 @@ public class YouTubeRefreshTokenSetup {
     /**
      * Generate authorization URL for specific channel
      */
-    public String generateAuthorizationUrl(String channelName) throws IOException, GeneralSecurityException {
+    public String generateAuthorizationUrl(String channelName, String state) throws IOException, GeneralSecurityException {
         final String clientSecretsJson = fetchClientDetails();
 
         GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(
@@ -72,7 +73,7 @@ public class YouTubeRefreshTokenSetup {
 
         String authorizationUrl = flow.newAuthorizationUrl()
                 .setRedirectUri(REDIRECT_URI)
-                .setState("channel:" + channelName)  // Include channel info in state
+                .setState(state)
                 .build();
 
         log.info("=== YOUTUBE AUTHORIZATION SETUP FOR {} ===", channelName);

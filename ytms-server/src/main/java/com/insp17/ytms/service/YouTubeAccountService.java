@@ -1,9 +1,6 @@
 package com.insp17.ytms.service;
 
-import com.google.cloud.secretmanager.v1.SecretManagerServiceClient;
-import com.google.cloud.secretmanager.v1.SecretPayload;
-import com.google.cloud.secretmanager.v1.SecretVersion;
-import com.google.cloud.secretmanager.v1.ProjectName;
+import com.google.cloud.secretmanager.v1.*;
 import com.google.protobuf.ByteString;
 import com.insp17.ytms.dtos.YouTubeAccount;
 import com.insp17.ytms.entity.User;
@@ -78,53 +75,69 @@ public class YouTubeAccountService {
      */
     public String saveYouTubeAccount(String email, String refreshToken, User addedBy) {
         try {
-            // Create a unique secret name for this account
-            String secretName = REFRESH_TOKEN_PREFIX + sanitizeEmail(email);
+            String secretId = REFRESH_TOKEN_PREFIX + sanitizeEmail(email);
+            ProjectName projectName = ProjectName.of(projectId);
+            SecretName secretName = SecretName.of(projectId, secretId);
 
-            // Create or update the secret in Secret Manager
+            // 1. Create the secret if it doesn't exist.
             try {
-                // Try to create new secret
                 secretManagerServiceClient.createSecret(
-                        ProjectName.of(projectId),
-                        secretName,
+                        projectName,
+                        secretId,
                         com.google.cloud.secretmanager.v1.Secret.newBuilder()
                                 .setReplication(
                                         com.google.cloud.secretmanager.v1.Replication.newBuilder()
-                                                .setAutomatic(com.google.cloud.secretmanager.v1.Replication.Automatic.newBuilder())
+                                                .setAutomatic(com.google.cloud.secretmanager.v1.Replication.Automatic.newBuilder().build())
                                                 .build()
                                 )
                                 .build()
                 );
+                log.info("Created new secret: {}", secretId);
             } catch (Exception e) {
-                // Secret might already exist, that's okay
-                log.info("Secret {} already exists, will add new version", secretName);
+                log.info("Secret {} already exists, proceeding to update versions.", secretId);
             }
 
-            // Add the refresh token as a new version
-            SecretVersion version = secretManagerServiceClient.addSecretVersion(
-                    secretName,
+            // 2. Disable all existing enabled versions of the secret.
+            SecretManagerServiceClient.ListSecretVersionsPagedResponse pagedResponse = secretManagerServiceClient.listSecretVersions(secretName);
+            for (SecretVersion version : pagedResponse.iterateAll()) {
+                if (version.getState() == SecretVersion.State.ENABLED) {
+                    log.info("Disabling old secret version: {}", version.getName());
+                    DisableSecretVersionRequest disableRequest = DisableSecretVersionRequest.newBuilder()
+                            .setName(version.getName())
+                            .build();
+                    secretManagerServiceClient.disableSecretVersion(disableRequest);
+                }
+            }
+
+            // 3. Add the new refresh token as the latest, enabled version.
+            SecretVersion newVersion = secretManagerServiceClient.addSecretVersion(
+                    secretName, // Use the fully qualified SecretName object
                     SecretPayload.newBuilder()
                             .setData(ByteString.copyFromUtf8(refreshToken))
                             .build()
             );
+            log.info("Added new secret version: {}", newVersion.getName());
 
-            // Store account info
+
+            // 4. Store account info for in-app use.
             YouTubeAccount account = new YouTubeAccount();
             account.setEmail(email);
-            account.setSecretName(secretName);
+            account.setSecretName(secretId); // Store the ID, not the full name
             account.setAddedBy(addedBy.getUsername());
             account.setConnectedAt(LocalDateTime.now());
 
             accountStore.put(email, account);
 
-            log.info("Successfully saved YouTube account {} with refresh token", email);
-            return secretName;
+            log.info("Successfully saved YouTube account {} with a new refresh token version.", email);
+            return secretId;
 
         } catch (Exception e) {
             log.error("Failed to save YouTube account", e);
-            throw new RuntimeException("Failed to save YouTube account: " + e.getMessage());
+            throw new RuntimeException("Failed to save YouTube account: " + e.getMessage(), e);
         }
     }
+
+
 
     /**
      * Get refresh token for a YouTube account

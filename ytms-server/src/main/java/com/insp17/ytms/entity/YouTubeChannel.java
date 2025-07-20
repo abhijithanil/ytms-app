@@ -61,6 +61,7 @@ public class YouTubeChannel {
     @Column(name = "refresh_token_key")
     private String refreshTokenKey; // e.g., "YT_REFRESH_TOKEN_MAIN", "YT_REFRESH_TOKEN_GAMING"
 
+
     public YouTubeChannel(String channelName, String channelId, String channelUrl, User addedBy, String youtubeChannelOwnerEmail) {
         this.channelName = channelName;
         this.channelId = channelId;

@@ -56,7 +56,7 @@ public class YouTubeOAuthController {
             // Store state temporarily to validate callback
             youTubeAccountService.saveOAuthState(state, userPrincipal.getId());
 
-            String authUrl = refreshTokenSetup.generateAuthorizationUrl(channelName) + "&state=" + state;
+            String authUrl = refreshTokenSetup.generateAuthorizationUrl(channelName, state);
 
             Map<String, String> response = new HashMap<>();
             response.put("authorizationUrl", authUrl);
