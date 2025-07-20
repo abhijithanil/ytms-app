@@ -195,7 +195,7 @@ export const tasksAPI = {
     return api.post(`/tasks/${taskId}/schedule-upload`, { uploadTime });
   },
   doYoutubeUpload: (uploadRequest) => {
-    return api.post(`/tasks/upload-to-youtube`, uploadRequest)
+    return api.post(`/tasks/upload-to-youtube`, uploadRequest);
   },
   addAudioInstruction: (audioInstruction) => {
     console.log(
@@ -416,7 +416,6 @@ export const fileUtils = {
   },
 };
 
-
 export const youtubeChannelAPI = {
   getAllChannels: () => {
     console.log("Fetching all YouTube channels...");
@@ -479,9 +478,9 @@ export const youtubeChannelUtils = {
       /^https?:\/\/(www\.)?youtube\.com\/channel\/UC[a-zA-Z0-9_-]{22}$/,
       /^https?:\/\/(www\.)?youtube\.com\/c\/[a-zA-Z0-9_-]+$/,
       /^https?:\/\/(www\.)?youtube\.com\/user\/[a-zA-Z0-9_-]+$/,
-      /^https?:\/\/(www\.)?youtube\.com\/@[a-zA-Z0-9_-]+$/
+      /^https?:\/\/(www\.)?youtube\.com\/@[a-zA-Z0-9_-]+$/,
     ];
-    return youtubeUrlPatterns.some(pattern => pattern.test(url));
+    return youtubeUrlPatterns.some((pattern) => pattern.test(url));
   },
 
   extractChannelIdFromUrl: (url) => {
@@ -509,7 +508,10 @@ export const youtubeChannelUtils = {
   validateChannelData: (channelData) => {
     const errors = [];
 
-    if (!channelData.channelName || channelData.channelName.trim().length === 0) {
+    if (
+      !channelData.channelName ||
+      channelData.channelName.trim().length === 0
+    ) {
       errors.push("Channel name is required");
     }
 
@@ -517,11 +519,19 @@ export const youtubeChannelUtils = {
       errors.push("Channel name must not exceed 100 characters");
     }
 
-    if (!channelData.channelId || !youtubeChannelUtils.validateChannelId(channelData.channelId)) {
-      errors.push("Valid YouTube channel ID is required (format: UC followed by 22 characters)");
+    if (
+      !channelData.channelId ||
+      !youtubeChannelUtils.validateChannelId(channelData.channelId)
+    ) {
+      errors.push(
+        "Valid YouTube channel ID is required (format: UC followed by 22 characters)"
+      );
     }
 
-    if (channelData.channelUrl && !youtubeChannelUtils.validateChannelUrl(channelData.channelUrl)) {
+    if (
+      channelData.channelUrl &&
+      !youtubeChannelUtils.validateChannelUrl(channelData.channelUrl)
+    ) {
       errors.push("Invalid YouTube channel URL format");
     }
 
@@ -535,9 +545,54 @@ export const youtubeChannelUtils = {
 
     return {
       isValid: errors.length === 0,
-      errors: errors
+      errors: errors,
     };
-  }
+  },
+};
+
+// NEW: YouTube OAuth API
+export const youtubeOAuthAPI = {
+  /**
+   * Start YouTube OAuth flow
+   * @param {string} channelName - Reference name for the connection
+   * @returns {Promise} Authorization URL and instructions
+   */
+  startConnect: (channelName) => {
+    return api.get("/api/youtube/oauth/connect", {
+      params: { channelName },
+    });
+  },
+
+  /**
+   * Get all connected YouTube accounts
+   * @returns {Promise} List of connected accounts with their channels
+   */
+  getConnectedAccounts: () => {
+    return api.get("/api/youtube/oauth/accounts");
+  },
+
+  /**
+   * Disconnect a YouTube account
+   * @param {string} email - Email of the account to disconnect
+   * @returns {Promise} Success message
+   */
+  disconnectAccount: (email) => {
+    return api.delete(
+      `/api/youtube/oauth/accounts/${encodeURIComponent(email)}`
+    );
+  },
+
+  /**
+   * Handle OAuth callback (this would typically be called by your backend)
+   * @param {string} code - Authorization code from Google
+   * @param {string} state - State parameter for validation
+   * @returns {Promise} Connection result
+   */
+  handleCallback: (code, state) => {
+    return api.get("/api/youtube/oauth/callback", {
+      params: { code, state },
+    });
+  },
 };
 
 export default api;

@@ -1,9 +1,248 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Edit3, Trash2, Users, Youtube, Search, X, MoreVertical } from "lucide-react";
-import { youtubeChannelAPI, usersAPI } from "../services/api";
+import { Plus, Edit3, Trash2, Users, Youtube, Search, X, MoreVertical, Key, Link, Unlink, ExternalLink, RefreshCw } from "lucide-react";
+import { youtubeChannelAPI, usersAPI, youtubeOAuthAPI } from "../services/api";
 import toast from "react-hot-toast";
 
-const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
+const ConnectYouTubeModal = ({ isOpen, onClose, onAccountConnected }) => {
+  const [channelName, setChannelName] = useState("");
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  const handleConnect = async () => {
+    if (!channelName.trim()) {
+      toast.error("Please enter a channel name");
+      return;
+    }
+
+    setIsConnecting(true);
+    try {
+      const response = await youtubeOAuthAPI.startConnect(channelName.trim());
+      if (response.data.authorizationUrl) {
+        // Open the authorization URL in a new window
+        window.open(response.data.authorizationUrl, '_blank', 'width=600,height=600');
+        toast.success("Authorization window opened. Please complete the OAuth flow.");
+        onClose();
+        // The parent component should handle refreshing the accounts list
+        setTimeout(() => onAccountConnected(), 2000);
+      } else {
+        toast.error("Failed to get authorization URL");
+      }
+    } catch (error) {
+      console.error("Error starting YouTube OAuth:", error);
+      toast.error(error.response?.data?.error || "Failed to start YouTube connection");
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const resetForm = () => {
+    setChannelName("");
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl p-4 sm:p-6 w-full max-w-md">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-900 flex items-center">
+            <Link className="h-5 w-5 text-blue-600 mr-2" />
+            Connect YouTube Account
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Channel Name Reference
+            </label>
+            <input
+              type="text"
+              value={channelName}
+              onChange={(e) => setChannelName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              placeholder="Enter a reference name for this connection"
+              disabled={isConnecting}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              This is just for reference - you'll connect to all channels in the YouTube account
+            </p>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <h4 className="text-sm font-medium text-blue-900 mb-1">What happens next:</h4>
+            <ul className="text-xs text-blue-700 space-y-1">
+              <li>• You'll be redirected to Google for authorization</li>
+              <li>• All channels in your YouTube account will be imported</li>
+              <li>• You can manage channel access afterwards</li>
+            </ul>
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-4 pt-4 border-t">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                resetForm();
+              }}
+              className="w-full sm:w-auto px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+              disabled={isConnecting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConnect}
+              className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm flex items-center justify-center"
+              disabled={isConnecting}
+            >
+              {isConnecting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <Link className="h-4 w-4 mr-2" />
+                  Connect Account
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ConnectedAccountsModal = ({ isOpen, onClose, onAccountDisconnected }) => {
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchConnectedAccounts();
+    }
+  }, [isOpen]);
+
+  const fetchConnectedAccounts = async () => {
+    setLoading(true);
+    try {
+      const response = await youtubeOAuthAPI.getConnectedAccounts();
+      setAccounts(response.data || []);
+    } catch (error) {
+      console.error("Error fetching connected accounts:", error);
+      toast.error("Failed to load connected accounts");
+      setAccounts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDisconnect = async (email) => {
+    if (window.confirm(`Are you sure you want to disconnect the YouTube account "${email}"? This will remove all associated channels.`)) {
+      try {
+        await youtubeOAuthAPI.disconnectAccount(email);
+        toast.success("Account disconnected successfully");
+        setAccounts(prev => prev.filter(acc => acc.email !== email));
+        onAccountDisconnected();
+      } catch (error) {
+        console.error("Error disconnecting account:", error);
+        toast.error(error.response?.data?.error || "Failed to disconnect account");
+      }
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl p-4 sm:p-6 w-full max-w-3xl max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-900 flex items-center">
+            <Youtube className="h-5 w-5 text-red-600 mr-2" />
+            Connected YouTube Accounts
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="text-center py-8">
+            <RefreshCw className="h-8 w-8 text-gray-400 mx-auto mb-4 animate-spin" />
+            <p className="text-gray-500">Loading connected accounts...</p>
+          </div>
+        ) : accounts.length === 0 ? (
+          <div className="text-center py-8">
+            <Youtube className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Connected Accounts</h3>
+            <p className="text-gray-600">Connect your first YouTube account to get started</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {accounts.map((account, index) => (
+              <div key={index} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                      <Youtube className="h-4 w-4 text-red-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-900">{account.email}</h4>
+                      <p className="text-xs text-gray-500">
+                        Connected: {new Date(account.connectedAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDisconnect(account.email)}
+                    className="text-red-600 hover:text-red-800 text-sm flex items-center space-x-1"
+                  >
+                    <Unlink className="h-4 w-4" />
+                    <span>Disconnect</span>
+                  </button>
+                </div>
+
+                <div className="ml-11">
+                  <h5 className="text-sm font-medium text-gray-700 mb-2">
+                    Channels ({account.channels?.length || 0})
+                  </h5>
+                  {account.channels && account.channels.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {account.channels.map((channel) => (
+                        <div
+                          key={channel.id}
+                          className="text-sm text-gray-600 bg-gray-50 rounded px-3 py-2"
+                        >
+                          <div className="font-medium">{channel.name}</div>
+                          <div className="text-xs text-gray-500">{channel.channelId}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No channels found</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex justify-end pt-4 border-t mt-6">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
   const [formData, setFormData] = useState({
     channelName: "",
     channelId: "",
@@ -11,7 +250,8 @@ const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
     description: "",
     thumbnailUrl: "",
     usersWithAccess: [],
-    youtubeChannelOwnerEmail: ""
+    youtubeChannelOwnerEmail: "",
+    refreshTokenKey: ""
   });
   const [users, setUsers] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -21,6 +261,14 @@ const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
       fetchUsers();
     }
   }, [isOpen]);
+
+  // Auto-generate refresh token key when channel name changes
+  useEffect(() => {
+    if (formData.channelName) {
+      const generatedKey = "YT_REFRESH_TOKEN_" + formData.channelName.toUpperCase().replaceAll(/[^A-Z0-9]/g, "_");
+      setFormData(prev => ({ ...prev, refreshTokenKey: generatedKey }));
+    }
+  }, [formData.channelName]);
 
   const fetchUsers = async () => {
     try {
@@ -37,6 +285,12 @@ const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
     return channelIdRegex.test(channelId);
   };
 
+  const validateRefreshTokenKey = (key) => {
+    // Should only contain uppercase letters, numbers, and underscores
+    const keyRegex = /^[A-Z0-9_]+$/;
+    return keyRegex.test(key);
+  };
+
   const handleSubmit = async () => {
     // Validation
     if (!formData.channelName.trim()) {
@@ -51,6 +305,16 @@ const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
 
     if (!validateChannelId(formData.channelId)) {
       toast.error("Invalid YouTube channel ID format (should start with UC and be 24 characters)");
+      return;
+    }
+
+    if (!formData.refreshTokenKey.trim()) {
+      toast.error("Refresh token key is required");
+      return;
+    }
+
+    if (!validateRefreshTokenKey(formData.refreshTokenKey)) {
+      toast.error("Refresh token key should only contain uppercase letters, numbers, and underscores");
       return;
     }
     
@@ -82,6 +346,7 @@ const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
       thumbnailUrl: "",
       usersWithAccess: [],
       youtubeChannelOwnerEmail: "",
+      refreshTokenKey: ""
     });
   };
 
@@ -187,16 +452,36 @@ const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Channel Owner
+              Channel Owner Email
             </label>
             <input
-              type="youtubeChannelOwnerEmail"
+              type="email"
               value={formData.youtubeChannelOwnerEmail}
               onChange={(e) => setFormData(prev => ({ ...prev, youtubeChannelOwnerEmail: e.target.value }))}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              placeholder="...@gmail.com"
+              placeholder="owner@gmail.com"
               disabled={isSubmitting}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Refresh Token Key *
+            </label>
+            <div className="relative">
+              <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                value={formData.refreshTokenKey}
+                onChange={(e) => setFormData(prev => ({ ...prev, refreshTokenKey: e.target.value.toUpperCase() }))}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-mono"
+                placeholder="YT_REFRESH_TOKEN_CHANNEL_NAME"
+                disabled={isSubmitting}
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Unique key for storing YouTube API refresh token. Auto-generated from channel name.
+            </p>
           </div>
 
           <div>
@@ -247,9 +532,7 @@ const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
       </div>
     </div>
   );
-};
-
-const ActionsDropdown = ({ channel, onEdit, onDelete, onManageAccess }) => {
+const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -329,6 +612,12 @@ const ChannelCard = ({ channel, onEdit, onDelete, onManageAccess }) => {
           <div className="min-w-0 flex-1">
             <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{channel.channelName}</h3>
             <p className="text-xs sm:text-sm text-gray-500 truncate">ID: {channel.channelId}</p>
+            {channel.refreshTokenKey && (
+              <p className="text-xs text-gray-400 truncate font-mono flex items-center">
+                <Key className="h-3 w-3 mr-1" />
+                {channel.refreshTokenKey}
+              </p>
+            )}
           </div>
         </div>
         <ActionsDropdown 
@@ -344,9 +633,16 @@ const ChannelCard = ({ channel, onEdit, onDelete, onManageAccess }) => {
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs sm:text-sm text-gray-500 space-y-1 sm:space-y-0">
-        <span className="truncate">
-          Added by: {channel.addedBy?.firstName} {channel.addedBy?.lastName}
-        </span>
+        <div className="flex flex-col space-y-1">
+          <span className="truncate">
+            Added by: {channel.addedBy?.firstName} {channel.addedBy?.lastName}
+          </span>
+          {channel.youtubeChannelOwnerEmail && (
+            <span className="truncate">
+              Owner: {channel.youtubeChannelOwnerEmail}
+            </span>
+          )}
+        </div>
         <span className="text-right">
           {channel.usersWithAccess?.length || 0} users with access
         </span>
@@ -370,6 +666,8 @@ const ChannelCard = ({ channel, onEdit, onDelete, onManageAccess }) => {
 const ChannelManagement = () => {
   const [channels, setChannels] = useState([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
+  const [isAccountsModalOpen, setIsAccountsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [filteredChannels, setFilteredChannels] = useState([]);
@@ -381,7 +679,9 @@ const ChannelManagement = () => {
   useEffect(() => {
     const filtered = channels.filter(channel =>
       channel.channelName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      channel.channelId.toLowerCase().includes(searchQuery.toLowerCase())
+      channel.channelId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (channel.youtubeChannelOwnerEmail && channel.youtubeChannelOwnerEmail.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (channel.refreshTokenKey && channel.refreshTokenKey.toLowerCase().includes(searchQuery.toLowerCase()))
     );
     setFilteredChannels(filtered);
   }, [channels, searchQuery]);
@@ -402,6 +702,16 @@ const ChannelManagement = () => {
 
   const handleChannelCreated = (newChannel) => {
     setChannels(prev => [...prev, newChannel]);
+  };
+
+  const handleAccountConnected = () => {
+    // Refresh the channels list after an account is connected
+    fetchChannels();
+  };
+
+  const handleAccountDisconnected = () => {
+    // Refresh the channels list after an account is disconnected
+    fetchChannels();
   };
 
   const handleEdit = (channel) => {
@@ -458,13 +768,29 @@ const ChannelManagement = () => {
             Manage your YouTube channels and user access
           </p>
         </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex btn-primary items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm w-full sm:w-auto"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Add Channel</span>
-        </button>
+        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+          <button
+            onClick={() => setIsAccountsModalOpen(true)}
+            className="flex items-center justify-center space-x-2 text-gray-700 bg-gray-100 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm w-full sm:w-auto"
+          >
+            <Users className="h-4 w-4" />
+            <span>Connected Accounts</span>
+          </button>
+          <button
+            onClick={() => setIsConnectModalOpen(true)}
+            className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm w-full sm:w-auto"
+          >
+            <Link className="h-4 w-4" />
+            <span>Connect YouTube</span>
+          </button>
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex btn-primary items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm w-full sm:w-auto"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Add Manual</span>
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center space-x-4">
@@ -474,7 +800,7 @@ const ChannelManagement = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search channels..."
+            placeholder="Search channels by name, ID, owner, or token key..."
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
           />
         </div>
@@ -493,13 +819,22 @@ const ChannelManagement = () => {
             }
           </p>
           {!searchQuery && (
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="inline-flex btn-primary items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add Your First Channel</span>
-            </button>
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 justify-center">
+              <button
+                onClick={() => setIsConnectModalOpen(true)}
+                className="inline-flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm"
+              >
+                <Link className="h-4 w-4" />
+                <span>Connect YouTube Account</span>
+              </button>
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="inline-flex btn-primary items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add Manual Channel</span>
+              </button>
+            </div>
           )}
         </div>
       ) : (
@@ -520,6 +855,18 @@ const ChannelManagement = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onChannelCreated={handleChannelCreated}
+      />
+
+      <ConnectYouTubeModal
+        isOpen={isConnectModalOpen}
+        onClose={() => setIsConnectModalOpen(false)}
+        onAccountConnected={handleAccountConnected}
+      />
+
+      <ConnectedAccountsModal
+        isOpen={isAccountsModalOpen}
+        onClose={() => setIsAccountsModalOpen(false)}
+        onAccountDisconnected={handleAccountDisconnected}
       />
     </div>
   );
