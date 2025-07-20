@@ -243,6 +243,8 @@ const ConnectedAccountsModal = ({ isOpen, onClose, onAccountDisconnected }) => {
     </div>
   );
 };
+
+const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
   const [formData, setFormData] = useState({
     channelName: "",
     channelId: "",
@@ -532,7 +534,9 @@ const ConnectedAccountsModal = ({ isOpen, onClose, onAccountDisconnected }) => {
       </div>
     </div>
   );
-const CreateChannelModal = ({ isOpen, onClose, onChannelCreated }) => {
+};
+
+const ActionsDropdown = ({ channel, onEdit, onDelete, onManageAccess }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
