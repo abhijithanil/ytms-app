@@ -558,7 +558,7 @@ export const youtubeOAuthAPI = {
    * @returns {Promise} Authorization URL and instructions
    */
   startConnect: (channelName) => {
-    return api.get("/api/youtube/oauth/connect", {
+    return api.get("/youtube/oauth/connect", {
       params: { channelName },
     });
   },
@@ -568,7 +568,7 @@ export const youtubeOAuthAPI = {
    * @returns {Promise} List of connected accounts with their channels
    */
   getConnectedAccounts: () => {
-    return api.get("/api/youtube/oauth/accounts");
+    return api.get("/youtube/oauth/accounts");
   },
 
   /**
@@ -578,7 +578,7 @@ export const youtubeOAuthAPI = {
    */
   disconnectAccount: (email) => {
     return api.delete(
-      `/api/youtube/oauth/accounts/${encodeURIComponent(email)}`
+      `/youtube/oauth/accounts/${encodeURIComponent(email)}`
     );
   },
 
@@ -589,7 +589,7 @@ export const youtubeOAuthAPI = {
    * @returns {Promise} Connection result
    */
   handleCallback: (code, state) => {
-    return api.get("/api/youtube/oauth/callback", {
+    return api.get("/youtube/oauth/callback", {
       params: { code, state },
     });
   },
