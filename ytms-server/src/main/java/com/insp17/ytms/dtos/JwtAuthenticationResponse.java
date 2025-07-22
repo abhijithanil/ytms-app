@@ -16,12 +16,27 @@ public class JwtAuthenticationResponse {
     }
 
     // Getters and setters
-    public String getAccessToken() { return accessToken; }
-    public void setAccessToken(String accessToken) { this.accessToken = accessToken; }
+    public String getAccessToken() {
+        return accessToken;
+    }
 
-    public String getTokenType() { return tokenType; }
-    public void setTokenType(String tokenType) { this.tokenType = tokenType; }
+    public void setAccessToken(String accessToken) {
+        this.accessToken = accessToken;
+    }
 
-    public UserSummary getUser() { return user; }
-    public void setUser(UserSummary user) { this.user = user; }
+    public String getTokenType() {
+        return tokenType;
+    }
+
+    public void setTokenType(String tokenType) {
+        this.tokenType = tokenType;
+    }
+
+    public UserSummary getUser() {
+        return user;
+    }
+
+    public void setUser(UserSummary user) {
+        this.user = user;
+    }
 }

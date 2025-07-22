@@ -12,6 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.text.MessageFormat;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -56,15 +57,14 @@ public class VideoTaskController {
     @GetMapping
     public ResponseEntity<List<VideoTaskDTO>> getAllTasks(@CurrentUser UserPrincipal userPrincipal) {
         List<VideoTask> tasks = videoTaskService.getAccessibleTasksForUser(userPrincipal.getId());
-        List<VideoTaskDTO> taskDTOs = tasks.stream()
-                .map(VideoTaskDTO::new)
-                .collect(Collectors.toList());
+        List<VideoTaskDTO> taskDTOs = tasks.stream().map(VideoTaskDTO::new).collect(Collectors.toList());
         return ResponseEntity.ok(taskDTOs);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<VideoTaskDTO> getTaskById(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
-        if (!videoTaskService.canUserAccessTask(id, userPrincipal.getId())) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(id, user)) {
             return ResponseEntity.status(403).build();
         }
         VideoTask task = videoTaskService.getTaskByIdWithDetails(id).orElseThrow();
@@ -73,7 +73,8 @@ public class VideoTaskController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Boolean>> deleteTaskById(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
-        if (!videoTaskService.canUserAccessTask(id, userPrincipal.getId())) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(id, user)) {
             return ResponseEntity.status(403).build();
         }
 
@@ -87,7 +88,7 @@ public class VideoTaskController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
     public ResponseEntity<VideoTaskDTO> createTask(@RequestBody CreateTaskRequest createTaskRequest, @CurrentUser UserPrincipal userPrincipal) {
         try {
-            User creator = userService.getUserById(userPrincipal.getId());
+            User creator = userService.getUserByIdPrivateUse(userPrincipal.getId());
             VideoTask task = new VideoTask(createTaskRequest.getTitle(), createTaskRequest.getDescription(), creator);
 
             task.setTaskPriority(createTaskRequest.getPriority());
@@ -98,7 +99,7 @@ public class VideoTaskController {
             }
 
             if (createTaskRequest.getAssignedEditorId() != null) {
-                User editor = userService.getUserById(createTaskRequest.getAssignedEditorId());
+                User editor = userService.getUserByIdPrivateUse(createTaskRequest.getAssignedEditorId());
                 task.setAssignedEditor(editor);
                 task.setTaskStatus(TaskStatus.ASSIGNED);
             }
@@ -167,26 +168,26 @@ public class VideoTaskController {
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<VideoTaskDTO> updateTask(@PathVariable Long id, @RequestBody TaskUpdateRequest taskUpdateRequest, @CurrentUser UserPrincipal userPrincipal) {
-        User assignedBy = userService.getUserById(userPrincipal.getId());
+        User assignedBy = userService.getUserByIdPrivateUse(userPrincipal.getId());
         if (assignedBy.getRole() != UserRole.ADMIN) {
             return ResponseEntity.status(403).build();
         }
 
-        VideoTask task = videoTaskService.updateTaskStatus(id, taskUpdateRequest);
+        VideoTask task = videoTaskService.updateTask(id, taskUpdateRequest);
         return ResponseEntity.ok(new VideoTaskDTO(task));
     }
 
     @PutMapping("/{id}/assign")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<VideoTaskDTO> assignEditor(@PathVariable Long id, @RequestBody AssignEditorRequest request, @CurrentUser UserPrincipal userPrincipal) {
-        User assignedBy = userService.getUserById(userPrincipal.getId());
+        User assignedBy = userService.getUserByIdPrivateUse(userPrincipal.getId());
         VideoTask task = videoTaskService.assignEditor(id, request.getEditorId(), assignedBy);
         return ResponseEntity.ok(new VideoTaskDTO(task));
     }
 
     @PutMapping("/{id}/status")
     public ResponseEntity<VideoTaskDTO> updateStatus(@PathVariable Long id, @RequestBody UpdateStatusRequest request, @CurrentUser UserPrincipal userPrincipal) {
-        User updatedBy = userService.getUserById(userPrincipal.getId());
+        User updatedBy = userService.getUserByIdPrivateUse(userPrincipal.getId());
         VideoTask task = videoTaskService.updateTaskStatus(id, request.getStatus(), updatedBy);
         return ResponseEntity.ok(new VideoTaskDTO(task));
     }
@@ -207,17 +208,15 @@ public class VideoTaskController {
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
     @PostMapping("/{id}/audio-instructions")
-    public ResponseEntity<AudioInstructionDTO> addAudioInstruction(
-            @RequestBody AudioInstructionDTO audioInstructionDTO,
-            @CurrentUser UserPrincipal userPrincipal) {
+    public ResponseEntity<AudioInstructionDTO> addAudioInstruction(@RequestBody AudioInstructionDTO audioInstructionDTO, @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
 
         try {
-            if (!videoTaskService.canUserAccessTask(audioInstructionDTO.getVideoTaskId(), userPrincipal.getId())) {
+            if (!videoTaskService.canUserAccessTask(audioInstructionDTO.getVideoTaskId(), user)) {
                 return ResponseEntity.status(403).build();
             }
 
-            User uploadedBy = userService.getUserById(userPrincipal.getId());
-            AudioInstruction audioInstruction = videoTaskService.addAudioInstruction(audioInstructionDTO, uploadedBy);
+            AudioInstruction audioInstruction = videoTaskService.addAudioInstruction(audioInstructionDTO, user);
             return ResponseEntity.ok(new AudioInstructionDTO(audioInstruction));
 
         } catch (IOException e) {
@@ -227,25 +226,23 @@ public class VideoTaskController {
 
     @GetMapping("/{id}/audio-instructions")
     public ResponseEntity<List<AudioInstructionDTO>> getAudioInstructions(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
-        if (!videoTaskService.canUserAccessTask(id, userPrincipal.getId())) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(id, user)) {
             return ResponseEntity.status(403).build();
         }
         List<AudioInstruction> audioInstructions = videoTaskService.getAudioInstructions(id);
-        List<AudioInstructionDTO> audioDTOs = audioInstructions.stream()
-                .map(AudioInstructionDTO::new)
-                .collect(Collectors.toList());
+        List<AudioInstructionDTO> audioDTOs = audioInstructions.stream().map(AudioInstructionDTO::new).collect(Collectors.toList());
         return ResponseEntity.ok(audioDTOs);
     }
 
     @DeleteMapping("/audio-instructions/{audioInstructionId}/delete")
     @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
     public ResponseEntity<Void> deleteAudioInstruction(@PathVariable Long audioInstructionId, @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
         AudioInstruction audioInstruction = audioInstructionService.getAudioInstructionById(audioInstructionId);
-        if (!videoTaskService.canUserAccessTask(audioInstruction.getVideoTask().getId(), userPrincipal.getId())) {
+        if (!videoTaskService.canUserAccessTask(audioInstruction.getVideoTask().getId(), user)) {
             return ResponseEntity.status(403).build();
         }
-        Long userId = userPrincipal.getId();
-        User user = userService.getUserById(userId);
         if (user.getId() == audioInstruction.getUploadedBy().getId() || user.getRole() == UserRole.ADMIN) {
             audioInstructionService.deleteInstruction(audioInstructionId);
         } else {
@@ -259,24 +256,21 @@ public class VideoTaskController {
     @GetMapping("/editor/{editorId}")
     public ResponseEntity<List<VideoTaskDTO>> getTasksByEditor(@PathVariable Long editorId) {
         List<VideoTask> tasks = videoTaskService.getTasksByEditor(editorId);
-        List<VideoTaskDTO> taskDTOs = tasks.stream()
-                .map(VideoTaskDTO::new)
-                .collect(Collectors.toList());
+        List<VideoTaskDTO> taskDTOs = tasks.stream().map(VideoTaskDTO::new).collect(Collectors.toList());
         return ResponseEntity.ok(taskDTOs);
     }
 
     @GetMapping("/status/{status}")
     public ResponseEntity<List<VideoTaskDTO>> getTasksByStatus(@PathVariable TaskStatus status) {
         List<VideoTask> tasks = videoTaskService.getTasksByStatus(status);
-        List<VideoTaskDTO> taskDTOs = tasks.stream()
-                .map(VideoTaskDTO::new)
-                .collect(Collectors.toList());
+        List<VideoTaskDTO> taskDTOs = tasks.stream().map(VideoTaskDTO::new).collect(Collectors.toList());
         return ResponseEntity.ok(taskDTOs);
     }
 
     @GetMapping("/{id}/video-url")
     public ResponseEntity<Map<String, String>> getTaskVideoUrl(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
-        if (!videoTaskService.canUserAccessTask(id, userPrincipal.getId())) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(id, user)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         VideoTask task = videoTaskService.getTaskById(id);
@@ -296,56 +290,38 @@ public class VideoTaskController {
 
     @PostMapping("/upload-to-youtube")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> uploadToYouTube(@RequestBody UploadVideoRequest uploadVideoRequest,
-                                             @CurrentUser UserPrincipal userPrincipal) {
-        if (!videoTaskService.canUserAccessTask(uploadVideoRequest.getVideoId(), userPrincipal.getId())) {
+    public ResponseEntity<?> uploadToYouTube(@RequestBody UploadVideoRequest uploadVideoRequest, @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(uploadVideoRequest.getVideoId(), user)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
         try {
-            VideoTask task = videoTaskService.getTaskByIdWithDetails(uploadVideoRequest.getVideoId())
-                    .orElseThrow(() -> new RuntimeException("Task not found."));
-
+            VideoTask task = videoTaskService.getTaskByIdWithDetails(uploadVideoRequest.getVideoId()).orElseThrow(() -> new RuntimeException("Task not found."));
             if (task.getTaskStatus() != TaskStatus.READY) {
                 return ResponseEntity.badRequest().body(Map.of("message", "Task is not in READY status."));
             }
 
             // Get the selected channel
-            YouTubeChannel channel = youTubeChannelService.getChannelById(uploadVideoRequest.getChannelId())
-                    .orElseThrow(() -> new RuntimeException("Channel doesn't exist"));
+            YouTubeChannel channel = youTubeChannelService.getChannelById(uploadVideoRequest.getChannelId()).orElseThrow(() -> new RuntimeException("Channel doesn't exist"));
 
             // Verify the channel is accessible to the user
-            if (!youTubeChannelService.canUserAccessChannel(uploadVideoRequest.getChannelId(), userPrincipal.getId())) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Map.of("message", "You don't have access to this channel"));
+            if (!youTubeChannelService.canUserAccessChannel(uploadVideoRequest.getChannelId(), user)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "You don't have access to this channel"));
             }
 
             // Check if the YouTube account is connected
             if (!youTubeAccountService.isAccountConnected(channel.getYoutubeChannelOwnerEmail())) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "message", "YouTube account not connected. Please connect the account first.",
-                        "accountEmail", channel.getYoutubeChannelOwnerEmail()
-                ));
+                return ResponseEntity.badRequest().body(Map.of("message", "YouTube account not connected. Please connect the account first.", "accountEmail", channel.getYoutubeChannelOwnerEmail()));
             }
 
-            Video uploadedVideo = youTubeService.uploadVideo(task, channel);
-
-            // Update task with YouTube video ID and set status to UPLOADED
-            videoTaskService.updateTaskAfterUpload(uploadVideoRequest.getVideoId(),
-                    uploadedVideo.getId(), userPrincipal.getId());
-
-            return ResponseEntity.ok(Map.of(
-                    "message", "Successfully uploaded to YouTube!",
-                    "videoId", uploadedVideo.getId(),
-                    "channelName", channel.getChannelName(),
-                    "channelId", channel.getChannelId(),
-                    "videoUrl", "https://youtube.com/watch?v=" + uploadedVideo.getId()
-            ));
+            youTubeService.uploadVideo(task, channel, uploadVideoRequest, user);
+            videoTaskService.updateTaskStatus(task.getId(),TaskStatus.UPLOADING, user);
+            return ResponseEntity.ok(Map.of("message", "Uploading to YouTube initiated!"));
 
         } catch (Exception e) {
             log.error("YouTube upload failed for task {}: {}", uploadVideoRequest.getVideoId(), e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("message", e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", e.getMessage()));
         }
     }
 
@@ -354,18 +330,16 @@ public class VideoTaskController {
      */
     @GetMapping("/{taskId}/available-channels")
     @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
-    public ResponseEntity<Map<String, Object>> getAvailableChannelsForTask(
-            @PathVariable Long taskId,
-            @CurrentUser UserPrincipal userPrincipal) {
+    public ResponseEntity<Map<String, Object>> getAvailableChannelsForTask(@PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
 
-        if (!videoTaskService.canUserAccessTask(taskId, userPrincipal.getId())) {
+        if (!videoTaskService.canUserAccessTask(taskId, user)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
         try {
             // Get channels grouped by account
-            Map<String, List<YouTubeChannel>> groupedChannels =
-                    youTubeChannelService.getChannelsGroupedByOwner(userPrincipal.getId());
+            Map<String, List<YouTubeChannel>> groupedChannels = youTubeChannelService.getChannelsGroupedByOwner(userPrincipal.getId());
 
             // Filter to only include connected accounts
             Map<String, List<Map<String, Object>>> availableChannels = new HashMap<>();
@@ -374,29 +348,17 @@ public class VideoTaskController {
                 String accountEmail = entry.getKey();
 
                 if (youTubeAccountService.isAccountConnected(accountEmail)) {
-                    List<Map<String, Object>> channelList = entry.getValue().stream()
-                            .map(channel -> Map.<String, Object>of(
-                                    "id", channel.getId(),
-                                    "name", channel.getChannelName(),
-                                    "channelId", channel.getChannelId(),
-                                    "thumbnailUrl", channel.getThumbnailUrl()
-                            ))
-                            .collect(Collectors.toList());
+                    List<Map<String, Object>> channelList = entry.getValue().stream().map(channel -> Map.<String, Object>of("id", channel.getId(), "name", channel.getChannelName(), "channelId", channel.getChannelId(), "thumbnailUrl", channel.getThumbnailUrl())).collect(Collectors.toList());
 
                     availableChannels.put(accountEmail, channelList);
                 }
             }
 
-            return ResponseEntity.ok(Map.of(
-                    "taskId", taskId,
-                    "availableChannels", availableChannels
-            ));
+            return ResponseEntity.ok(Map.of("taskId", taskId, "availableChannels", availableChannels));
 
         } catch (Exception e) {
             log.error("Error fetching available channels for task {}: {}", taskId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to fetch available channels"));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Failed to fetch available channels"));
         }
     }
-
 }

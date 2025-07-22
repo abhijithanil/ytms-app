@@ -2,14 +2,12 @@ package com.insp17.ytms.dtos;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -64,15 +62,4 @@ public class VideoMetadataDTO {
         private LocalDate recordingDate;
     }
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class VideoChapterDTO {
-        @NotBlank(message = "Chapter title is required")
-        @Size(max = 100, message = "Chapter title must not exceed 100 characters")
-        private String title;
-
-        @NotBlank(message = "Chapter timestamp is required")
-        private String timestamp;
-    }
 }

@@ -13,9 +13,9 @@ import java.util.Objects;
 public class UserPrincipal implements UserDetails {
     private final Long id;
     private final String username;
-    private String email;
     private final String password;
     private final Collection<? extends GrantedAuthority> authorities;
+    private String email;
 
     public UserPrincipal(Long id, String username, String email, String password,
                          Collection<? extends GrantedAuthority> authorities) {

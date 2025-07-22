@@ -18,7 +18,7 @@ GRANT CREATE ON SCHEMA public TO ytms_user;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ytms_user;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ytms_user;
 
-                            
+
 GRANT USAGE ON SCHEMA public TO ytms_user;
 GRANT CREATE ON SCHEMA public TO ytms_user;
 
@@ -31,11 +31,26 @@ DROP TYPE IF EXISTS user_status CASCADE;
 
 -- Create custom enum types
 CREATE TYPE user_role AS ENUM ('ADMIN', 'EDITOR', 'USER');
-CREATE TYPE task_status AS ENUM ('DRAFT', 'ASSIGNED', 'IN_PROGRESS', 'REVIEW', 'READY', 'SCHEDULED', 'UPLOADED');
+CREATE TYPE task_status AS ENUM ('DRAFT', 'ASSIGNED', 'IN_PROGRESS', 'REVIEW', 'READY', 'SCHEDULED', 'UPLOADED', 'UPLOADING', 'COMPLETED');
 CREATE TYPE privacy_level AS ENUM ('ALL', 'SELECTED');
 CREATE TYPE task_priority AS ENUM ('LOW', 'MEDIUM', 'HIGH');
 CREATE TYPE user_status AS ENUM ('ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING', 'DELETED');
+ALTER TABLE video_tasks
+    DROP CONSTRAINT video_tasks_task_status_check;
 
+ALTER TABLE video_tasks
+    ADD CONSTRAINT video_tasks_task_status_check
+        CHECK (task_status IN (
+                               'DRAFT',
+                               'ASSIGNED',
+                               'IN_PROGRESS',
+                               'REVIEW',
+                               'READY',
+                               'SCHEDULED',
+                               'UPLOADED',
+                               'UPLOADING',
+                               'COMPLETED'
+            ));
 
 
 -- Grant usage on types to application user

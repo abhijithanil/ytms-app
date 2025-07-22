@@ -179,11 +179,11 @@ public class VideoTaskService {
         }
     }
 
-    public boolean canUserAccessTask(Long taskId, Long userId) {
+    public boolean canUserAccessTask(Long taskId, User user) {
         VideoTask task = getTaskById(taskId);
-        User user = userRepository.findById(userId).orElse(null);
 
         if (user == null) return false;
+        Long userId = user.getId();
         if (user.getRole() == UserRole.ADMIN) return true;
         if (task.getCreatedBy().getId().equals(userId)) return true;
         if (task.getAssignedEditor() != null && task.getAssignedEditor().getId().equals(userId)) return true;
@@ -279,7 +279,7 @@ public class VideoTaskService {
         videoTaskRepository.deleteById(id);
     }
 
-    public VideoTask updateTaskStatus(Long id, TaskUpdateRequest taskUpdateRequest) {
+    public VideoTask updateTask(Long id, TaskUpdateRequest taskUpdateRequest) {
         VideoTask videoTask = videoTaskRepository.findById(id).orElseThrow(() -> new RuntimeException("Video not found"));
         boolean hasModificationItem = false;
         if (taskUpdateRequest.getDeadline() != null && !taskUpdateRequest.getDeadline().isEmpty()) {
@@ -317,12 +317,12 @@ public class VideoTaskService {
         return videoTask;
     }
 
-    public void updateTaskAfterUpload(Long taskId, String youtubeVideoId, Long updatedByUserId) {
+    public void updateTaskStatus(Long taskId, String youtubeVideoId, Long updatedByUserId, TaskStatus taskStatus) {
         VideoTask task = getTaskById(taskId);
-        User updatedBy = userService.getUserById(updatedByUserId);
+        User updatedBy = userService.getUserByIdPrivateUse(updatedByUserId);
 
         task.setYoutubeVideoId(youtubeVideoId);
-        updateTaskStatus(taskId, TaskStatus.UPLOADED, updatedBy);
+        updateTaskStatus(taskId, taskStatus, updatedBy);
     }
 
 

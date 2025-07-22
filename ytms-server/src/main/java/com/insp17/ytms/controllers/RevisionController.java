@@ -45,13 +45,14 @@ public class RevisionController {
     public ResponseEntity<RevisionDTO> createRevision(@RequestBody RevisionRequest revisionRequest,
                                                       @CurrentUser UserPrincipal userPrincipal) {
 
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
         try {
-            if (!videoTaskService.canUserAccessTask(revisionRequest.getVideoTaskId(), userPrincipal.getId())) {
+            if (!videoTaskService.canUserAccessTask(revisionRequest.getVideoTaskId(), user)) {
                 return ResponseEntity.status(403).build();
             }
 
-            User uploadedBy = userService.getUserById(userPrincipal.getId());
-            Revision revision = revisionService.createRevision(revisionRequest, uploadedBy);
+            Revision revision = revisionService.createRevision(revisionRequest, user);
             return ResponseEntity.ok(new RevisionDTO(revision));
 
         } catch (IOException e) {
@@ -62,9 +63,12 @@ public class RevisionController {
 
     @GetMapping("/task/{taskId}")
     public ResponseEntity<List<RevisionDTO>> getRevisionsByTask(@PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
-        if (!videoTaskService.canUserAccessTask(taskId, userPrincipal.getId())) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
+        if (!videoTaskService.canUserAccessTask(taskId, user)) {
             return ResponseEntity.status(403).build();
         }
+
         List<Revision> revisions = revisionService.getRevisionsByTask(taskId);
         List<RevisionDTO> revisionDTOs = revisions.stream()
                 .map(RevisionDTO::new)
@@ -74,7 +78,9 @@ public class RevisionController {
 
     @GetMapping("/task/{taskId}/latest")
     public ResponseEntity<RevisionDTO> getLatestRevision(@PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
-        if (!videoTaskService.canUserAccessTask(taskId, userPrincipal.getId())) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
+        if (!videoTaskService.canUserAccessTask(taskId, user)) {
             return ResponseEntity.status(403).build();
         }
         return revisionService.getLatestRevision(taskId)
@@ -84,8 +90,9 @@ public class RevisionController {
 
     @GetMapping("/{id}")
     public ResponseEntity<RevisionDTO> getRevisionById(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
         Revision revision = revisionService.getRevisionById(id);
-        if (!videoTaskService.canUserAccessTask(revision.getVideoTask().getId(), userPrincipal.getId())) {
+        if (!videoTaskService.canUserAccessTask(revision.getVideoTask().getId(), user)) {
             return ResponseEntity.status(403).build();
         }
         return ResponseEntity.ok(new RevisionDTO(revision));
@@ -93,7 +100,9 @@ public class RevisionController {
 
     @GetMapping("/{id}/task/{taskId}/video-url")
     public ResponseEntity<Map<String, String>> getTaskVideoUrl(@PathVariable Long id, @PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
-        if (!videoTaskService.canUserAccessTask(taskId, userPrincipal.getId())) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
+        if (!videoTaskService.canUserAccessTask(taskId, user)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         Revision revision = revisionService.getRevisionById(id);
@@ -114,12 +123,12 @@ public class RevisionController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
     public ResponseEntity<Void> deleteRevision(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
         Revision revision = revisionService.getRevisionById(id);
-        if (!videoTaskService.canUserAccessTask(revision.getVideoTask().getId(), userPrincipal.getId())) {
+        if (!videoTaskService.canUserAccessTask(revision.getVideoTask().getId(), user)) {
             return ResponseEntity.status(403).build();
         }
         Long userId = userPrincipal.getId();
-        User user = userService.getUserById(userId);
         if (user.getId() == revision.getUploadedBy().getId() || user.getRole() == UserRole.ADMIN) {
             revisionService.deleteRevision(id);
         } else {

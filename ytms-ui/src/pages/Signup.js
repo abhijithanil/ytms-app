@@ -205,6 +205,12 @@ const Signup = () => {
     setIsLoading(true);
 
     try {
+      console.log("=== DEBUG INFO ===");
+      console.log("api.defaults.baseURL:", api.defaults.baseURL);
+      console.log("authAPI:", authAPI);
+      console.log("Environment variable REACT_APP_API_URL:", process.env.REACT_APP_API_URL);
+      console.log("==================");
+      debugger
       const response = await api.post("/auth/register", {
         firstName: formData.firstName,
         lastName: formData.lastName,

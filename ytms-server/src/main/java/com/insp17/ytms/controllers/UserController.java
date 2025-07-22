@@ -19,25 +19,25 @@ public class UserController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN')")
-    public ResponseEntity<List<User>> getAllUsers() {
+    public ResponseEntity<List<UserResponse>> getAllUsers() {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN')")
-    public ResponseEntity<User> getUserById(@PathVariable Long id) {
+    public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) {
         return ResponseEntity.ok(userService.getUserById(id));
     }
 
     @GetMapping("/username/{username}")
     @PreAuthorize("hasAnyRole('ADMIN')")
-    public ResponseEntity<User> getUserByUsername(@PathVariable String username) {
+    public ResponseEntity<UserResponse> getUserByUsername(@PathVariable String username) {
         return ResponseEntity.ok(userService.getUserByUsername(username));
     }
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<User> createUser(@RequestBody CreateUserRequest request) {
+    public ResponseEntity<UserResponse> createUser(@RequestBody CreateUserRequest request) {
         User user = new User(
                 request.getFirstName(),
                 request.getLastName(),
@@ -48,26 +48,26 @@ public class UserController {
                 request.getUserStatus()
         );
 
-        User createdUser = userService.createUser(user);
+        UserResponse createdUser = userService.createUser(user);
         return ResponseEntity.ok(createdUser);
     }
 
     @GetMapping("/editors")
     @PreAuthorize("hasAnyRole('ADMIN')")
-    public ResponseEntity<List<User>> getEditors() {
+    public ResponseEntity<List<UserResponse>> getEditors() {
         return ResponseEntity.ok(userService.getEditors());
     }
 
     @GetMapping("/admins")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<User>> getAdmins() {
+    public ResponseEntity<List<UserResponse>> getAdmins() {
         return ResponseEntity.ok(userService.getAdmins());
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody UpdateUserRequest updateUserRequest) {
-        User userDetails = userService.getUserById(id);
+    public ResponseEntity<UserResponse> updateUser(@PathVariable Long id, @RequestBody UpdateUserRequest updateUserRequest) {
+        User userDetails = userService.getUserByIdPrivateUse(id);
         if (updateUserRequest.getUsername() != null) {
             userDetails.setUsername(updateUserRequest.getUsername());
         }
@@ -80,14 +80,14 @@ public class UserController {
             userDetails.setRole(updateUserRequest.getRole());
         }
 
-        User updatedUser = userService.updateUser(userDetails);
+        UserResponse updatedUser = userService.updateUser(userDetails);
         return ResponseEntity.ok(updatedUser);
     }
 
     @PutMapping("/{id}/profile")
     @PreAuthorize("#id == authentication.principal.id or hasRole('ADMIN')")
-    public ResponseEntity<User> updateUserProfile(@PathVariable Long id, @RequestBody UpdateProfileRequest request) {
-        User updatedUser = userService.updateUserProfile(id, request);
+    public ResponseEntity<UserResponse> updateUserProfile(@PathVariable Long id, @RequestBody UpdateProfileRequest request) {
+        UserResponse updatedUser = userService.updateUserProfile(id, request);
         return ResponseEntity.ok(updatedUser);
     }
 

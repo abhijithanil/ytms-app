@@ -22,6 +22,7 @@ const Dashboard = () => {
     readyToUpload: 0,
     completed: 0
   });
+  const [uploadingTask, setUploadingTask] = useState([]);
   const [recentTasks, setRecentTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,13 +33,15 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsResponse, tasksResponse] = await Promise.all([
+      const [statsResponse, tasksResponse, uploadingTaskResponse] = await Promise.all([
         dashboardAPI.getStats(),
-        dashboardAPI.getRecentTasks()
+        dashboardAPI.getRecentTasks(),
+        dashboardAPI.getUploadingTasks()
       ]);
       
       setStats(statsResponse.data);
       setRecentTasks(tasksResponse.data);
+      setUploadingTask(uploadingTaskResponse.data)
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     } finally {
@@ -192,6 +195,46 @@ const Dashboard = () => {
           trend={0}
         />
       </div>
+
+       {/* Uploading Tasks */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Video className="h-5 w-5 text-primary-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Uploading Tasks</h2>
+            </div>
+            <button 
+              onClick={() => navigate('/tasks')}
+              className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+            >
+              View All
+            </button>
+          </div>
+        </div>
+        
+        <div className="p-6">
+          {uploadingTask.length > 0 ? (
+            <div className="space-y-4">
+              {uploadingTask.map((task) => (
+                <TaskCard key={task.id} task={task} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Video className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">No uploading tasks found</p>
+              {/* <button 
+                onClick={() => navigate('/upload')}
+                className="btn-primary mt-4"
+              >
+                
+              </button> */}
+            </div>
+          )}
+        </div>
+      </div>
+
 
       {/* Recent Tasks */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">

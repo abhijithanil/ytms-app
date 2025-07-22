@@ -6,6 +6,7 @@ brew install postgresql@15
 brew services start postgresql@15
 
 # Create database and user
+
 psql postgres
 On Ubuntu/Debian:
 bash# Install PostgreSQL
@@ -13,10 +14,12 @@ sudo apt update
 sudo apt install postgresql postgresql-contrib
 
 # Start PostgreSQL service
+
 sudo systemctl start postgresql
 sudo systemctl enable postgresql
 
 # Create database and user
+
 sudo -u postgres psql
 On Windows:
 
@@ -37,8 +40,11 @@ bash# Via psql
 docker exec -it ytms-postgres psql -U ytms_user -d ytms_db
 
 # Via pgAdmin (if enabled)
+
 # Open http://localhost:5050
+
 # Email: admin@ytms.com, Password: admin123
+
 Database Setup
 
 Run the SQL setup script (provided above) to create database and user
@@ -53,6 +59,7 @@ bash# For development
 java -jar -Dspring.profiles.active=dev your-app.jar
 
 # Or set in IDE run configuration
+
 -Dspring.profiles.active=dev
 
 Environment variables for production:
@@ -69,13 +76,10 @@ Check database connectivity:
 Look for successful Hibernate schema creation in logs
 Access actuator health endpoint: http://localhost:8080/actuator/health
 
-
 Test with initial data:
 
 Login with: admin / password123
 Or: editor1 / password123
-
-
 
 Database Schema
 The application will automatically create these tables:
@@ -91,4 +95,5 @@ Database connections: Check Hikari connection pool metrics
 Performance: Enable SQL logging in development
 Health checks: Use Spring Boot Actuator endpoints
 
-Your Spring Boot application is now configured to use PostgreSQL with proper connection pooling, profiles for different environments, and sample data initialization!
+Your Spring Boot application is now configured to use PostgreSQL with proper connection pooling, profiles for different
+environments, and sample data initialization!

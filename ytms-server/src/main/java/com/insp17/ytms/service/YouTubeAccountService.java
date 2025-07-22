@@ -4,7 +4,6 @@ import com.google.cloud.secretmanager.v1.*;
 import com.google.protobuf.ByteString;
 import com.insp17.ytms.dtos.YouTubeAccount;
 import com.insp17.ytms.entity.User;
-import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,28 +11,27 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
 public class YouTubeAccountService {
 
-    @Value("${gcp.project-id}")
-    private String projectId;
-
-    @Autowired
-    private SecretManagerServiceClient secretManagerServiceClient;
-
-    @Autowired(required = false)
-    private RedisTemplate<String, String> redisTemplate;
-
+    private static final String OAUTH_STATE_PREFIX = "youtube:oauth:state:";
+    private static final String REFRESH_TOKEN_PREFIX = "YT_REFRESH_TOKEN_";
     // In-memory storage as fallback if Redis is not available
     private final Map<String, String> oauthStateStore = new HashMap<>();
     private final Map<String, YouTubeAccount> accountStore = new HashMap<>();
-
-    private static final String OAUTH_STATE_PREFIX = "youtube:oauth:state:";
-    private static final String REFRESH_TOKEN_PREFIX = "YT_REFRESH_TOKEN_";
+    @Value("${gcp.project-id}")
+    private String projectId;
+    @Autowired
+    private SecretManagerServiceClient secretManagerServiceClient;
+    @Autowired(required = false)
+    private RedisTemplate<String, String> redisTemplate;
 
     /**
      * Save OAuth state temporarily for validation
@@ -136,7 +134,6 @@ public class YouTubeAccountService {
             throw new RuntimeException("Failed to save YouTube account: " + e.getMessage(), e);
         }
     }
-
 
 
     /**

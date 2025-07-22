@@ -47,8 +47,10 @@ public class YouTubeChannelController {
     @GetMapping("/{id}")
     public ResponseEntity<YouTubeChannelDTO> getChannelById(@PathVariable Long id,
                                                             @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
         try {
-            if (!youTubeChannelService.canUserAccessChannel(id, userPrincipal.getId())) {
+            if (!youTubeChannelService.canUserAccessChannel(id, user)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
 
@@ -71,7 +73,7 @@ public class YouTubeChannelController {
             @Valid @RequestBody CreateYouTubeChannelRequest request,
             @CurrentUser UserPrincipal userPrincipal) {
         try {
-            User addedBy = userService.getUserById(userPrincipal.getId());
+            User addedBy = userService.getUserByIdPrivateUse(userPrincipal.getId());
             YouTubeChannel channel = youTubeChannelService.createChannel(request, addedBy);
 
             YouTubeChannelDTO channelDTO = new YouTubeChannelDTO(channel);
@@ -102,7 +104,7 @@ public class YouTubeChannelController {
             @Valid @RequestBody UpdateYouTubeChannelRequest request,
             @CurrentUser UserPrincipal userPrincipal) {
         try {
-            User updatedBy = userService.getUserById(userPrincipal.getId());
+            User updatedBy = userService.getUserByIdPrivateUse(userPrincipal.getId());
             YouTubeChannel channel = youTubeChannelService.updateChannel(id, request, updatedBy);
 
             YouTubeChannelDTO channelDTO = new YouTubeChannelDTO(channel);
@@ -140,7 +142,7 @@ public class YouTubeChannelController {
             @PathVariable Long id,
             @CurrentUser UserPrincipal userPrincipal) {
         try {
-            User deletedBy = userService.getUserById(userPrincipal.getId());
+            User deletedBy = userService.getUserByIdPrivateUse(userPrincipal.getId());
             youTubeChannelService.deleteChannel(id, deletedBy);
 
             return ResponseEntity.ok(new YouTubeChannelResponse(
@@ -175,7 +177,7 @@ public class YouTubeChannelController {
             @Valid @RequestBody ManageChannelAccessRequest request,
             @CurrentUser UserPrincipal userPrincipal) {
         try {
-            User modifiedBy = userService.getUserById(userPrincipal.getId());
+            User modifiedBy = userService.getUserByIdPrivateUse(userPrincipal.getId());
 
             if ("ADD".equalsIgnoreCase(request.getAction())) {
                 youTubeChannelService.addUserAccess(id, request.getUserIds(), modifiedBy);

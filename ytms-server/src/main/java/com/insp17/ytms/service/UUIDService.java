@@ -15,10 +15,9 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 public class UUIDService {
+    private static final String MFA_PREFIX = "MFA-";
     @Autowired
     private StringRedisTemplate redisTemplate;
-
-    private static final String MFA_PREFIX = "MFA-";
 
     public String generateVerificationToken(String email) {
         String token = UUID.randomUUID().toString();

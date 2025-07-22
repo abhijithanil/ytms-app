@@ -28,7 +28,7 @@ public class VideoMetadata {
     private Long id;
 
     // NOTE: videoTask is often just an ID link, LAZY fetching is more appropriate.
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "video_task_id")
     private VideoTask videoTask;
 
@@ -70,8 +70,7 @@ public class VideoMetadata {
     @Column(nullable = false)
     private String license = "YouTube Standard License";
 
-    // CHANGE: Switched to LAZY fetching for performance.
-    @OneToMany(mappedBy = "videoMetadata", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "videoMetadata", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @JsonManagedReference
     private List<VideoChapter> videoChapters = new ArrayList<>();
 

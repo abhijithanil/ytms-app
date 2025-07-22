@@ -2,11 +2,11 @@
 
 import axios from "axios";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:8080/api";
+// Ensure no double slashes in API URL construction
+const API_BASE_URL = process.env.REACT_APP_API_URL ||  "http://localhost:8080/api"
 
 // Fixed: Extract methods to avoid instanceof issues
-const { isCancel, CancelToken } = axios;
+const { isCancel } = axios;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -80,51 +80,183 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
-  login: (credentials) => {
-    console.log("Attempting login with:", credentials);
-    return api.post("/auth/login", credentials);
+  login: async (credentials) => {
+    try {
+      const response = await api.post("/auth/login", credentials);
+      return response.data;
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
+    }
+  },
+  register: async (userData) => {
+    try {
+      debugger
+      const response = await api.post("/auth/register", userData);
+      return response.data;
+    } catch (error) {
+      console.error("Registration error:", error);
+      throw error;
+    }
+  },
+  getCurrentUser: async () => {
+    try {
+      const response = await api.get("/auth/me");
+      return response.data;
+    } catch (error) {
+      console.error("Get current user error:", error);
+      throw error;
+    }
+  },
+  refreshToken: async () => {
+    try {
+      const response = await api.post("/auth/refresh");
+      return response.data;
+    } catch (error) {
+      console.error("Token refresh error:", error);
+      throw error;
+    }
   },
 
-  register: (userData) => api.post("/auth/register", userData),
-  getCurrentUser: () => {
-    console.log("Fetching current user...");
-    return api.get("/auth/me");
-  },
-  refreshToken: () => api.post("/auth/refresh"),
-
-  getInviteDetails: (token) => {
-    const body = {
-      token: token,
-    };
-    return api.post("/auth/validate-token", body);
-  },
-
-  acceptInvite: (token, userDetails) => {
-    return api.post(`/auth/accept-invite/${token}`, userDetails);
+  getInviteDetails: async (token) => {
+    try {
+      const body = {
+        token: token,
+      };
+      const response = await api.post("/auth/validate-token", body);
+      return response.data;
+    } catch (error) {
+      console.error("Get invite details error:", error);
+      throw error;
+    }
   },
 
-  declineInvite: (token) => api.post(`/auth/decline-invite/${token}`),
+  acceptInvite: async (token, userDetails) => {
+    try {
+      const response = await api.post(`/auth/accept-invite/${token}`, userDetails);
+      return response.data;
+    } catch (error) {
+      console.error("Accept invite error:", error);
+      throw error;
+    }
+  },
+
+  declineInvite: async (token) => {
+    try {
+      const response = await api.post(`/auth/decline-invite/${token}`);
+      return response.data;
+    } catch (error) {
+      console.error("Decline invite error:", error);
+      throw error;
+    }
+  },
 };
 
 // --- TEAM ---
 export const teamAPI = {
-  getAllUsers: () => api.get("/team"),
-  inviteUser: (inviteRequest) => api.post("/team/invite", inviteRequest),
+  getAllUsers: async () => {
+    try {
+      const response = await api.get("/team/users");
+      return response.data;
+    } catch (error) {
+      console.error("Get all team users error:", error);
+      throw error;
+    }
+  },
+  inviteUser: async (inviteRequest) => {
+    try {
+      const response = await api.post("/team/invite", inviteRequest);
+      return response.data;
+    } catch (error) {
+      console.error("Invite user error:", error);
+      throw error;
+    }
+  },
 };
 
 // Users API
 export const usersAPI = {
-  getAllUsers: () => api.get("/users"),
-  getUserById: (id) => api.get(`/users/${id}`),
-  createUser: (userData) => api.post("/users", userData),
-  updateUser: (id, userData) => api.put(`/users/${id}`, userData),
-  deleteUser: (id) => api.delete(`/users/${id}`),
-  getEditors: () => api.get("/users/editors"),
-  getAdmins: () => api.get("/users/admins"),
-  updateUserProfile: (id, profileData) =>
-    api.put(`/users/${id}/profile`, profileData),
-  changePassword: (id, passwordData) =>
-    api.put(`/users/${id}/password`, passwordData),
+  getAllUsers: async () => {
+    try {
+      const response = await api.get("/users");
+      return response;
+    } catch (error) {
+      console.error("Get all users error:", error);
+      throw error;
+    }
+  },
+  getUserById: async (id) => {
+    try {
+      const response = await api.get(`/users/${id}`);
+      return response;
+    } catch (error) {
+      console.error(`Get user ${id} error:`, error);
+      throw error;
+    }
+  },
+  createUser: async (userData) => {
+    try {
+      const response = await api.post("/users", userData);
+      return response;
+    } catch (error) {
+      console.error("Create user error:", error);
+      throw error;
+    }
+  },
+  updateUser: async (id, userData) => {
+    try {
+      const response = await api.put(`/users/${id}`, userData);
+      return response;
+    } catch (error) {
+      console.error(`Update user ${id} error:`, error);
+      throw error;
+    }
+  },
+  deleteUser: async (id) => {
+    try {
+      const response = await api.delete(`/users/${id}`);
+      return response;
+    } catch (error) {
+      console.error(`Delete user ${id} error:`, error);
+      throw error;
+    }
+  },
+  getEditors: async () => {
+    try {
+      const response = await api.get("/users/editors");
+      return response;
+    } catch (error) {
+      console.error("Get editors error:", error);
+      throw error;
+    }
+  },
+  getAdmins: async () => {
+    try {
+      const response = await api.get("/users/admins");
+      return response.data;
+    } catch (error) {
+      console.error("Get admins error:", error);
+      throw error;
+    }
+  },
+  updateUserProfile: async (id, profileData) => {
+    try {
+      const response = await api.put(`/users/${id}/profile`, profileData);
+      return response;
+    } catch (error) {
+      console.error(`Update user ${id} profile error:`, error);
+      throw error;
+    }
+  },
+  changePassword: async (id, passwordData) => {
+    try {
+      const response = await api.put(`/users/${id}/password`, passwordData);
+      return response;
+    } catch (error) {
+      console.error(`Change password for user ${id} error:`, error);
+      throw error;
+    }
+  },
 };
 
 // Tasks API
@@ -195,6 +327,21 @@ export const tasksAPI = {
     return api.post(`/tasks/${taskId}/schedule-upload`, { uploadTime });
   },
   doYoutubeUpload: (uploadRequest) => {
+    const uploadApi = axios.create({
+      ...api.defaults,
+      timeout: 0,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+    });
+
+    // Apply the same interceptors as the main api instance
+    uploadApi.interceptors.request.use(
+      api.interceptors.request.handlers[0].fulfilled
+    );
+    uploadApi.interceptors.response.use(
+      api.interceptors.response.handlers[0].fulfilled,
+      api.interceptors.response.handlers[0].rejected
+    );
     return api.post(`/tasks/upload-to-youtube`, uploadRequest);
   },
   addAudioInstruction: (audioInstruction) => {
@@ -278,7 +425,7 @@ export const commentsAPI = {
 
   deleteComment: (id) => {
     console.log(`Deleting revision ${id}`);
-    return api.delete(`comments/${id}`);
+    return api.delete(`/comments/${id}`);
   },
 };
 
@@ -347,6 +494,10 @@ export const dashboardAPI = {
   getRecentTasks: () => {
     console.log("Fetching recent tasks...");
     return api.get("/dashboard/recent-tasks");
+  },
+  getUploadingTasks: () => {
+    console.log("Fetching currently uploading tasks...");
+    return api.get("/dashboard/uploading-tasks");
   },
 };
 

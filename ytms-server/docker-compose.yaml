@@ -16,7 +16,7 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ytms_user -d ytms_db"]
+      test: [ "CMD-SHELL", "pg_isready -U ytms_user -d ytms_db" ]
       interval: 30s
       timeout: 10s
       retries: 3

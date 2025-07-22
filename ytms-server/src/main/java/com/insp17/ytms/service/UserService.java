@@ -2,6 +2,7 @@ package com.insp17.ytms.service;
 
 import com.insp17.ytms.dtos.UpdatePasswordRequest;
 import com.insp17.ytms.dtos.UpdateProfileRequest;
+import com.insp17.ytms.dtos.UserResponse;
 import com.insp17.ytms.entity.User;
 import com.insp17.ytms.entity.UserRole;
 import com.insp17.ytms.entity.UserStatus;
@@ -13,6 +14,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -40,21 +42,31 @@ public class UserService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    public List<User> getAllUsers() {
-        return userRepository.findAllActiveUsers();
+    public List<UserResponse> getAllUsers() {
+        List<User> allActiveUsers = userRepository.findAllActiveUsers();
+        return allActiveUsers.stream().map(UserResponse::new).collect(Collectors.toList());
     }
 
-    public User getUserById(Long id) {
-        return userRepository.findById(id)
+    public UserResponse getUserById(Long id) {
+        User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+        return new UserResponse(user);
     }
 
-    public User getUserByUsername(String username) {
-        return userRepository.findByUsername(username)
+    public User getUserByIdPrivateUse(Long id) {
+        User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+        return user;
     }
 
-    public User createUser(User user) {
+
+    public UserResponse getUserByUsername(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return new UserResponse(user);
+    }
+
+    public UserResponse createUser(User user) {
         if (userRepository.existsByUsername(user.getUsername())) {
             throw new RuntimeException("Username already exists");
         }
@@ -63,19 +75,23 @@ public class UserService {
         }
 
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        return userRepository.save(user);
+        User result = userRepository.save(user);
+        return new UserResponse(result);
     }
 
-    public List<User> getEditors() {
-        return userRepository.findByRole(UserRole.EDITOR);
+    public List<UserResponse> getEditors() {
+        List<User> editors = userRepository.findByRole(UserRole.EDITOR);
+        return editors.stream().map(UserResponse::new).collect(Collectors.toList());
     }
 
-    public List<User> getAdmins() {
-        return userRepository.findByRole(UserRole.ADMIN);
+    public List<UserResponse> getAdmins() {
+        List<User> users = userRepository.findByRole(UserRole.ADMIN);
+        return users.stream().map(UserResponse::new).collect(Collectors.toList());
     }
 
-    public User updateUser(User userDetails) {
-        return userRepository.save(userDetails);
+    public UserResponse updateUser(User userDetails) {
+        User user = userRepository.save(userDetails);
+        return new UserResponse(user);
     }
 
     public void deleteUser(Long id) {
@@ -83,9 +99,10 @@ public class UserService {
         user.setUserStatus(UserStatus.DELETED);
     }
 
-    public User getMainAdmin() {
-        return userRepository.findFirstByRoleOrderByIdAsc(UserRole.ADMIN)
+    public UserResponse getMainAdmin() {
+        User user = userRepository.findFirstByRoleOrderByIdAsc(UserRole.ADMIN)
                 .orElseThrow(() -> new RuntimeException("No admin user found to reassign tasks to."));
+        return new UserResponse(user);
     }
 
     public boolean existsByUsername(String username) {
@@ -96,17 +113,17 @@ public class UserService {
         return userRepository.existsByEmail(email);
     }
 
-    public User updateUserProfile(Long id, UpdateProfileRequest request) {
-        User user = getUserById(id);
+    public UserResponse updateUserProfile(Long id, UpdateProfileRequest request) {
+        User user = getUserByIdPrivateUse(id);
         user.setFistName(request.getFirstName().trim());
         user.setLastName(request.getLastName().trim());
         user.setUsername(request.getUsername().trim());
         user.setEmail(request.getEmail().trim());
-        return userRepository.save(user);
+        return new UserResponse(user);
     }
 
     public void changePassword(Long id, UpdatePasswordRequest request) {
-        User user = getUserById(id);
+        User user = getUserByIdPrivateUse(id);
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
             throw new BadCredentialsException("Incorrect current password");
         }

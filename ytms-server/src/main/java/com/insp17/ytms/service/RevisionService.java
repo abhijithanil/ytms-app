@@ -99,13 +99,13 @@ public class RevisionService {
         List<Comment> comments = commentRepository.findByRevisionId(revisionId);
 
         if (comments != null && !comments.isEmpty()) {
-           for (Comment comment: comments) {
-               try {
-                   commentRepository.deleteByIdNativeSql(comment.getId());
-               } catch (Exception e) {
-                   e.printStackTrace();
-               }
-           }
+            for (Comment comment : comments) {
+                try {
+                    commentRepository.deleteByIdNativeSql(comment.getId());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
         }
 
         System.out.println("About to delete from database...");

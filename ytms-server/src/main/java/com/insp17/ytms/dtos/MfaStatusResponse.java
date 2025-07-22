@@ -10,7 +10,8 @@ public class MfaStatusResponse {
     private String status;
     private String message;
 
-    public MfaStatusResponse() {}
+    public MfaStatusResponse() {
+    }
 
     public MfaStatusResponse(boolean mfaEnabled, String status) {
         this.mfaEnabled = mfaEnabled;

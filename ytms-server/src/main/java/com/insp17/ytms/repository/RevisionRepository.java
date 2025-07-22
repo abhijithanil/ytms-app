@@ -13,7 +13,9 @@ import java.util.Optional;
 @Repository
 public interface RevisionRepository extends JpaRepository<Revision, Long> {
     List<Revision> findByVideoTaskId(Long videoTaskId);
+
     List<Revision> findByVideoTaskIdOrderByRevisionNumberDesc(Long videoTaskId);
+
     List<Revision> findByUploadedById(Long uploadedById);
 
     @Query("SELECT r FROM Revision r WHERE r.videoTask.id = :taskId AND r.revisionNumber = :revisionNumber")

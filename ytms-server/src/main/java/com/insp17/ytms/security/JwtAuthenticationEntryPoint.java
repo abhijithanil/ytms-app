@@ -22,13 +22,13 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 
         String body = """
-            {
-                "error": "Unauthorized",
-                "message": "Access denied. Please provide valid authentication credentials.",
-                "path": "%s",
-                "timestamp": "%s"
-            }
-            """.formatted(request.getRequestURI(), Instant.now().toString());
+                {
+                    "error": "Unauthorized",
+                    "message": "Access denied. Please provide valid authentication credentials.",
+                    "path": "%s",
+                    "timestamp": "%s"
+                }
+                """.formatted(request.getRequestURI(), Instant.now().toString());
 
         response.getWriter().write(body);
     }

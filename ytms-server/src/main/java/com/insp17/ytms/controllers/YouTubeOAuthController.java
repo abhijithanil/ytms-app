@@ -1,12 +1,8 @@
 package com.insp17.ytms.controllers;
 
-import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
-import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
-import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.youtube.YouTube;
-import com.google.api.services.youtube.YouTubeScopes;
 import com.google.api.services.youtube.model.Channel;
 import com.google.api.services.youtube.model.ChannelListResponse;
 import com.insp17.ytms.components.YouTubeRefreshTokenSetup;
@@ -24,7 +20,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.StringReader;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -96,7 +91,7 @@ public class YouTubeOAuthController {
                 );
             }
 
-            User user = userService.getUserById(userId);
+            User user = userService.getUserByIdPrivateUse(userId);
 
             // Exchange code for tokens
             RefreshTokenResult tokenResult =

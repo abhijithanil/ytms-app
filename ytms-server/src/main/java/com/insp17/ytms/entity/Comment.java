@@ -31,7 +31,8 @@ public class Comment {
     private LocalDateTime createdAt;
 
     // Constructors
-    public Comment() {}
+    public Comment() {
+    }
 
     public Comment(VideoTask videoTask, String content, User author) {
         this.videoTask = videoTask;
@@ -41,21 +42,51 @@ public class Comment {
     }
 
     // Getters and setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public VideoTask getVideoTask() { return videoTask; }
-    public void setVideoTask(VideoTask videoTask) { this.videoTask = videoTask; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public Revision getRevision() { return revision; }
-    public void setRevision(Revision revision) { this.revision = revision; }
+    public VideoTask getVideoTask() {
+        return videoTask;
+    }
 
-    public String getContent() { return content; }
-    public void setContent(String content) { this.content = content; }
+    public void setVideoTask(VideoTask videoTask) {
+        this.videoTask = videoTask;
+    }
 
-    public User getAuthor() { return author; }
-    public void setAuthor(User author) { this.author = author; }
+    public Revision getRevision() {
+        return revision;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public void setRevision(Revision revision) {
+        this.revision = revision;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public void setContent(String content) {
+        this.content = content;
+    }
+
+    public User getAuthor() {
+        return author;
+    }
+
+    public void setAuthor(User author) {
+        this.author = author;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
 }

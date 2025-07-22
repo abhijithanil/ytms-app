@@ -1,6 +1,7 @@
 package com.insp17.ytms.controllers;
 
 import com.insp17.ytms.dtos.InviteRequest;
+import com.insp17.ytms.dtos.UserResponse;
 import com.insp17.ytms.entity.User;
 import com.insp17.ytms.service.EmailService;
 import com.insp17.ytms.service.UUIDService;
@@ -28,13 +29,13 @@ public class TeamController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'EDITOR', 'VIEWER')")
-    public ResponseEntity<List<User>> getAllUsers() {
+    public ResponseEntity<List<UserResponse>> getAllUsers() {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 
     @PreAuthorize("hasAnyRole('ADMIN')")
     @PostMapping("invite")
-    public ResponseEntity<Map<String,String>> createInvite(@RequestBody InviteRequest inviteRequest){
+    public ResponseEntity<Map<String, String>> createInvite(@RequestBody InviteRequest inviteRequest) {
 
         Map<String, String> userInviteRequest = uuidService.createUserInviteRequest(inviteRequest);
         emailService.sendUserInviteEmail(userInviteRequest.get("url"), inviteRequest);

@@ -31,25 +31,26 @@ public class CommentController {
 
     @PostMapping("/task/{taskId}")
     public ResponseEntity<CommentDTO> addComment(@PathVariable Long taskId, @RequestBody AddCommentRequest request, @CurrentUser UserPrincipal userPrincipal) {
-        if (!videoTaskService.canUserAccessTask(taskId, userPrincipal.getId())) {
+        User author = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(taskId, author)) {
             return ResponseEntity.status(403).build();
         }
 
-        User author = userService.getUserById(userPrincipal.getId());
         Comment comment = commentService.addComment(taskId, request.getContent(), author);
         return ResponseEntity.ok(new CommentDTO(comment));
     }
 
     @PostMapping("/revision/{revisionId}")
     public ResponseEntity<CommentDTO> addCommentToRevision(@PathVariable Long revisionId, @RequestBody AddCommentRequest request, @CurrentUser UserPrincipal userPrincipal) {
-        User author = userService.getUserById(userPrincipal.getId());
+        User author = userService.getUserByIdPrivateUse(userPrincipal.getId());
         Comment comment = commentService.addCommentToRevision(revisionId, request.getContent(), author);
         return ResponseEntity.ok(new CommentDTO(comment));
     }
 
     @GetMapping("/task/{taskId}")
     public ResponseEntity<List<CommentDTO>> getCommentsByTask(@PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
-        if (!videoTaskService.canUserAccessTask(taskId, userPrincipal.getId())) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(taskId, user)) {
             return ResponseEntity.status(403).build();
         }
 

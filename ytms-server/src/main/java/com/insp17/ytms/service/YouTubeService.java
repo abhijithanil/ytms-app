@@ -8,61 +8,78 @@ import com.google.api.client.googleapis.media.MediaHttpUploaderProgressListener;
 import com.google.api.client.http.InputStreamContent;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.youtube.YouTube;
-import com.google.api.services.youtube.model.*;
+import com.google.api.services.youtube.model.ThumbnailSetResponse;
+import com.google.api.services.youtube.model.Video;
+import com.google.api.services.youtube.model.VideoSnippet;
+import com.google.api.services.youtube.model.VideoStatus;
 import com.google.cloud.secretmanager.v1.SecretManagerServiceClient;
 import com.google.cloud.secretmanager.v1.SecretVersionName;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.insp17.ytms.dtos.ChannelTokenStatus;
-import com.insp17.ytms.dtos.VideoMetadataResponseDTO;
-import com.insp17.ytms.entity.Revision;
-import com.insp17.ytms.entity.VideoTask;
-import com.insp17.ytms.entity.YouTubeChannel;
+import com.insp17.ytms.dtos.*;
+import com.insp17.ytms.entity.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.security.GeneralSecurityException;
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 public class YouTubeService {
-
-    @Value("${gcp.project-id}")
-    private String projectId;
-
-    @Value("${gcp.client-secret-key:client_data}")
-    private String clientSecretKey;
-
-    @Autowired
-    private SecretManagerServiceClient secretManagerServiceClient;
-
-    @Autowired
-    private VideoMetadataService videoMetadataService;
-
-    @Autowired
-    private FileStorageService fileStorageService;
-
-    @Autowired
-    private YouTubeAccountService youTubeAccountService;
 
     // YouTube API constraints
     private static final long MAX_FILE_SIZE = 256L * 1024 * 1024 * 1024; // 256GB
     private static final int MAX_TITLE_LENGTH = 100;
     private static final int MAX_DESCRIPTION_LENGTH = 5000;
     private static final int MAX_TAGS_COUNT = 500;
+    private static final long MAX_THUMBNAIL_SIZE = 2 * 1024 * 1024; // 2MB
     private static final List<String> SUPPORTED_FORMATS = Arrays.asList(
             ".mov", ".mpeg4", ".mp4", ".avi", ".wmv", ".mpegps", ".flv", ".3gpp", ".webm"
     );
     private static final List<String> VALID_PRIVACY_STATUSES = Arrays.asList("private", "public", "unlisted");
+
+    @Value("${gcp.project-id}")
+    private String projectId;
+    @Value("${gcp.client-secret-key:client_data}")
+    private String clientSecretKey;
+    @Autowired
+    private SecretManagerServiceClient secretManagerServiceClient;
+    @Autowired
+    private VideoMetadataService videoMetadataService;
+    @Autowired
+    private FileStorageService fileStorageService;
+    @Autowired
+    private YouTubeAccountService youTubeAccountService;
+    @Autowired
+    private VideoTaskService videoTaskService;
+    @Autowired
+    private CommentService commentService;
+
+
+    private final YouTubeService self;
+
+    @Autowired
+    public YouTubeService(@Lazy YouTubeService self) {
+        this.self = self;
+    }
 
     /**
      * Creates YouTube service with automatic token refresh
@@ -101,7 +118,7 @@ public class YouTubeService {
      * Upload video to specific channel
      * The channel parameter now determines which YouTube account to use
      */
-    public Video uploadVideo(VideoTask task, YouTubeChannel channel) throws IOException, GeneralSecurityException {
+    public void uploadVideo(VideoTask task, YouTubeChannel channel, UploadVideoRequest uploadVideoRequest, User user) throws IOException, GeneralSecurityException {
         log.info("Starting video upload for task: {} to channel: {} (owner: {})",
                 task.getId(), channel.getChannelName(), channel.getYoutubeChannelOwnerEmail());
 
@@ -116,7 +133,6 @@ public class YouTubeService {
                     " is not connected. Please connect the account first.");
         }
 
-        // Rest of your upload logic remains the same...
         // Get latest revision
         Revision latestRevision = task.getRevisions().stream()
                 .max((r1, r2) -> r1.getRevisionNumber().compareTo(r2.getRevisionNumber()))
@@ -129,13 +145,18 @@ public class YouTubeService {
         }
         validateMetadata(metadata);
 
-        // Download and validate video file
+        // --- Call the async method via the injected self-proxy ---
+        self.uploadVideoOperations(latestRevision, metadata, channel, task, uploadVideoRequest, user);
+    }
+
+    @Async("youtubeUploadExecutor")
+    public void uploadVideoOperations(Revision latestRevision, VideoMetadataResponseDTO metadata, YouTubeChannel channel, VideoTask task, UploadVideoRequest uploadVideoRequest, User user) throws IOException {
         log.info("Downloading video file from: {}", latestRevision.getEditedVideoUrl());
         byte[] fileContent = fileStorageService.downloadFile(latestRevision.getEditedVideoUrl());
         validateVideoFile(fileContent, latestRevision.getEditedVideoUrl());
 
-        // Create video object
-        Video videoObject = createVideoObject(metadata);
+        // Create video object (WITHOUT thumbnail - we'll upload it separately)
+        Video videoObject = createVideoObjectWithoutThumbnail(metadata);
 
         // Upload video
         try (InputStream inputStream = new ByteArrayInputStream(fileContent)) {
@@ -157,14 +178,31 @@ public class YouTubeService {
                     metadata.getTitle(), channel.getChannelName(), channel.getYoutubeChannelOwnerEmail());
 
             Video uploadedVideo = videoInsert.execute();
+            String videoId = uploadedVideo.getId();
 
             log.info("Successfully uploaded video - ID: {}, Title: {}, Channel: {}, Status: {}",
-                    uploadedVideo.getId(),
+                    videoId,
                     uploadedVideo.getSnippet().getTitle(),
                     channel.getChannelName(),
                     uploadedVideo.getStatus().getPrivacyStatus());
 
-            return uploadedVideo;
+            // UPLOAD THUMBNAIL SEPARATELY (if provided)
+            if (metadata.getThumbnailUrl() != null && !metadata.getThumbnailUrl().trim().isEmpty()) {
+                try {
+                    uploadThumbnail(youtubeService, videoId, metadata.getThumbnailUrl());
+                    log.info("Successfully uploaded custom thumbnail for video: {}", videoId);
+                } catch (Exception thumbnailError) {
+                    log.error("Failed to upload thumbnail for video {}: {}", videoId, thumbnailError.getMessage());
+                    // Don't fail the entire upload if thumbnail fails
+                }
+            }
+
+            // Update task with YouTube video ID and set status to UPLOADED
+            videoTaskService.updateTaskStatus(task.getId(), TaskStatus.COMPLETED, user);
+
+            String comment = MessageFormat.format("The video with title {0} has been uploaded successfully.\nYoutube Link: {1}",
+                    uploadedVideo.getSnippet().getTitle(), "https://youtube.com/watch?v=" + uploadedVideo.getId());
+            commentService.addComment(uploadVideoRequest.getVideoId(), comment, user);
 
         } catch (Exception e) {
             log.error("Failed to upload video '{}' to channel '{}': {}",
@@ -263,7 +301,7 @@ public class YouTubeService {
     }
 
     /**
-     * Validates video metadata constraints
+     * Updated metadata validation to include thumbnail requirements
      */
     private void validateMetadata(VideoMetadataResponseDTO metadata) throws IOException {
         if (metadata.getTitle() == null || metadata.getTitle().trim().isEmpty()) {
@@ -299,6 +337,13 @@ public class YouTubeService {
             ));
         }
 
+        // Validate thumbnail URL if provided
+        if (metadata.getThumbnailUrl() != null && !metadata.getThumbnailUrl().trim().isEmpty()) {
+            if (!isValidUrl(metadata.getThumbnailUrl())) {
+                throw new IOException("Invalid thumbnail URL format: " + metadata.getThumbnailUrl());
+            }
+        }
+
         log.info("Video metadata validation passed for: {}", metadata.getTitle());
     }
 
@@ -330,97 +375,19 @@ public class YouTubeService {
         };
     }
 
-//    /**
-//     * Main video upload method with enhanced channel support
-//     */
-//    public Video uploadVideo(VideoTask task, YouTubeChannel channel) throws IOException, GeneralSecurityException {
-//
-//        log.info("Starting video upload process for task: {} to channel: {}",
-//                task.getId(), channel.getChannelName());
-//
-//        // Validation
-//        if (channel.getYoutubeChannelOwnerEmail() == null) {
-//            throw new IOException("YouTube channel owner email is not set");
-//        }
-//
-//        // Verify refresh token exists for this channel
-//        if (channel.getRefreshTokenKey() == null) {
-//            throw new IOException("No refresh token key configured for channel: " + channel.getChannelName() +
-//                    ". Please run OAuth setup for this channel first.");
-//        }
-//
-//        // Get latest revision
-//        Revision latestRevision = task.getRevisions().stream()
-//                .max((r1, r2) -> r1.getRevisionNumber().compareTo(r2.getRevisionNumber()))
-//                .orElseThrow(() -> new IOException("No revisions found for this task"));
-//
-//        // Get and validate metadata
-//        VideoMetadataResponseDTO metadata = videoMetadataService.getVideoMetadata(task.getId());
-//        if (metadata == null) {
-//            throw new IOException("Video metadata is required for YouTube upload");
-//        }
-//        validateMetadata(metadata);
-//
-//        // Download and validate video file
-//        log.info("Downloading video file from: {}", latestRevision.getEditedVideoUrl());
-//        byte[] fileContent = fileStorageService.downloadFile(latestRevision.getEditedVideoUrl());
-//        validateVideoFile(fileContent, latestRevision.getEditedVideoUrl());
-//
-//        // Create video object
-//        Video videoObject = createVideoObject(metadata);
-//
-//        // Upload video
-//        try (InputStream inputStream = new ByteArrayInputStream(fileContent)) {
-//            InputStreamContent mediaContent = new InputStreamContent("video/*", inputStream);
-//            mediaContent.setLength(fileContent.length);
-//
-//            YouTube youtubeService = getYouTubeService(channel);
-//
-//            YouTube.Videos.Insert videoInsert = youtubeService.videos()
-//                    .insert(Collections.singletonList("snippet,status"), videoObject, mediaContent);
-//
-//            // Configure upload
-//            MediaHttpUploader uploader = videoInsert.getMediaHttpUploader();
-//            uploader.setDirectUploadEnabled(false);
-//            uploader.setChunkSize(MediaHttpUploader.MINIMUM_CHUNK_SIZE);
-//            uploader.setProgressListener(createProgressListener(metadata.getTitle()));
-//
-//            log.info("Uploading '{}' to channel: {} ({})",
-//                    metadata.getTitle(), channel.getChannelName(), channel.getYoutubeChannelOwnerEmail());
-//
-//            Video uploadedVideo = videoInsert.execute();
-//
-//            log.info("Successfully uploaded video - ID: {}, Title: {}, Channel: {}, Status: {}",
-//                    uploadedVideo.getId(),
-//                    uploadedVideo.getSnippet().getTitle(),
-//                    channel.getChannelName(),
-//                    uploadedVideo.getStatus().getPrivacyStatus());
-//
-//            return uploadedVideo;
-//
-//        } catch (Exception e) {
-//            log.error("Failed to upload video '{}' to channel '{}': {}",
-//                    metadata.getTitle(), channel.getChannelName(), e.getMessage(), e);
-//            throw new IOException("Video upload failed: " + e.getMessage(), e);
-//        }
-//    }
-
     /**
-     * Creates Video object with metadata
+     * Creates Video object WITHOUT thumbnail (thumbnail uploaded separately)
      */
-    private Video createVideoObject(VideoMetadataResponseDTO metadata) {
+    private Video createVideoObjectWithoutThumbnail(VideoMetadataResponseDTO metadata) throws IOException {
         VideoSnippet snippet = new VideoSnippet();
         snippet.setTitle(metadata.getTitle());
-        snippet.setDescription(metadata.getDescription());
+        snippet.setDescription(formatDescriptionWithChapters(metadata));
 
         if (metadata.getTags() != null && !metadata.getTags().isEmpty()) {
             snippet.setTags(new ArrayList<>(metadata.getTags()));
         }
-        Thumbnail thumbnail = new Thumbnail();
-        thumbnail.setUrl(metadata.getThumbnailUrl());
-        ThumbnailDetails thumbnailDetails = new ThumbnailDetails();
-        thumbnailDetails.setDefault(thumbnail);
-        snippet.setThumbnails(thumbnailDetails);
+
+        // DON'T set thumbnails here - YouTube will reject it
 
         VideoStatus status = new VideoStatus();
         status.setPrivacyStatus(metadata.getPrivacyStatus());
@@ -431,6 +398,150 @@ public class YouTubeService {
         videoObject.setStatus(status);
 
         return videoObject;
+    }
+
+    /**
+     * Downloads image data from a public URL
+     *
+     * @param url The public URL to download from
+     * @return byte array of the downloaded image
+     * @throws IOException if download fails
+     */
+    private byte[] downloadFromPublicUrl(String url) throws IOException {
+        log.debug("Downloading thumbnail from public URL: {}", url);
+
+        try {
+            // Create URL connection with proper configuration
+            URL thumbnailUrl = new URL(url);
+            HttpURLConnection connection = (HttpURLConnection) thumbnailUrl.openConnection();
+
+            // Set connection properties
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(30000); // 30 seconds
+            connection.setReadTimeout(60000); // 60 seconds
+            connection.setRequestProperty("User-Agent", "YourApp/1.0");
+            connection.setInstanceFollowRedirects(true);
+
+            // Check response code
+            int responseCode = connection.getResponseCode();
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                throw new IOException("HTTP error code: " + responseCode + " for URL: " + url);
+            }
+
+            // Check content type
+            String contentType = connection.getContentType();
+            if (contentType != null && !contentType.startsWith("image/")) {
+                log.warn("Content type is not an image: {} for URL: {}", contentType, url);
+            }
+
+            // Read the image data
+            try (InputStream inputStream = connection.getInputStream();
+                 ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                byte[] imageData = outputStream.toByteArray();
+                log.debug("Downloaded {} bytes from URL: {}", imageData.length, url);
+
+                return imageData;
+            }
+
+        } catch (Exception e) {
+            log.error("Error downloading thumbnail from URL: {}", url, e);
+        }
+        return null;
+    }
+
+    /**
+     * Upload custom thumbnail for a video
+     */
+    private void uploadThumbnail(YouTube youtubeService, String videoId, String thumbnailUrl) throws IOException {
+        log.info("Uploading thumbnail for video: {} from URL: {}", videoId, thumbnailUrl);
+
+        try {
+            // Download thumbnail from the provided URL
+            byte[] thumbnailData = self.downloadFromPublicUrl(thumbnailUrl);
+
+            if (thumbnailData == null || thumbnailData.length == 0) {
+                // Handle with sending notification
+               return;
+            }
+
+            // Validate thumbnail size (max 2MB for YouTube)
+            if (thumbnailData.length > MAX_THUMBNAIL_SIZE) {
+                throw new IOException("Thumbnail file too large. Maximum size is 2MB, current size: " +
+                        String.format("%.2fMB", thumbnailData.length / (1024.0 * 1024.0)));
+            }
+
+            // Validate image format by checking file header
+            if (!isValidImageFormat(thumbnailData)) {
+                throw new IOException("Invalid thumbnail format. YouTube accepts JPG, GIF, BMP, PNG formats.");
+            }
+
+            // Upload thumbnail
+            try (InputStream thumbnailStream = new ByteArrayInputStream(thumbnailData)) {
+                InputStreamContent thumbnailContent = new InputStreamContent("image/*", thumbnailStream);
+                thumbnailContent.setLength(thumbnailData.length);
+
+                YouTube.Thumbnails.Set thumbnailSet = youtubeService.thumbnails()
+                        .set(videoId, thumbnailContent);
+
+                ThumbnailSetResponse response = thumbnailSet.execute();
+                log.info("Thumbnail upload successful for video: {}. Response: {}", videoId, response.toPrettyString());
+            }
+
+        } catch (Exception e) {
+            log.error("Error downloading or uploading thumbnail for video {}: {}", videoId, e.getMessage());
+            throw new IOException("Thumbnail upload failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Validate image format by checking file headers
+     */
+    private boolean isValidImageFormat(byte[] imageData) {
+        if (imageData.length < 8) {
+            return false;
+        }
+
+        // Check for common image format signatures
+        // JPEG: FF D8 FF
+        if (imageData[0] == (byte) 0xFF && imageData[1] == (byte) 0xD8 && imageData[2] == (byte) 0xFF) {
+            return true;
+        }
+
+        // PNG: 89 50 4E 47 0D 0A 1A 0A
+        if (imageData[0] == (byte) 0x89 && imageData[1] == 0x50 && imageData[2] == 0x4E && imageData[3] == 0x47) {
+            return true;
+        }
+
+        // GIF: 47 49 46 38
+        if (imageData[0] == 0x47 && imageData[1] == 0x49 && imageData[2] == 0x46 && imageData[3] == 0x38) {
+            return true;
+        }
+
+        // BMP: 42 4D
+        if (imageData[0] == 0x42 && imageData[1] == 0x4D) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Simple URL validation
+     */
+    private boolean isValidUrl(String url) {
+        try {
+            new java.net.URL(url);
+            return url.startsWith("http://") || url.startsWith("https://");
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
@@ -562,4 +673,109 @@ public class YouTubeService {
         return videos.get(0);
     }
 
+    private String formatDescriptionWithChapters(VideoMetadataResponseDTO metadata) throws IOException {
+        StringBuilder description = new StringBuilder();
+
+        // Add main description first
+        if (metadata.getDescription() != null && !metadata.getDescription().trim().isEmpty()) {
+            description.append(metadata.getDescription().trim());
+        }
+
+        // Add chapters if provided
+        if (metadata.getVideoChapters() != null && !metadata.getVideoChapters().isEmpty()) {
+            // Add separator between description and chapters
+            if (description.length() > 0) {
+                description.append("\n\n");
+            }
+
+            // Add chapters section header (optional)
+            description.append("📍 CHAPTERS:\n");
+
+            // Validate and add chapters
+            List<VideoChapterDTO> validChapters = validateAndSortChapters(metadata.getVideoChapters());
+            for (VideoChapterDTO chapter : validChapters) {
+                description.append(chapter.toString()).append("\n");
+            }
+        }
+
+        return description.toString();
+    }
+
+    /**
+     * Validates and sorts chapters by timestamp
+     */
+    private List<VideoChapterDTO> validateAndSortChapters(List<VideoChapterDTO> chapters) throws IOException {
+        if (chapters.isEmpty()) {
+            return chapters;
+        }
+
+        // YouTube requirements for chapters:
+        // 1. Must have at least 3 chapters
+        // 2. Each chapter must be at least 10 seconds long
+        // 3. First chapter must start at 0:00
+        // 4. Timestamps must be in ascending order
+
+        if (chapters.size() < 3) {
+            throw new IOException("YouTube requires at least 3 chapters for automatic chapter detection");
+        }
+
+        // Validate timestamp formats and convert to seconds for sorting
+        List<VideoChapterWithSeconds> chaptersWithSeconds = new ArrayList<>();
+        Pattern timestampPattern = Pattern.compile("^(\\d+):(\\d{2})(?::(\\d{2}))?$");
+
+        for (VideoChapterDTO chapter : chapters) {
+            Matcher matcher = timestampPattern.matcher(chapter.getTimestamp().trim());
+            if (!matcher.matches()) {
+                throw new IOException("Invalid timestamp format: " + chapter.getTimestamp() +
+                        ". Use format MM:SS or HH:MM:SS");
+            }
+
+            // Convert to seconds for validation
+            int totalSeconds = parseTimestampToSeconds(chapter.getTimestamp().trim());
+            chaptersWithSeconds.add(new VideoChapterWithSeconds(chapter, totalSeconds));
+        }
+
+        // Sort by timestamp
+        chaptersWithSeconds.sort((a, b) -> Integer.compare(a.getSeconds(), b.getSeconds()));
+
+        // Validate first chapter starts at 0:00
+        if (chaptersWithSeconds.getFirst().getSeconds() != 0) {
+            throw new IOException("First chapter must start at 0:00");
+        }
+
+        // Validate minimum 10 seconds between chapters
+        for (int i = 1; i < chaptersWithSeconds.size(); i++) {
+            int timeDiff = chaptersWithSeconds.get(i).getSeconds() - chaptersWithSeconds.get(i - 1).getSeconds();
+            if (timeDiff < 10) {
+                throw new IOException("Each chapter must be at least 10 seconds long. " +
+                        "Chapter at " + chaptersWithSeconds.get(i).getChapter().getTimestamp() +
+                        " is only " + timeDiff + " seconds after the previous chapter");
+            }
+        }
+
+        // Return sorted chapters
+        return chaptersWithSeconds.stream()
+                .map(VideoChapterWithSeconds::getChapter)
+                .collect(Collectors.toList());
+    }
+
+
+    private int parseTimestampToSeconds(String timestamp) {
+        String[] parts = timestamp.split(":");
+
+        if (parts.length == 2) {
+            // MM:SS format
+            int minutes = Integer.parseInt(parts[0]);
+            int seconds = Integer.parseInt(parts[1]);
+            return minutes * 60 + seconds;
+        } else if (parts.length == 3) {
+            // HH:MM:SS format
+            int hours = Integer.parseInt(parts[0]);
+            int minutes = Integer.parseInt(parts[1]);
+            int seconds = Integer.parseInt(parts[2]);
+            return hours * 3600 + minutes * 60 + seconds;
+        }
+
+        throw new IllegalArgumentException("Invalid timestamp format: " + timestamp);
+    }
 }

@@ -1,5 +1,6 @@
 package com.insp17.ytms.service;
 
+import com.insp17.ytms.dtos.VideoChapterDTO;
 import com.insp17.ytms.dtos.VideoMetadataDTO;
 import com.insp17.ytms.dtos.VideoMetadataResponseDTO;
 import com.insp17.ytms.entity.VideoChapter;
@@ -50,6 +51,7 @@ public class VideoMetadataService {
         videoTaskRepository.save(videoTask);
         return convertToResponseDTO(savedMetadata);
     }
+
 
 
     @Transactional(readOnly = true)
@@ -104,7 +106,7 @@ public class VideoMetadataService {
         if (dto.getVideoChapters() != null && !dto.getVideoChapters().isEmpty()) {
             IntStream.range(0, dto.getVideoChapters().size())
                     .mapToObj(i -> {
-                        VideoMetadataDTO.VideoChapterDTO chapterDTO = dto.getVideoChapters().get(i);
+                        VideoChapterDTO chapterDTO = dto.getVideoChapters().get(i);
                         VideoChapter chapter = new VideoChapter();
                         chapter.setTitle(chapterDTO.getTitle());
                         chapter.setTimestamp(chapterDTO.getTimestamp());
@@ -140,8 +142,8 @@ public class VideoMetadataService {
         }
 
         if (metadata.getVideoChapters() != null && !metadata.getVideoChapters().isEmpty()) {
-            List<VideoMetadataDTO.VideoChapterDTO> chapterDTOs = metadata.getVideoChapters().stream()
-                    .map(chapter -> new VideoMetadataDTO.VideoChapterDTO(chapter.getTitle(), chapter.getTimestamp()))
+            List<VideoChapterDTO> chapterDTOs = metadata.getVideoChapters().stream()
+                    .map(chapter -> new VideoChapterDTO(chapter.getTitle(), chapter.getTimestamp()))
                     .collect(Collectors.toList()); // Use Collectors.toList() for broader compatibility
             dto.setVideoChapters(chapterDTOs);
         }

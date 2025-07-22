@@ -4,15 +4,18 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.cloud.storage.*;
 import com.insp17.ytms.dtos.ThumbnailUploadResult;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.PostConstruct;
-import java.io.FileInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,28 +27,39 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-
+@Slf4j
 @Service
 public class FileStorageService {
 
-    @Value("${deployed.at:GCP}")
-    private String deploymentType;
-
-    @Value("${gcp.bucket-name}")
-    private String gcpBucketName;
-
-    @Value("${gcp.public.bucket-name}")
-    private String gcpPublicBucketName;
-
-    @Value("${file.storage.path:/mnt/storage/ytms}")
-    private String internalStoragePath;
-
-    private Storage storage = null;
-
     private static final long MAX_VIDEO_SIZE = 10L * 1024 * 1024 * 1024; // 10GB
     private static final long MAX_AUDIO_SIZE = 500L * 1024 * 1024; // 500MB
+    @Value("${deployed.at:GCP}")
+    private String deploymentType;
+    @Value("${gcp.bucket-name}")
+    private String gcpBucketName;
+    @Value("${gcp.public.bucket-name}")
+    private String gcpPublicBucketName;
+    @Value("${file.storage.path:/mnt/storage/ytms}")
+    private String internalStoragePath;
+    private Storage storage = null;
 
     public FileStorageService() {
+    }
+
+    private static String getString(String gcsUrl) {
+        if (!gcsUrl.startsWith("gs://")) {
+            throw new IllegalArgumentException("Invalid GCS URL format. Expected gs://bucket-name/object-name");
+        }
+
+        String pathWithoutProtocol = gcsUrl.substring(5); // Remove "gs://"
+        int firstSlashIndex = pathWithoutProtocol.indexOf('/');
+
+        if (firstSlashIndex == -1) {
+            throw new IllegalArgumentException("Invalid GCS URL format. Missing object name");
+        }
+
+        String objectName = pathWithoutProtocol.substring(firstSlashIndex + 1);
+        return objectName;
     }
 
     @PostConstruct
@@ -90,7 +104,6 @@ public class FileStorageService {
             throw new StorageException(500, "Failed to generate resumable upload URL: " + e.getMessage());
         }
     }
-
 
     public FileUploadResult uploadVideo(MultipartFile file, String folder) throws IOException {
         validateVideoFile(file);
@@ -200,7 +213,6 @@ public class FileStorageService {
         return new ThumbnailUploadResult(publicUrl, filename, file.getSize());
     }
 
-
     private FileUploadResult uploadToGCP(MultipartFile file, String filePath) throws IOException {
         if (storage == null) {
             throw new IOException("GCP Storage is not configured");
@@ -240,7 +252,6 @@ public class FileStorageService {
         return new FileUploadResult(url, file.getOriginalFilename(), file.getSize());
     }
 
-
     public String getSignedUrlToDownload(String gcsUrl) throws IOException {
 
         String objectName = getString(gcsUrl);
@@ -255,23 +266,6 @@ public class FileStorageService {
 
         return signedUrl.toString();
     }
-
-    private static String getString(String gcsUrl) {
-        if (!gcsUrl.startsWith("gs://")) {
-            throw new IllegalArgumentException("Invalid GCS URL format. Expected gs://bucket-name/object-name");
-        }
-
-        String pathWithoutProtocol = gcsUrl.substring(5); // Remove "gs://"
-        int firstSlashIndex = pathWithoutProtocol.indexOf('/');
-
-        if (firstSlashIndex == -1) {
-            throw new IllegalArgumentException("Invalid GCS URL format. Missing object name");
-        }
-
-        String objectName = pathWithoutProtocol.substring(firstSlashIndex + 1);
-        return objectName;
-    }
-
 
     public void deleteFile(String filePath) throws IOException {
         if ("GCP".equals(deploymentType) && storage != null) {

@@ -7,15 +7,35 @@ public class CreateRevisionRequest {
     private Long uploadedById;
 
     // Getters and setters
-    public Long getTaskId() { return taskId; }
-    public void setTaskId(Long taskId) { this.taskId = taskId; }
+    public Long getTaskId() {
+        return taskId;
+    }
 
-    public String getEditedVideoUrl() { return editedVideoUrl; }
-    public void setEditedVideoUrl(String editedVideoUrl) { this.editedVideoUrl = editedVideoUrl; }
+    public void setTaskId(Long taskId) {
+        this.taskId = taskId;
+    }
 
-    public String getNotes() { return notes; }
-    public void setNotes(String notes) { this.notes = notes; }
+    public String getEditedVideoUrl() {
+        return editedVideoUrl;
+    }
 
-    public Long getUploadedById() { return uploadedById; }
-    public void setUploadedById(Long uploadedById) { this.uploadedById = uploadedById; }
+    public void setEditedVideoUrl(String editedVideoUrl) {
+        this.editedVideoUrl = editedVideoUrl;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
+
+    public Long getUploadedById() {
+        return uploadedById;
+    }
+
+    public void setUploadedById(Long uploadedById) {
+        this.uploadedById = uploadedById;
+    }
 }

@@ -13,7 +13,8 @@ public class AudioInstructionDTO {
     private UserDTO uploadedBy;
     private LocalDateTime createdAt;
 
-    public AudioInstructionDTO() {}
+    public AudioInstructionDTO() {
+    }
 
     public AudioInstructionDTO(AudioInstruction audio) {
         this.id = audio.getId();
@@ -26,24 +27,59 @@ public class AudioInstructionDTO {
     }
 
     // Getters and setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public Long getVideoTaskId() { return videoTaskId; }
-    public void setVideoTaskId(Long videoTaskId) { this.videoTaskId = videoTaskId; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public String getAudioUrl() { return audioUrl; }
-    public void setAudioUrl(String audioUrl) { this.audioUrl = audioUrl; }
+    public Long getVideoTaskId() {
+        return videoTaskId;
+    }
 
-    public String getAudioFilename() { return audioFilename; }
-    public void setAudioFilename(String audioFilename) { this.audioFilename = audioFilename; }
+    public void setVideoTaskId(Long videoTaskId) {
+        this.videoTaskId = videoTaskId;
+    }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public String getAudioUrl() {
+        return audioUrl;
+    }
 
-    public UserDTO getUploadedBy() { return uploadedBy; }
-    public void setUploadedBy(UserDTO uploadedBy) { this.uploadedBy = uploadedBy; }
+    public void setAudioUrl(String audioUrl) {
+        this.audioUrl = audioUrl;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public String getAudioFilename() {
+        return audioFilename;
+    }
+
+    public void setAudioFilename(String audioFilename) {
+        this.audioFilename = audioFilename;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public UserDTO getUploadedBy() {
+        return uploadedBy;
+    }
+
+    public void setUploadedBy(UserDTO uploadedBy) {
+        this.uploadedBy = uploadedBy;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
 }

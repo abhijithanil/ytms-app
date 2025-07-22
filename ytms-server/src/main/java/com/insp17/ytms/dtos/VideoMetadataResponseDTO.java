@@ -41,5 +41,5 @@ public class VideoMetadataResponseDTO {
     private String license;
 
     @JsonProperty("video_chapters")
-    private List<VideoMetadataDTO.VideoChapterDTO> videoChapters;
+    private List<VideoChapterDTO> videoChapters;
 }

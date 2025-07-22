@@ -1,13 +1,12 @@
 package com.insp17.ytms.dtos;
 
-import com.insp17.ytms.dtos.UserDTO;
 import com.insp17.ytms.entity.YouTubeChannel;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 import java.util.Set;
 

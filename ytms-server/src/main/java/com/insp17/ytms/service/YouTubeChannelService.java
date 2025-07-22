@@ -350,9 +350,7 @@ public class YouTubeChannelService {
         log.info("Successfully removed user access from channel: {}", channelId);
     }
 
-    public boolean canUserAccessChannel(Long channelId, Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+    public boolean canUserAccessChannel(Long channelId, User user) {
 
         // Admins can access all channels
         if (user.getRole() == UserRole.ADMIN) {
@@ -363,12 +361,12 @@ public class YouTubeChannelService {
                 .orElseThrow(() -> new RuntimeException("YouTube channel not found"));
 
         // Channel creator can always access
-        if (channel.getAddedBy().getId().equals(userId)) {
+        if (channel.getAddedBy().getId().equals(user.getId())) {
             return true;
         }
 
         // Check if user has explicit access
-        return channel.hasUserAccess(userId);
+        return channel.hasUserAccess(user.getId());
     }
 
     public boolean canUserModifyChannel(YouTubeChannel channel, User user) {

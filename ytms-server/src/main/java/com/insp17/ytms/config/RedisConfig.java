@@ -7,6 +7,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.util.StringUtils;
 
 @Configuration
@@ -24,6 +27,7 @@ public class RedisConfig {
     /**
      * This bean is used by Spring Data Redis components like RedisTemplate.
      * It's good to keep it for general Redis operations.
+     *
      * @return A configured LettuceConnectionFactory.
      */
     @Bean
@@ -39,9 +43,28 @@ public class RedisConfig {
     }
 
     /**
+     * RedisTemplate bean for YouTube upload progress tracking
+     *
+     * @param connectionFactory The Lettuce connection factory
+     * @return A configured RedisTemplate
+     */
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(LettuceConnectionFactory connectionFactory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
+        template.setHashKeySerializer(new StringRedisSerializer());
+        template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
+        template.afterPropertiesSet();
+        return template;
+    }
+
+    /**
      * This new bean provides the raw Lettuce RedisClient.
      * It is specifically required by Bucket4j's LettuceBasedProxyManager in your RatelimiterConfig.
      * The destroyMethod ensures the client's resources are released when the application shuts down.
+     *
      * @return A configured RedisClient instance.
      */
     @Bean(destroyMethod = "shutdown")
@@ -56,7 +79,6 @@ public class RedisConfig {
 
         return RedisClient.create(redisURI);
     }
-
 
     private void validateRedisConfig() {
         if (!StringUtils.hasText(redisHost)) {

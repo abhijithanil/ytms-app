@@ -30,7 +30,8 @@ public class VideoTaskDTO {
     private List<AudioInstructionDTO> audioInstructions;
     private VideoMetadataResponseDTO videoMetadataResponseDTO;
 
-    public VideoTaskDTO() {}
+    public VideoTaskDTO() {
+    }
 
     public VideoTaskDTO(VideoTask task) {
         this.id = task.getId();
@@ -70,59 +71,149 @@ public class VideoTaskDTO {
     }
 
     // Getters and setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public String getTitle() { return title; }
-    public void setTitle(String title) { this.title = title; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public String getTitle() {
+        return title;
+    }
 
-    public String getRawVideoUrl() { return rawVideoUrl; }
-    public void setRawVideoUrl(String rawVideoUrl) { this.rawVideoUrl = rawVideoUrl; }
+    public void setTitle(String title) {
+        this.title = title;
+    }
 
-    public String getRawVideoFilename() { return rawVideoFilename; }
-    public void setRawVideoFilename(String rawVideoFilename) { this.rawVideoFilename = rawVideoFilename; }
+    public String getDescription() {
+        return description;
+    }
 
-    public UserDTO getAssignedEditor() { return assignedEditor; }
-    public void setAssignedEditor(UserDTO assignedEditor) { this.assignedEditor = assignedEditor; }
+    public void setDescription(String description) {
+        this.description = description;
+    }
 
-    public UserDTO getCreatedBy() { return createdBy; }
-    public void setCreatedBy(UserDTO createdBy) { this.createdBy = createdBy; }
+    public String getRawVideoUrl() {
+        return rawVideoUrl;
+    }
 
-    public TaskStatus getStatus() { return status; }
-    public void setStatus(TaskStatus status) { this.status = status; }
+    public void setRawVideoUrl(String rawVideoUrl) {
+        this.rawVideoUrl = rawVideoUrl;
+    }
 
-    public TaskPriority getPriority() { return priority; }
-    public void setPriority(TaskPriority priority) { this.priority = priority; }
+    public String getRawVideoFilename() {
+        return rawVideoFilename;
+    }
 
-    public PrivacyLevel getPrivacyLevel() { return privacyLevel; }
-    public void setPrivacyLevel(PrivacyLevel privacyLevel) { this.privacyLevel = privacyLevel; }
+    public void setRawVideoFilename(String rawVideoFilename) {
+        this.rawVideoFilename = rawVideoFilename;
+    }
 
-    public LocalDateTime getDeadline() { return deadline; }
-    public void setDeadline(LocalDateTime deadline) { this.deadline = deadline; }
+    public UserDTO getAssignedEditor() {
+        return assignedEditor;
+    }
 
-    public LocalDateTime getYoutubeUploadTime() { return youtubeUploadTime; }
-    public void setYoutubeUploadTime(LocalDateTime youtubeUploadTime) { this.youtubeUploadTime = youtubeUploadTime; }
+    public void setAssignedEditor(UserDTO assignedEditor) {
+        this.assignedEditor = assignedEditor;
+    }
 
-    public String getYoutubeVideoId() { return youtubeVideoId; }
-    public void setYoutubeVideoId(String youtubeVideoId) { this.youtubeVideoId = youtubeVideoId; }
+    public UserDTO getCreatedBy() {
+        return createdBy;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public void setCreatedBy(UserDTO createdBy) {
+        this.createdBy = createdBy;
+    }
 
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public TaskStatus getStatus() {
+        return status;
+    }
 
-    public List<RevisionDTO> getRevisions() { return revisions; }
-    public void setRevisions(List<RevisionDTO> revisions) { this.revisions = revisions; }
+    public void setStatus(TaskStatus status) {
+        this.status = status;
+    }
 
-    public List<CommentDTO> getComments() { return comments; }
-    public void setComments(List<CommentDTO> comments) { this.comments = comments; }
+    public TaskPriority getPriority() {
+        return priority;
+    }
 
-    public List<AudioInstructionDTO> getAudioInstructions() { return audioInstructions; }
-    public void setAudioInstructions(List<AudioInstructionDTO> audioInstructions) { this.audioInstructions = audioInstructions; }
+    public void setPriority(TaskPriority priority) {
+        this.priority = priority;
+    }
+
+    public PrivacyLevel getPrivacyLevel() {
+        return privacyLevel;
+    }
+
+    public void setPrivacyLevel(PrivacyLevel privacyLevel) {
+        this.privacyLevel = privacyLevel;
+    }
+
+    public LocalDateTime getDeadline() {
+        return deadline;
+    }
+
+    public void setDeadline(LocalDateTime deadline) {
+        this.deadline = deadline;
+    }
+
+    public LocalDateTime getYoutubeUploadTime() {
+        return youtubeUploadTime;
+    }
+
+    public void setYoutubeUploadTime(LocalDateTime youtubeUploadTime) {
+        this.youtubeUploadTime = youtubeUploadTime;
+    }
+
+    public String getYoutubeVideoId() {
+        return youtubeVideoId;
+    }
+
+    public void setYoutubeVideoId(String youtubeVideoId) {
+        this.youtubeVideoId = youtubeVideoId;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public List<RevisionDTO> getRevisions() {
+        return revisions;
+    }
+
+    public void setRevisions(List<RevisionDTO> revisions) {
+        this.revisions = revisions;
+    }
+
+    public List<CommentDTO> getComments() {
+        return comments;
+    }
+
+    public void setComments(List<CommentDTO> comments) {
+        this.comments = comments;
+    }
+
+    public List<AudioInstructionDTO> getAudioInstructions() {
+        return audioInstructions;
+    }
+
+    public void setAudioInstructions(List<AudioInstructionDTO> audioInstructions) {
+        this.audioInstructions = audioInstructions;
+    }
 
     public VideoMetadataResponseDTO getVideoMetadataResponseDTO() {
         return videoMetadataResponseDTO;

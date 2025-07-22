@@ -4,10 +4,12 @@ import com.insp17.ytms.dtos.CurrentUser;
 import com.insp17.ytms.dtos.UserPrincipal;
 import com.insp17.ytms.entity.AudioInstruction;
 import com.insp17.ytms.entity.Revision;
+import com.insp17.ytms.entity.User;
 import com.insp17.ytms.entity.VideoTask;
 import com.insp17.ytms.repository.AudioInstructionRepository;
 import com.insp17.ytms.service.FileStorageService;
 import com.insp17.ytms.service.RevisionService;
+import com.insp17.ytms.service.UserService;
 import com.insp17.ytms.service.VideoTaskService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +42,9 @@ public class FileController {
     private RevisionService revisionService;
 
     @Autowired
+    private UserService userService;
+
+    @Autowired
     private AudioInstructionRepository audioInstructionRepository;
 
     @GetMapping("/video/{taskId}")
@@ -48,8 +53,9 @@ public class FileController {
                                                    HttpServletRequest request) {
         try {
             System.out.println("Streaming raw video for task: " + taskId + " by user: " + userPrincipal.getUsername());
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
 
-            if (!videoTaskService.canUserAccessTask(taskId, userPrincipal.getId())) {
+            if (!videoTaskService.canUserAccessTask(taskId, user)) {
                 System.out.println("User " + userPrincipal.getUsername() + " denied access to task " + taskId);
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
@@ -90,10 +96,11 @@ public class FileController {
                                                         @CurrentUser UserPrincipal userPrincipal,
                                                         HttpServletRequest request) {
         try {
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
             System.out.println("Streaming revision video: " + revisionId + " by user: " + userPrincipal.getUsername());
 
             Revision revision = revisionService.getRevisionById(revisionId);
-            if (!videoTaskService.canUserAccessTask(revision.getVideoTask().getId(), userPrincipal.getId())) {
+            if (!videoTaskService.canUserAccessTask(revision.getVideoTask().getId(), user)) {
                 System.out.println("User " + userPrincipal.getUsername() + " denied access to revision " + revisionId);
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
@@ -132,11 +139,12 @@ public class FileController {
     public ResponseEntity<Resource> streamAudio(@PathVariable Long audioId, @CurrentUser UserPrincipal userPrincipal) {
         try {
             System.out.println("Streaming audio: " + audioId + " by user: " + userPrincipal.getUsername());
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
 
             AudioInstruction audio = audioInstructionRepository.findById(audioId)
                     .orElseThrow(() -> new RuntimeException("Audio not found"));
 
-            if (!videoTaskService.canUserAccessTask(audio.getVideoTask().getId(), userPrincipal.getId())) {
+            if (!videoTaskService.canUserAccessTask(audio.getVideoTask().getId(), user)) {
                 System.out.println("User " + userPrincipal.getUsername() + " denied access to audio " + audioId);
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
@@ -243,7 +251,7 @@ public class FileController {
     }
 
     @GetMapping("/download/video/{taskId}")
-    public ResponseEntity<Map<String,String>> downloadRawVideo(@PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
+    public ResponseEntity<Map<String, String>> downloadRawVideo(@PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
         try {
             System.out.println("Downloading raw video for task: " + taskId + " by user: " + userPrincipal.getUsername());
 

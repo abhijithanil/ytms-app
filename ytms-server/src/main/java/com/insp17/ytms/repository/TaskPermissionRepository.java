@@ -14,7 +14,9 @@ import java.util.Optional;
 @Repository
 public interface TaskPermissionRepository extends JpaRepository<TaskPermission, Long> {
     List<TaskPermission> findByVideoTaskId(Long videoTaskId);
+
     List<TaskPermission> findByUserId(Long userId);
+
     List<TaskPermission> findByVideoTaskIdAndPermissionType(Long videoTaskId, PermissionType permissionType);
 
     Optional<TaskPermission> findByVideoTaskIdAndUserId(Long videoTaskId, Long userId);

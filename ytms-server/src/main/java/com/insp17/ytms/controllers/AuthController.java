@@ -77,7 +77,7 @@ public class AuthController {
                     UserStatus.INACTIVE
             );
 
-            User result = userService.createUser(user);
+            UserResponse result = userService.createUser(user);
 
             String token = uuidService.generateVerificationToken(signUpRequest.getEmail());
             emailService.sendUserVerificationEmail(signUpRequest.getEmail(), token);
@@ -104,7 +104,7 @@ public class AuthController {
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
-            User user = userService.getUserById(userPrincipal.getId());
+            UserResponse user = userService.getUserById(userPrincipal.getId());
 
             if (user.isMfaEnabled()) {
                 Map<String, Object> response = new HashMap<>();
@@ -130,7 +130,7 @@ public class AuthController {
     @PostMapping("/login/verify")
     public ResponseEntity<?> verifyCode(@RequestBody MfaVerifyCodeRequest verifyCodeRequest) {
         try {
-            User user = userService.getUserByUsername(verifyCodeRequest.getUsername());
+            UserResponse user = userService.getUserByUsername(verifyCodeRequest.getUsername());
             if (!mfaService.verifyTotp(user.getSecret(), verifyCodeRequest.getToken())) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse(false, "Invalid OTP"));
             }
@@ -149,7 +149,7 @@ public class AuthController {
     public ResponseEntity<MfaStatusResponse> getMfaStatus(@CurrentUser UserPrincipal userPrincipal,
                                                           @PathVariable Long userId) {
         try {
-            User user = userService.getUserById(userId);
+            UserResponse user = userService.getUserById(userId);
             return ResponseEntity.ok(new MfaStatusResponse(
                     user.isMfaEnabled(),
                     user.getSecret() != null ? "Secret configured" : "No secret configured"
@@ -164,7 +164,7 @@ public class AuthController {
     @GetMapping("/mfa/status")
     public ResponseEntity<MfaStatusResponse> getCurrentUserMfaStatus(@CurrentUser UserPrincipal userPrincipal) {
         try {
-            User user = userService.getUserById(userPrincipal.getId());
+            UserResponse user = userService.getUserById(userPrincipal.getId());
             return ResponseEntity.ok(new MfaStatusResponse(
                     user.isMfaEnabled(),
                     user.getSecret() != null ? "Secret configured" : "No secret configured"
@@ -179,7 +179,7 @@ public class AuthController {
     @PostMapping("/mfa/signup/enable")
     public ResponseEntity<?> enableMfaSingup(@RequestBody MfaGenericRequest enableMfaRequest) {
         try {
-            User user = userService.getUserById(enableMfaRequest.getUserId());
+            UserResponse user = userService.getUserById(enableMfaRequest.getUserId());
 
             if (user.isMfaEnabled()) {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -204,7 +204,7 @@ public class AuthController {
     @PreAuthorize("#userPrincipal.id == #enableMfaRequest.userId")
     public ResponseEntity<?> enableMfa(@CurrentUser UserPrincipal userPrincipal, @RequestBody MfaGenericRequest enableMfaRequest) {
         try {
-            User user = userService.getUserById(userPrincipal.getId());
+            UserResponse user = userService.getUserById(userPrincipal.getId());
 
             if (user.isMfaEnabled()) {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -228,7 +228,7 @@ public class AuthController {
     @PostMapping("/mfa/verify")
     public ResponseEntity<?> verifyMfa(@RequestBody MfaVerifyCodeRequest verifyRequest) {
         try {
-            User user = userService.getUserById(verifyRequest.getUserId());
+            User user = userService.getUserByIdPrivateUse(verifyRequest.getUserId());
 
             if (user.isMfaEnabled()) {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -266,7 +266,7 @@ public class AuthController {
     @PostMapping("/mfa/disable")
     @PreAuthorize("#userPrincipal.id == #disableMfaRequest.userId")
     public ResponseEntity<?> disableMfa(@CurrentUser UserPrincipal userPrincipal, @RequestBody MfaGenericRequest disableMfaRequest) {
-        User user = userService.getUserById(userPrincipal.getId());
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
         user.setMfaEnabled(false);
         userService.updateUser(user);
         return ResponseEntity.ok(new ApiResponse(true, "MFA disabled successfully"));
@@ -299,9 +299,9 @@ public class AuthController {
 
     @GetMapping("/me")
     @PreAuthorize("hasRole('USER') or hasRole('ADMIN') or hasRole('EDITOR')")
-    public ResponseEntity<UserDTO> getCurrentUser(@CurrentUser UserPrincipal userPrincipal) {
-        User user = userService.getUserById(userPrincipal.getId());
-        return ResponseEntity.ok(new UserDTO(user));
+    public ResponseEntity<UserResponse> getCurrentUser(@CurrentUser UserPrincipal userPrincipal) {
+        UserResponse user = userService.getUserById(userPrincipal.getId());
+        return ResponseEntity.ok(user);
     }
 
     @RateLimited
@@ -340,9 +340,9 @@ public class AuthController {
                     UserStatus.ACTIVE
             );
 
-            User result = userService.createUser(user);
+            UserResponse result = userService.createUser(user);
             uuidService.removeInviteRequest(token);
-            UserRegistrationResponse response = new UserRegistrationResponse(true, "User registered successfully",result.getId(), result.getUsername());
+            UserRegistrationResponse response = new UserRegistrationResponse(true, "User registered successfully", result.getId(), result.getUsername());
             return ResponseEntity.ok(response);
         } else {
             UserRegistrationResponse response = new UserRegistrationResponse(false, "Invalid acceptance token, or expired");
@@ -355,7 +355,7 @@ public class AuthController {
         Optional<InviteRequest> inviteRequestOp = uuidService.getUserInviteRequest(token);
         if (inviteRequestOp.isPresent()) {
             long invitor = inviteRequestOp.get().getInvitedBy();
-            User user = userService.getUserById(invitor);
+            UserResponse user = userService.getUserById(invitor);
             emailService.sendUserInvitationDeclineEmail(user.getEmail(), inviteRequestOp.get());
             uuidService.removeInviteRequest(token);
         }

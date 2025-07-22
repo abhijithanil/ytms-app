@@ -26,7 +26,8 @@ public class TaskPermission {
     private LocalDateTime createdAt;
 
     // Constructors, getters, setters
-    public TaskPermission() {}
+    public TaskPermission() {
+    }
 
     public TaskPermission(VideoTask videoTask, User user, PermissionType permissionType) {
         this.videoTask = videoTask;
@@ -36,18 +37,43 @@ public class TaskPermission {
     }
 
     // Getters and setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public VideoTask getVideoTask() { return videoTask; }
-    public void setVideoTask(VideoTask videoTask) { this.videoTask = videoTask; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public User getUser() { return user; }
-    public void setUser(User user) { this.user = user; }
+    public VideoTask getVideoTask() {
+        return videoTask;
+    }
 
-    public PermissionType getPermissionType() { return permissionType; }
-    public void setPermissionType(PermissionType permissionType) { this.permissionType = permissionType; }
+    public void setVideoTask(VideoTask videoTask) {
+        this.videoTask = videoTask;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+
+    public PermissionType getPermissionType() {
+        return permissionType;
+    }
+
+    public void setPermissionType(PermissionType permissionType) {
+        this.permissionType = permissionType;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
 }

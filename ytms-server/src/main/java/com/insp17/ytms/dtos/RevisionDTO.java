@@ -14,7 +14,8 @@ public class RevisionDTO {
     private UserDTO uploadedBy;
     private LocalDateTime createdAt;
 
-    public RevisionDTO() {}
+    public RevisionDTO() {
+    }
 
     public RevisionDTO(Revision revision) {
         this.id = revision.getId();
@@ -28,28 +29,68 @@ public class RevisionDTO {
     }
 
     // Getters and setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public Long getVideoTaskId() { return videoTaskId; }
-    public void setVideoTaskId(Long videoTaskId) { this.videoTaskId = videoTaskId; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public Integer getRevisionNumber() { return revisionNumber; }
-    public void setRevisionNumber(Integer revisionNumber) { this.revisionNumber = revisionNumber; }
+    public Long getVideoTaskId() {
+        return videoTaskId;
+    }
 
-    public String getEditedVideoUrl() { return editedVideoUrl; }
-    public void setEditedVideoUrl(String editedVideoUrl) { this.editedVideoUrl = editedVideoUrl; }
+    public void setVideoTaskId(Long videoTaskId) {
+        this.videoTaskId = videoTaskId;
+    }
 
-    public String getEditedVideoFilename() { return editedVideoFilename; }
-    public void setEditedVideoFilename(String editedVideoFilename) { this.editedVideoFilename = editedVideoFilename; }
+    public Integer getRevisionNumber() {
+        return revisionNumber;
+    }
 
-    public String getNotes() { return notes; }
-    public void setNotes(String notes) { this.notes = notes; }
+    public void setRevisionNumber(Integer revisionNumber) {
+        this.revisionNumber = revisionNumber;
+    }
 
-    public UserDTO getUploadedBy() { return uploadedBy; }
-    public void setUploadedBy(UserDTO uploadedBy) { this.uploadedBy = uploadedBy; }
+    public String getEditedVideoUrl() {
+        return editedVideoUrl;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public void setEditedVideoUrl(String editedVideoUrl) {
+        this.editedVideoUrl = editedVideoUrl;
+    }
+
+    public String getEditedVideoFilename() {
+        return editedVideoFilename;
+    }
+
+    public void setEditedVideoFilename(String editedVideoFilename) {
+        this.editedVideoFilename = editedVideoFilename;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
+
+    public UserDTO getUploadedBy() {
+        return uploadedBy;
+    }
+
+    public void setUploadedBy(UserDTO uploadedBy) {
+        this.uploadedBy = uploadedBy;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
 }
 

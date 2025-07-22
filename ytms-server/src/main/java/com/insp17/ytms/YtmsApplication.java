@@ -13,22 +13,22 @@ import org.springframework.web.filter.CorsFilter;
 @EnableAspectJAutoProxy
 @ComponentScan(basePackages = {"com.insp17.ytms"})
 public class YtmsApplication {
-	public static void main(String[] args) {
-		SpringApplication.run(YtmsApplication.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(YtmsApplication.class, args);
+    }
 
-	@Bean
-	public CorsFilter corsFilter() {
-		CorsConfiguration config = new CorsConfiguration();
-		config.addAllowedOrigin("http://localhost:3000");
-		config.addAllowedHeader("*");
-		config.addAllowedMethod("*");
-		config.setAllowCredentials(true);
+    @Bean
+    public CorsFilter corsFilter() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.addAllowedOrigin("http://localhost:3000");
+        config.addAllowedHeader("*");
+        config.addAllowedMethod("*");
+        config.setAllowCredentials(true);
 
-		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-		source.registerCorsConfiguration("/**", config);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
 
-		return new CorsFilter(source);
-	}
+        return new CorsFilter(source);
+    }
 }
 

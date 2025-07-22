@@ -28,12 +28,12 @@ public interface VideoTaskRepository extends JpaRepository<VideoTask, Long> {
 
     /* ---------- custom JPQL ---------- */
     @Query("""
-           SELECT vt
-           FROM   VideoTask vt
-           WHERE  vt.createdAt BETWEEN :startDate AND :endDate
-           """)
+            SELECT vt
+            FROM   VideoTask vt
+            WHERE  vt.createdAt BETWEEN :startDate AND :endDate
+            """)
     List<VideoTask> findByCreatedAtBetween(@Param("startDate") LocalDateTime startDate,
-                                           @Param("endDate")   LocalDateTime endDate);
+                                           @Param("endDate") LocalDateTime endDate);
 
 
     // For displaying task with comments
@@ -49,48 +49,48 @@ public interface VideoTaskRepository extends JpaRepository<VideoTask, Long> {
     Optional<VideoTask> findByIdWithAllDetails(@Param("id") Long id);
 
     @Query("""
-           SELECT vt
-           FROM   VideoTask vt
-           WHERE  vt.privacyLevel = 'ALL'
-              OR  vt.id IN (SELECT tp.videoTask.id
-                            FROM   TaskPermission tp
-                            WHERE  tp.user.id = :userId)
-           """)
+            SELECT vt
+            FROM   VideoTask vt
+            WHERE  vt.privacyLevel = 'ALL'
+               OR  vt.id IN (SELECT tp.videoTask.id
+                             FROM   TaskPermission tp
+                             WHERE  tp.user.id = :userId)
+            """)
     List<VideoTask> findVisibleTasksForUser(@Param("userId") Long userId);
 
     @Query("""
-           SELECT vt
-           FROM   VideoTask vt
-           WHERE  vt.assignedEditor.id = :editorId
-              OR  vt.createdBy.id      = :userId
-              OR  vt.privacyLevel      = 'ALL'
-              OR  vt.id IN (SELECT tp.videoTask.id
-                            FROM   TaskPermission tp
-                            WHERE  tp.user.id = :userId)
-           """)
-    List<VideoTask> findAccessibleTasksForUser(@Param("userId")  Long userId,
+            SELECT vt
+            FROM   VideoTask vt
+            WHERE  vt.assignedEditor.id = :editorId
+               OR  vt.createdBy.id      = :userId
+               OR  vt.privacyLevel      = 'ALL'
+               OR  vt.id IN (SELECT tp.videoTask.id
+                             FROM   TaskPermission tp
+                             WHERE  tp.user.id = :userId)
+            """)
+    List<VideoTask> findAccessibleTasksForUser(@Param("userId") Long userId,
                                                @Param("editorId") Long editorId);
 
     @Query("SELECT COUNT(vt) FROM VideoTask vt WHERE vt.taskStatus = :taskStatus")
     long countAllByTaskStatus(@Param("taskStatus") TaskStatus taskStatus);
 
     @Query("""
-           SELECT COUNT(vt)
-           FROM   VideoTask vt
-           WHERE  vt.assignedEditor.id = :editorId
-             AND  vt.taskStatus        = :taskStatus
-           """)
-    long countByAssignedEditorIdAndTaskStatusJPQL(@Param("editorId")   Long editorId,
+            SELECT COUNT(vt)
+            FROM   VideoTask vt
+            WHERE  vt.assignedEditor.id = :editorId
+              AND  vt.taskStatus        = :taskStatus
+            """)
+    long countByAssignedEditorIdAndTaskStatusJPQL(@Param("editorId") Long editorId,
                                                   @Param("taskStatus") TaskStatus taskStatus);
 
     List<VideoTask> findTop10ByOrderByCreatedAtDesc();
 
     @Query("""
-           SELECT vt
-           FROM   VideoTask vt
-           WHERE  vt.youtubeUploadTime <= :uploadTime
-             AND  vt.taskStatus = 'SCHEDULED'
-           """)
+            SELECT vt
+            FROM   VideoTask vt
+            WHERE  vt.youtubeUploadTime <= :uploadTime
+              AND  vt.taskStatus = 'SCHEDULED'
+            """)
     List<VideoTask> findScheduledTasksForUpload(@Param("uploadTime") LocalDateTime uploadTime);
 }
 
