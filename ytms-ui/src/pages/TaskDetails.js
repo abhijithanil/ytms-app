@@ -978,7 +978,7 @@ const TaskDetails = () => {
       try {
         const token = localStorage.getItem("token");
         const baseUrl =
-          process.env.REACT_APP_API_URL || "http://localhost:8080";
+          process.env.REACT_APP_API_URL || "http://localhost:8080/api";
 
         const response = await fetch(`${baseUrl}/files/audio/${audioId}`, {
           method: "GET",
