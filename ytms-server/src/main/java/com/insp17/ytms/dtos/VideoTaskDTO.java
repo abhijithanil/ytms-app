@@ -1,82 +1,110 @@
 package com.insp17.ytms.dtos;
 
 import com.insp17.ytms.entity.VideoTask;
-import com.insp17.ytms.entity.TaskStatus;
-import com.insp17.ytms.entity.TaskPriority;
-import com.insp17.ytms.entity.PrivacyLevel;
+import com.insp17.ytms.entity.RawVideo;
+import com.insp17.ytms.entity.Revision;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
+@Getter
+@Setter
 public class VideoTaskDTO {
     private Long id;
     private String title;
     private String description;
+    private String status;
+    private String priority;
+    private String privacyLevel;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private LocalDateTime deadline;
+    private UserDTO createdBy;
+    private UserDTO assignedEditor;
 
-    // Legacy single video support (kept for backward compatibility)
+    // Legacy single video support (for backward compatibility)
     private String rawVideoUrl;
     private String rawVideoFilename;
 
-    // NEW: Multiple raw videos support
-    private List<RawVideoDTO> rawVideos = new ArrayList<>();
+    // Enhanced multiple video support
+    private List<RawVideoDTO> rawVideos;
+    private List<RawVideoDTO> mainVideos;
+    private List<RawVideoDTO> shortVideos;
 
-    private UserDTO assignedEditor;
-    private UserDTO createdBy;
-    private TaskStatus status;
-    private TaskPriority priority;
-    private PrivacyLevel privacyLevel;
-    private LocalDateTime deadline;
-    private LocalDateTime youtubeUploadTime;
-    private String youtubeVideoId;
-    private Set<String> tags = new HashSet<>();
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    // Revision support with types
+    private List<RevisionDTO> revisions;
+    private List<RevisionDTO> mainRevisions;
+    private List<RevisionDTO> shortRevisions;
 
-    private List<RevisionDTO> revisions = new ArrayList<>();
-    private List<CommentDTO> comments = new ArrayList<>();
-    private List<AudioInstructionDTO> audioInstructions = new ArrayList<>();
+    private List<CommentDTO> comments;
+    private List<AudioInstructionDTO> audioInstructions;
+    private List<String> tags;
+    private Integer totalRevisions;
+    private Integer totalRawVideos;
+    private Integer totalMainVideos;
+    private Integer totalShortVideos;
 
-    // Constructors
     public VideoTaskDTO() {}
 
     public VideoTaskDTO(VideoTask task) {
         this.id = task.getId();
         this.title = task.getTitle();
         this.description = task.getDescription();
+        this.status = task.getTaskStatus() != null ? task.getTaskStatus().name() : null;
+        this.priority = task.getTaskPriority() != null ? task.getTaskPriority().name() : null;
+        this.privacyLevel = task.getPrivacyLevel() != null ? task.getPrivacyLevel().name() : null;
+        this.createdAt = task.getCreatedAt();
+        this.updatedAt = task.getUpdatedAt();
+        this.deadline = task.getDeadline();
+        this.createdBy = task.getCreatedBy() != null ? new UserDTO(task.getCreatedBy()) : null;
+        this.assignedEditor = task.getAssignedEditor() != null ? new UserDTO(task.getAssignedEditor()) : null;
 
-        // Legacy fields
+        // Legacy support
         this.rawVideoUrl = task.getRawVideoUrl();
         this.rawVideoFilename = task.getRawVideoFilename();
 
-        // NEW: Multiple raw videos
+        // Enhanced multiple video support
         if (task.getRawVideos() != null) {
             this.rawVideos = task.getRawVideos().stream()
                     .map(RawVideoDTO::new)
                     .collect(Collectors.toList());
+
+            // Separate by type
+            this.mainVideos = this.rawVideos.stream()
+                    .filter(v -> "main".equals(v.getType()))
+                    .collect(Collectors.toList());
+
+            this.shortVideos = this.rawVideos.stream()
+                    .filter(v -> "short".equals(v.getType()))
+                    .collect(Collectors.toList());
+
+            this.totalRawVideos = this.rawVideos.size();
+            this.totalMainVideos = this.mainVideos.size();
+            this.totalShortVideos = this.shortVideos.size();
         }
 
-        this.assignedEditor = task.getAssignedEditor() != null ? new UserDTO(task.getAssignedEditor()) : null;
-        this.createdBy = task.getCreatedBy() != null ? new UserDTO(task.getCreatedBy()) : null;
-        this.status = task.getTaskStatus();
-        this.priority = task.getTaskPriority();
-        this.privacyLevel = task.getPrivacyLevel();
-        this.deadline = task.getDeadline();
-        this.youtubeUploadTime = task.getYoutubeUploadTime();
-        this.youtubeVideoId = task.getYoutubeVideoId();
-        this.tags = task.getTags() != null ? new HashSet<>(task.getTags()) : new HashSet<>();
-        this.createdAt = task.getCreatedAt();
-        this.updatedAt = task.getUpdatedAt();
-
+        // Enhanced revision support
         if (task.getRevisions() != null) {
             this.revisions = task.getRevisions().stream()
                     .map(RevisionDTO::new)
                     .collect(Collectors.toList());
+
+            // Separate revisions by type if type field exists
+            this.mainRevisions = this.revisions.stream()
+                    .filter(r -> "main".equals(r.getType()) || r.getType() == null) // null defaults to main
+                    .collect(Collectors.toList());
+
+            this.shortRevisions = this.revisions.stream()
+                    .filter(r -> "short".equals(r.getType()))
+                    .collect(Collectors.toList());
+
+            this.totalRevisions = this.revisions.size();
         }
 
+        // Comments and audio instructions
         if (task.getComments() != null) {
             this.comments = task.getComments().stream()
                     .map(CommentDTO::new)
@@ -88,186 +116,10 @@ public class VideoTaskDTO {
                     .map(AudioInstructionDTO::new)
                     .collect(Collectors.toList());
         }
-    }
 
-    // Helper methods
-    public List<RawVideoDTO> getMainVideos() {
-        return rawVideos.stream()
-                .filter(video -> "main".equals(video.getType()))
-                .collect(Collectors.toList());
-    }
-
-    public List<RawVideoDTO> getShortVideos() {
-        return rawVideos.stream()
-                .filter(video -> "short".equals(video.getType()))
-                .collect(Collectors.toList());
-    }
-
-    public RawVideoDTO getPrimaryMainVideo() {
-        return rawVideos.stream()
-                .filter(video -> "main".equals(video.getType()))
-                .findFirst()
-                .orElse(null);
-    }
-
-    // Getters and setters
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public String getRawVideoUrl() {
-        return rawVideoUrl;
-    }
-
-    public void setRawVideoUrl(String rawVideoUrl) {
-        this.rawVideoUrl = rawVideoUrl;
-    }
-
-    public String getRawVideoFilename() {
-        return rawVideoFilename;
-    }
-
-    public void setRawVideoFilename(String rawVideoFilename) {
-        this.rawVideoFilename = rawVideoFilename;
-    }
-
-    public List<RawVideoDTO> getRawVideos() {
-        return rawVideos;
-    }
-
-    public void setRawVideos(List<RawVideoDTO> rawVideos) {
-        this.rawVideos = rawVideos;
-    }
-
-    public UserDTO getAssignedEditor() {
-        return assignedEditor;
-    }
-
-    public void setAssignedEditor(UserDTO assignedEditor) {
-        this.assignedEditor = assignedEditor;
-    }
-
-    public UserDTO getCreatedBy() {
-        return createdBy;
-    }
-
-    public void setCreatedBy(UserDTO createdBy) {
-        this.createdBy = createdBy;
-    }
-
-    public TaskStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(TaskStatus status) {
-        this.status = status;
-    }
-
-    public TaskPriority getPriority() {
-        return priority;
-    }
-
-    public void setPriority(TaskPriority priority) {
-        this.priority = priority;
-    }
-
-    public PrivacyLevel getPrivacyLevel() {
-        return privacyLevel;
-    }
-
-    public void setPrivacyLevel(PrivacyLevel privacyLevel) {
-        this.privacyLevel = privacyLevel;
-    }
-
-    public LocalDateTime getDeadline() {
-        return deadline;
-    }
-
-    public void setDeadline(LocalDateTime deadline) {
-        this.deadline = deadline;
-    }
-
-    public LocalDateTime getYoutubeUploadTime() {
-        return youtubeUploadTime;
-    }
-
-    public void setYoutubeUploadTime(LocalDateTime youtubeUploadTime) {
-        this.youtubeUploadTime = youtubeUploadTime;
-    }
-
-    public String getYoutubeVideoId() {
-        return youtubeVideoId;
-    }
-
-    public void setYoutubeVideoId(String youtubeVideoId) {
-        this.youtubeVideoId = youtubeVideoId;
-    }
-
-    public Set<String> getTags() {
-        return tags;
-    }
-
-    public void setTags(Set<String> tags) {
-        this.tags = tags;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    public List<RevisionDTO> getRevisions() {
-        return revisions;
-    }
-
-    public void setRevisions(List<RevisionDTO> revisions) {
-        this.revisions = revisions;
-    }
-
-    public List<CommentDTO> getComments() {
-        return comments;
-    }
-
-    public void setComments(List<CommentDTO> comments) {
-        this.comments = comments;
-    }
-
-    public List<AudioInstructionDTO> getAudioInstructions() {
-        return audioInstructions;
-    }
-
-    public void setAudioInstructions(List<AudioInstructionDTO> audioInstructions) {
-        this.audioInstructions = audioInstructions;
+        // Tags support
+        if (task.getTags() != null) {
+            this.tags = List.copyOf(task.getTags());
+        }
     }
 }

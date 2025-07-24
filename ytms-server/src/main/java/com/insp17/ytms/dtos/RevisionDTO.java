@@ -13,6 +13,8 @@ public class RevisionDTO {
     private String notes;
     private UserDTO uploadedBy;
     private LocalDateTime createdAt;
+    private String type; // "main" or "short"
+    private Long fileSize; // File size in bytes
 
     public RevisionDTO() {
     }
@@ -26,6 +28,8 @@ public class RevisionDTO {
         this.notes = revision.getNotes();
         this.uploadedBy = revision.getUploadedBy() != null ? new UserDTO(revision.getUploadedBy()) : null;
         this.createdAt = revision.getCreatedAt();
+        this.type = revision.getType() != null ? revision.getType() : "main"; // Default to main if null
+        this.fileSize = revision.getFileSize();
     }
 
     // Getters and setters
@@ -92,5 +96,20 @@ public class RevisionDTO {
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
     }
-}
 
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
+    }
+
+    public Long getFileSize() {
+        return fileSize;
+    }
+
+    public void setFileSize(Long fileSize) {
+        this.fileSize = fileSize;
+    }
+}
