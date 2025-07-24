@@ -41,17 +41,26 @@ public class RevisionService {
 
         Integer nextRevisionNumber = getNextRevisionNumber(revisionRequest.getVideoTaskId());
 
+        // NEW: Support for video type (main or short)
+        String videoType = revisionRequest.getType() != null ? revisionRequest.getType() : "main";
 
         Revision revision = new Revision(
-                task, nextRevisionNumber, revisionRequest.getEditedVideoUrl(), revisionRequest.getEditedVideoFilename(), revisionRequest.getNotes(), uploadedBy
+                task,
+                nextRevisionNumber,
+                revisionRequest.getEditedVideoUrl(),
+                revisionRequest.getEditedVideoFilename(),
+                videoType,
+                revisionRequest.getNotes(),
+                uploadedBy
         );
 
         Revision savedRevision = revisionRepository.save(revision);
 
         // Add auto comment about new revision
+        String typeLabel = "short".equals(videoType) ? " (Short)" : "";
         Comment autoComment = new Comment(
                 task,
-                "New video revision #" + nextRevisionNumber + " has been uploaded.",
+                "New video revision #" + nextRevisionNumber + typeLabel + " has been uploaded.",
                 uploadedBy
         );
         autoComment.setRevision(savedRevision);
@@ -72,6 +81,21 @@ public class RevisionService {
         return revisionRepository.findByVideoTaskIdOrderByRevisionNumberDesc(taskId);
     }
 
+    // NEW: Get revisions by task and type
+    public List<Revision> getRevisionsByTaskAndType(Long taskId, String type) {
+        return revisionRepository.findByVideoTaskIdAndTypeOrderByRevisionNumberDesc(taskId, type);
+    }
+
+    // NEW: Get main video revisions
+    public List<Revision> getMainRevisionsByTask(Long taskId) {
+        return getRevisionsByTaskAndType(taskId, "main");
+    }
+
+    // NEW: Get short video revisions
+    public List<Revision> getShortRevisionsByTask(Long taskId) {
+        return getRevisionsByTaskAndType(taskId, "short");
+    }
+
     public Revision getRevisionById(Long revisionId) {
         return revisionRepository.findById(revisionId)
                 .orElseThrow(() -> new RuntimeException("Revision not found"));
@@ -81,6 +105,33 @@ public class RevisionService {
         return revisionRepository.findLatestRevisionByTaskId(taskId);
     }
 
+    // NEW: Get latest revision by type
+    public Optional<Revision> getLatestRevisionByType(Long taskId, String type) {
+        return revisionRepository.findLatestRevisionByTaskIdAndType(taskId, type);
+    }
+
+    // NEW: Get latest main revision
+    public Optional<Revision> getLatestMainRevision(Long taskId) {
+        return getLatestRevisionByType(taskId, "main");
+    }
+
+    // NEW: Get latest short revision
+    public Optional<Revision> getLatestShortRevision(Long taskId) {
+        return getLatestRevisionByType(taskId, "short");
+    }
+
+    // Get count of revisions by type
+    public long getRevisionCountByType(Long taskId, String type) {
+        return revisionRepository.countByVideoTaskIdAndType(taskId, type);
+    }
+
+    public long getMainRevisionCount(Long taskId) {
+        return getRevisionCountByType(taskId, "main");
+    }
+
+    public long getShortRevisionCount(Long taskId) {
+        return getRevisionCountByType(taskId, "short");
+    }
 
     @Transactional
     public void deleteRevision(Long revisionId) {
@@ -114,5 +165,21 @@ public class RevisionService {
 
         revisionRepository.flush();
         System.out.println("Flushed changes");
+    }
+
+    // NEW: Check if task has revisions ready for upload
+    public boolean hasRevisionsReadyForUpload(Long taskId) {
+        List<Revision> revisions = getRevisionsByTask(taskId);
+        return !revisions.isEmpty();
+    }
+
+    // NEW: Get revisions suitable for YouTube upload (both main and shorts)
+    public List<Revision> getRevisionsForYouTubeUpload(Long taskId) {
+        return getRevisionsByTask(taskId);
+    }
+
+    // NEW: Get revisions by IDs (for multi-video upload)
+    public List<Revision> getRevisionsByIds(List<Long> revisionIds) {
+        return revisionRepository.findAllById(revisionIds);
     }
 }

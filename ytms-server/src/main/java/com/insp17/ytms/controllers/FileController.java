@@ -3,6 +3,7 @@ package com.insp17.ytms.controllers;
 import com.insp17.ytms.dtos.CurrentUser;
 import com.insp17.ytms.dtos.UserPrincipal;
 import com.insp17.ytms.entity.AudioInstruction;
+import com.insp17.ytms.entity.RawVideo;
 import com.insp17.ytms.entity.Revision;
 import com.insp17.ytms.entity.User;
 import com.insp17.ytms.entity.VideoTask;
@@ -47,6 +48,7 @@ public class FileController {
     @Autowired
     private AudioInstructionRepository audioInstructionRepository;
 
+    // Legacy endpoint - stream first raw video (backward compatibility)
     @GetMapping("/video/{taskId}")
     public ResponseEntity<Resource> streamRawVideo(@PathVariable Long taskId,
                                                    @CurrentUser UserPrincipal userPrincipal,
@@ -61,24 +63,38 @@ public class FileController {
             }
 
             VideoTask task = videoTaskService.getTaskById(taskId);
-            if (task.getRawVideoUrl() == null) {
+
+            // Try to get the first raw video from the new structure
+            String videoUrl = null;
+            String filename = null;
+
+            if (task.getRawVideos() != null && !task.getRawVideos().isEmpty()) {
+                RawVideo firstVideo = task.getRawVideos().get(0);
+                videoUrl = firstVideo.getUrl();
+                filename = firstVideo.getFilename();
+            } else if (task.getRawVideoUrl() != null) {
+                // Fallback to legacy single video
+                videoUrl = task.getRawVideoUrl();
+                filename = task.getRawVideoFilename();
+            }
+
+            if (videoUrl == null) {
                 System.out.println("No raw video URL found for task " + taskId);
                 return ResponseEntity.notFound().build();
             }
 
-            System.out.println("Downloading file from: " + task.getRawVideoUrl());
-            byte[] fileContent = fileStorageService.downloadFile(task.getRawVideoUrl());
+            System.out.println("Downloading file from: " + videoUrl);
+            byte[] fileContent = fileStorageService.downloadFile(videoUrl);
 
             if (fileContent == null || fileContent.length == 0) {
                 System.out.println("File content is empty for task " + taskId);
                 return ResponseEntity.notFound().build();
             }
 
-            String filename = task.getRawVideoFilename() != null ? task.getRawVideoFilename() : "video.mp4";
-            String contentType = getContentType(filename);
+            String resolvedFilename = filename != null ? filename : "video.mp4";
+            String contentType = getContentType(resolvedFilename);
 
-            // Handle range requests for video streaming
-            return handleRangeRequest(request, fileContent, filename, contentType);
+            return handleRangeRequest(request, fileContent, resolvedFilename, contentType);
 
         } catch (IOException e) {
             System.err.println("Error streaming video for task " + taskId + ": " + e.getMessage());
@@ -86,6 +102,51 @@ public class FileController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         } catch (Exception e) {
             System.err.println("Unexpected error streaming video for task " + taskId + ": " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    // NEW: Stream specific raw video by ID
+    @GetMapping("/raw-video/{taskId}/{videoId}")
+    public ResponseEntity<Resource> streamSpecificRawVideo(@PathVariable Long taskId,
+                                                           @PathVariable Long videoId,
+                                                           @CurrentUser UserPrincipal userPrincipal,
+                                                           HttpServletRequest request) {
+        try {
+            System.out.println("Streaming raw video " + videoId + " for task: " + taskId + " by user: " + userPrincipal.getUsername());
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
+            if (!videoTaskService.canUserAccessTask(taskId, user)) {
+                System.out.println("User " + userPrincipal.getUsername() + " denied access to task " + taskId);
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            RawVideo rawVideo = videoTaskService.getRawVideoById(videoId);
+            if (rawVideo == null || !rawVideo.getVideoTask().getId().equals(taskId)) {
+                System.out.println("Raw video " + videoId + " not found for task " + taskId);
+                return ResponseEntity.notFound().build();
+            }
+
+            System.out.println("Downloading file from: " + rawVideo.getUrl());
+            byte[] fileContent = fileStorageService.downloadFile(rawVideo.getUrl());
+
+            if (fileContent == null || fileContent.length == 0) {
+                System.out.println("File content is empty for raw video " + videoId);
+                return ResponseEntity.notFound().build();
+            }
+
+            String filename = rawVideo.getFilename() != null ? rawVideo.getFilename() : "video.mp4";
+            String contentType = getContentType(filename);
+
+            return handleRangeRequest(request, fileContent, filename, contentType);
+
+        } catch (IOException e) {
+            System.err.println("Error streaming raw video " + videoId + " for task " + taskId + ": " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        } catch (Exception e) {
+            System.err.println("Unexpected error streaming raw video " + videoId + " for task " + taskId + ": " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
@@ -121,7 +182,6 @@ public class FileController {
             String filename = revision.getEditedVideoFilename() != null ? revision.getEditedVideoFilename() : "revision.mp4";
             String contentType = getContentType(filename);
 
-            // Handle range requests for video streaming
             return handleRangeRequest(request, fileContent, filename, contentType);
 
         } catch (IOException e) {
@@ -250,6 +310,7 @@ public class FileController {
         }
     }
 
+    // Legacy download endpoint
     @GetMapping("/download/video/{taskId}")
     public ResponseEntity<Map<String, String>> downloadRawVideo(@PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
         try {
@@ -261,19 +322,63 @@ public class FileController {
             }
 
             VideoTask task = videoTaskService.getTaskById(taskId);
-            if (task.getRawVideoUrl() == null) {
+
+            // Try to get the first raw video from the new structure
+            String videoUrl = null;
+            String filename = null;
+
+            if (task.getRawVideos() != null && !task.getRawVideos().isEmpty()) {
+                RawVideo firstVideo = task.getRawVideos().get(0);
+                videoUrl = firstVideo.getUrl();
+                filename = firstVideo.getFilename();
+            } else if (task.getRawVideoUrl() != null) {
+                // Fallback to legacy single video
+                videoUrl = task.getRawVideoUrl();
+                filename = task.getRawVideoFilename();
+            }
+
+            if (videoUrl == null) {
                 return ResponseEntity.notFound().build();
             }
 
-            String signedUrl = fileStorageService.getSignedUrlToDownload(task.getRawVideoUrl());
+            String signedUrl = fileStorageService.getSignedUrlToDownload(videoUrl);
 
             Map<String, String> response = new HashMap<>();
             response.put("signedUrl", signedUrl);
-            response.put("fileName", task.getRawVideoFilename());
+            response.put("fileName", filename);
             return ResponseEntity.ok(response);
 
         } catch (IOException e) {
             System.err.println("Error downloading video for task " + taskId + ": " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    // NEW: Download specific raw video
+    @GetMapping("/download/raw-video/{videoId}")
+    public ResponseEntity<Map<String, String>> downloadSpecificRawVideo(@PathVariable Long videoId, @CurrentUser UserPrincipal userPrincipal) {
+        try {
+            System.out.println("Downloading raw video: " + videoId + " by user: " + userPrincipal.getUsername());
+
+            RawVideo rawVideo = videoTaskService.getRawVideoById(videoId);
+            if (rawVideo == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            if (!videoTaskService.canUserDownloadTaskFiles(rawVideo.getVideoTask().getId(), userPrincipal.getId())) {
+                System.out.println("User " + userPrincipal.getUsername() + " denied download access to raw video " + videoId);
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            String signedUrl = fileStorageService.getSignedUrlToDownload(rawVideo.getUrl());
+
+            Map<String, String> response = new HashMap<>();
+            response.put("signedUrl", signedUrl);
+            response.put("fileName", rawVideo.getFilename());
+            return ResponseEntity.ok(response);
+
+        } catch (IOException e) {
+            System.err.println("Error downloading raw video " + videoId + ": " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
