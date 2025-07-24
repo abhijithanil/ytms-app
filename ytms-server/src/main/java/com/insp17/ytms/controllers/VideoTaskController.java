@@ -439,4 +439,71 @@ public class VideoTaskController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Failed to fetch available channels"));
         }
     }
+
+    // NEW: Raw Video Management Endpoints
+
+    @GetMapping("/{id}/raw-videos")
+    public ResponseEntity<List<RawVideoDTO>> getRawVideos(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(id, user)) {
+            return ResponseEntity.status(403).build();
+        }
+
+        List<RawVideo> rawVideos = videoTaskService.getRawVideosByTask(id);
+        List<RawVideoDTO> rawVideoDTOs = rawVideos.stream().map(RawVideoDTO::new).collect(Collectors.toList());
+        return ResponseEntity.ok(rawVideoDTOs);
+    }
+
+    @GetMapping("/{id}/raw-videos/main")
+    public ResponseEntity<List<RawVideoDTO>> getMainVideos(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(id, user)) {
+            return ResponseEntity.status(403).build();
+        }
+
+        List<RawVideo> mainVideos = videoTaskService.getMainVideosByTask(id);
+        List<RawVideoDTO> mainVideoDTOs = mainVideos.stream().map(RawVideoDTO::new).collect(Collectors.toList());
+        return ResponseEntity.ok(mainVideoDTOs);
+    }
+
+    @GetMapping("/{id}/raw-videos/shorts")
+    public ResponseEntity<List<RawVideoDTO>> getShortVideos(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(id, user)) {
+            return ResponseEntity.status(403).build();
+        }
+
+        List<RawVideo> shortVideos = videoTaskService.getShortVideosByTask(id);
+        List<RawVideoDTO> shortVideoDTOs = shortVideos.stream().map(RawVideoDTO::new).collect(Collectors.toList());
+        return ResponseEntity.ok(shortVideoDTOs);
+    }
+
+    @DeleteMapping("/raw-videos/{videoId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+    public ResponseEntity<Void> deleteRawVideo(@PathVariable Long videoId, @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
+        try {
+            RawVideo rawVideo = videoTaskService.getRawVideoById(videoId);
+            if (!videoTaskService.canUserAccessTask(rawVideo.getVideoTask().getId(), user)) {
+                return ResponseEntity.status(403).build();
+            }
+
+            // Only allow deletion by task creator, assigned editor, or admin
+            VideoTask task = rawVideo.getVideoTask();
+            if (user.getRole() == UserRole.ADMIN ||
+                    task.getCreatedBy().getId().equals(user.getId()) ||
+                    (task.getAssignedEditor() != null && task.getAssignedEditor().getId().equals(user.getId()))) {
+
+                videoTaskService.deleteRawVideo(videoId);
+                return ResponseEntity.noContent().build();
+            } else {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to delete raw video {}: {}", videoId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
 }
