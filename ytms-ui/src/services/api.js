@@ -1,4 +1,4 @@
-// Fixed API Services - Complete File
+// Updated API Services - Complete File with Multiple Videos Support
 
 import axios from "axios";
 
@@ -91,7 +91,6 @@ export const authAPI = {
   },
   register: async (userData) => {
     try {
-      debugger
       const response = await api.post("/auth/register", userData);
       return response.data;
     } catch (error) {
@@ -117,12 +116,9 @@ export const authAPI = {
       throw error;
     }
   },
-
   getInviteDetails: async (token) => {
     try {
-      const body = {
-        token: token,
-      };
+      const body = { token: token };
       const response = await api.post("/auth/validate-token", body);
       return response.data;
     } catch (error) {
@@ -130,7 +126,6 @@ export const authAPI = {
       throw error;
     }
   },
-
   acceptInvite: async (token, userDetails) => {
     try {
       const response = await api.post(`/auth/accept-invite/${token}`, userDetails);
@@ -140,7 +135,6 @@ export const authAPI = {
       throw error;
     }
   },
-
   declineInvite: async (token) => {
     try {
       const response = await api.post(`/auth/decline-invite/${token}`);
@@ -152,7 +146,7 @@ export const authAPI = {
   },
 };
 
-// --- TEAM ---
+// Team API
 export const teamAPI = {
   getAllUsers: async () => {
     try {
@@ -259,7 +253,7 @@ export const usersAPI = {
   },
 };
 
-// Tasks API
+// Tasks API - Updated for multiple videos support
 export const tasksAPI = {
   getAllTasks: () => {
     console.log("Fetching all tasks...");
@@ -287,12 +281,10 @@ export const tasksAPI = {
       api.interceptors.response.handlers[0].rejected
     );
 
-    // Always send as JSON now (remove FormData support)
     return uploadApi.post("/tasks", taskData, {
       headers: { "Content-Type": "application/json" },
     });
   },
-
   generateUploadUrl: (filename, type, folder) => {
     console.log(`Generating upload URL for ${filename} in folder ${folder}`);
 
@@ -321,11 +313,11 @@ export const tasksAPI = {
     return api.post(`/tasks/${taskId}/privacy`, privacyData);
   },
   scheduleYouTubeUpload: (taskId, uploadTime) => {
-    console.log(
-      `Scheduling YouTube upload for task ${taskId} at ${uploadTime}`
-    );
+    console.log(`Scheduling YouTube upload for task ${taskId} at ${uploadTime}`);
     return api.post(`/tasks/${taskId}/schedule-upload`, { uploadTime });
   },
+  
+  // Updated: Single video upload (legacy support)
   doYoutubeUpload: (uploadRequest) => {
     const uploadApi = axios.create({
       ...api.defaults,
@@ -334,7 +326,6 @@ export const tasksAPI = {
       maxBodyLength: Infinity,
     });
 
-    // Apply the same interceptors as the main api instance
     uploadApi.interceptors.request.use(
       api.interceptors.request.handlers[0].fulfilled
     );
@@ -344,10 +335,29 @@ export const tasksAPI = {
     );
     return api.post(`/tasks/upload-to-youtube`, uploadRequest);
   },
-  addAudioInstruction: (audioInstruction) => {
-    console.log(
-      `Adding audio instruction to task ${audioInstruction.videoTaskId}`
+
+  // New: Multiple video upload support  
+  doMultiVideoYoutubeUpload: (uploadRequest) => {
+    console.log("Starting multi-video YouTube upload:", uploadRequest);
+    const uploadApi = axios.create({
+      ...api.defaults,
+      timeout: 0,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+    });
+
+    uploadApi.interceptors.request.use(
+      api.interceptors.request.handlers[0].fulfilled
     );
+    uploadApi.interceptors.response.use(
+      api.interceptors.response.handlers[0].fulfilled,
+      api.interceptors.response.handlers[0].rejected
+    );
+    return uploadApi.post(`/tasks/upload-multiple-to-youtube`, uploadRequest);
+  },
+
+  addAudioInstruction: (audioInstruction) => {
+    console.log(`Adding audio instruction to task ${audioInstruction.videoTaskId}`);
     return api.post(
       `/tasks/${audioInstruction.videoTaskId}/audio-instructions`,
       audioInstruction
@@ -357,14 +367,13 @@ export const tasksAPI = {
     console.log(`Fetching audio instructions for task ${taskId}`);
     return api.get(`/tasks/${taskId}/audio-instructions`);
   },
-
   deleteAudioInstruction: (audioInstructionId) => {
     console.log(`Deleting audio instruction ${audioInstructionId}`);
     return api.delete(`/tasks/audio-instructions/${audioInstructionId}/delete`);
   },
 };
 
-// Revisions API
+// Revisions API - Updated for multiple videos support
 export const revisionsAPI = {
   createRevision: (formData) => {
     console.log("Creating revision with form data");
@@ -422,14 +431,13 @@ export const commentsAPI = {
     console.log(`Updating comment ${id}:`, commentData);
     return api.put(`/comments/${id}`, commentData);
   },
-
   deleteComment: (id) => {
-    console.log(`Deleting revision ${id}`);
+    console.log(`Deleting comment ${id}`);
     return api.delete(`/comments/${id}`);
   },
 };
 
-// metadata
+// Metadata API - Updated for multiple videos support
 export const metadataAPI = {
   createMetadata: (taskId, metadataData) => {
     return api.post(`/metadata/${taskId}`, metadataData, {
@@ -440,13 +448,34 @@ export const metadataAPI = {
     console.log(`Fetching metadata for task ${taskId}`);
     return api.get(`/metadata/task/${taskId}`);
   },
+  // New: Multiple video metadata support
+  createMultipleMetadata: (metadataMap) => {
+    console.log("Creating metadata for multiple videos:", metadataMap);
+    return api.post("/metadata/multiple", metadataMap, {
+      headers: { "Content-Type": "application/json" },
+    });
+  },
+  getMultipleMetadata: (revisionIds) => {
+    console.log(`Fetching metadata for revisions:`, revisionIds);
+    return api.post("/metadata/multiple/get", { revisionIds }, {
+      headers: { "Content-Type": "application/json" },
+    });
+  },
 };
 
-// File API
+// File API - Updated for multiple videos support
 export const fileAPI = {
   downloadRawVideo: (taskId) => {
     console.log(`Downloading raw video for task ${taskId}`);
     return api.get(`/files/video/${taskId}`, {
+      responseType: "blob",
+      timeout: 15 * 60 * 1000,
+    });
+  },
+  // New: Download specific raw video by ID
+  downloadRawVideoById: (taskId, videoId) => {
+    console.log(`Downloading raw video ${videoId} for task ${taskId}`);
+    return api.get(`/files/raw-video/${taskId}/${videoId}`, {
       responseType: "blob",
       timeout: 15 * 60 * 1000,
     });
@@ -467,21 +496,20 @@ export const fileAPI = {
   },
   getVideoUrl: (taskId) => {
     const token = localStorage.getItem("token");
-    return `${API_BASE_URL}/files/video/${taskId}?Authorization=Bearer ${encodeURIComponent(
-      token
-    )}`;
+    return `${API_BASE_URL}/files/video/${taskId}?Authorization=Bearer ${encodeURIComponent(token)}`;
+  },
+  // New: Get specific raw video URL
+  getRawVideoUrl: (taskId, videoId) => {
+    const token = localStorage.getItem("token");
+    return `${API_BASE_URL}/files/raw-video/${taskId}/${videoId}?Authorization=Bearer ${encodeURIComponent(token)}`;
   },
   getRevisionUrl: (revisionId) => {
     const token = localStorage.getItem("token");
-    return `${API_BASE_URL}/files/revision/${revisionId}?Authorization=Bearer ${encodeURIComponent(
-      token
-    )}`;
+    return `${API_BASE_URL}/files/revision/${revisionId}?Authorization=Bearer ${encodeURIComponent(token)}`;
   },
   getAudioUrl: (audioId) => {
     const token = localStorage.getItem("token");
-    return `${API_BASE_URL}/files/audio/${audioId}?Authorization=Bearer ${encodeURIComponent(
-      token
-    )}`;
+    return `${API_BASE_URL}/files/audio/${audioId}?Authorization=Bearer ${encodeURIComponent(token)}`;
   },
 };
 
@@ -504,9 +532,7 @@ export const dashboardAPI = {
 // Storage API
 export const storageAPI = {
   generateSignedUrl: (filename, folder, contentType) => {
-    console.log(
-      `Generating signed URL for ${filename} in ${folder} with type ${contentType}`
-    );
+    console.log(`Generating signed URL for ${filename} in ${folder} with type ${contentType}`);
     const params = new URLSearchParams({
       filename: filename,
       type: contentType,
@@ -515,7 +541,6 @@ export const storageAPI = {
 
     return api.post(`/tasks/generate-upload-url?${params.toString()}`);
   },
-
   verifyUpload: (objectName) => {
     console.log(`Verifying upload for object ${objectName}`);
     return api.post("/storage/verify-upload", { objectName });
@@ -538,11 +563,9 @@ export const fileUtils = {
       return fileType === type;
     });
   },
-
   validateFileSize: (file, maxSizeInBytes) => {
     return file.size <= maxSizeInBytes;
   },
-
   formatFileSize: (bytes) => {
     if (bytes === 0) return "0 Bytes";
     const k = 1024;
@@ -550,65 +573,53 @@ export const fileUtils = {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   },
-
   getFileExtension: (fileName) => {
     return fileName.split(".").pop().toLowerCase();
   },
-
   generateUniqueFileName: (originalName) => {
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
     const extension = fileUtils.getFileExtension(originalName);
-    const nameWithoutExt = originalName.substring(
-      0,
-      originalName.lastIndexOf(".")
-    );
+    const nameWithoutExt = originalName.substring(0, originalName.lastIndexOf("."));
     return `${nameWithoutExt}_${timestamp}_${random}.${extension}`;
   },
 };
 
+// YouTube Channel API
 export const youtubeChannelAPI = {
   getAllChannels: () => {
     console.log("Fetching all YouTube channels...");
     return api.get("/youtube-channels");
   },
-
   getChannelById: (id) => {
     console.log(`Fetching YouTube channel ${id}...`);
     return api.get(`/youtube-channels/${id}`);
   },
-
   createChannel: (channelData) => {
     console.log("Creating YouTube channel:", channelData);
     return api.post("/youtube-channels", channelData);
   },
-
   updateChannel: (id, channelData) => {
     console.log(`Updating YouTube channel ${id}:`, channelData);
     return api.put(`/youtube-channels/${id}`, channelData);
   },
-
   deleteChannel: (id) => {
     console.log(`Deleting YouTube channel ${id}`);
     return api.delete(`/youtube-channels/${id}`);
   },
-
   manageChannelAccess: (id, accessData) => {
     console.log(`Managing access for YouTube channel ${id}:`, accessData);
     return api.post(`/youtube-channels/${id}/access`, accessData);
   },
-
   searchChannels: (query) => {
     console.log(`Searching YouTube channels with query: ${query}`);
     const params = query ? `?q=${encodeURIComponent(query)}` : "";
     return api.get(`/youtube-channels/search${params}`);
   },
-
   getMyChannels: () => {
     console.log("Fetching user's YouTube channels...");
     return api.get("/youtube-channels/my-channels");
   },
-
   getChannelStats: () => {
     console.log("Fetching YouTube channel stats...");
     return api.get("/youtube-channels/stats");
@@ -618,13 +629,11 @@ export const youtubeChannelAPI = {
 // YouTube Channel utility functions
 export const youtubeChannelUtils = {
   validateChannelId: (channelId) => {
-    // YouTube channel IDs typically start with 'UC' and are 24 characters long
     const channelIdRegex = /^UC[a-zA-Z0-9_-]{22}$/;
     return channelIdRegex.test(channelId);
   },
-
   validateChannelUrl: (url) => {
-    if (!url) return true; // URL is optional
+    if (!url) return true;
     const youtubeUrlPatterns = [
       /^https?:\/\/(www\.)?youtube\.com\/channel\/UC[a-zA-Z0-9_-]{22}$/,
       /^https?:\/\/(www\.)?youtube\.com\/c\/[a-zA-Z0-9_-]+$/,
@@ -633,13 +642,11 @@ export const youtubeChannelUtils = {
     ];
     return youtubeUrlPatterns.some((pattern) => pattern.test(url));
   },
-
   extractChannelIdFromUrl: (url) => {
     if (!url) return null;
     const match = url.match(/\/channel\/(UC[a-zA-Z0-9_-]{22})/);
     return match ? match[1] : null;
   },
-
   formatChannelUrl: (channelId) => {
     if (!channelId) return "";
     if (youtubeChannelUtils.validateChannelId(channelId)) {
@@ -647,22 +654,16 @@ export const youtubeChannelUtils = {
     }
     return "";
   },
-
   generateThumbnailUrl: (channelId) => {
     if (!channelId || !youtubeChannelUtils.validateChannelId(channelId)) {
       return null;
     }
-    // YouTube channel thumbnail URL format
     return `https://yt3.ggpht.com/ytc/default_${channelId}=s240-c-k-c0x00ffffff-no-rj`;
   },
-
   validateChannelData: (channelData) => {
     const errors = [];
 
-    if (
-      !channelData.channelName ||
-      channelData.channelName.trim().length === 0
-    ) {
+    if (!channelData.channelName || channelData.channelName.trim().length === 0) {
       errors.push("Channel name is required");
     }
 
@@ -670,19 +671,11 @@ export const youtubeChannelUtils = {
       errors.push("Channel name must not exceed 100 characters");
     }
 
-    if (
-      !channelData.channelId ||
-      !youtubeChannelUtils.validateChannelId(channelData.channelId)
-    ) {
-      errors.push(
-        "Valid YouTube channel ID is required (format: UC followed by 22 characters)"
-      );
+    if (!channelData.channelId || !youtubeChannelUtils.validateChannelId(channelData.channelId)) {
+      errors.push("Valid YouTube channel ID is required (format: UC followed by 22 characters)");
     }
 
-    if (
-      channelData.channelUrl &&
-      !youtubeChannelUtils.validateChannelUrl(channelData.channelUrl)
-    ) {
+    if (channelData.channelUrl && !youtubeChannelUtils.validateChannelUrl(channelData.channelUrl)) {
       errors.push("Invalid YouTube channel URL format");
     }
 
@@ -701,43 +694,20 @@ export const youtubeChannelUtils = {
   },
 };
 
-// NEW: YouTube OAuth API
+// YouTube OAuth API
 export const youtubeOAuthAPI = {
-  /**
-   * Start YouTube OAuth flow
-   * @param {string} channelName - Reference name for the connection
-   * @returns {Promise} Authorization URL and instructions
-   */
   startConnect: (channelName) => {
     return api.get("/youtube/oauth/connect", {
       params: { channelName },
-      timeout: 180000, // 3 minutes in milliseconds
+      timeout: 180000,
     });
   },
-
-  /**
-   * Get all connected YouTube accounts
-   * @returns {Promise} List of connected accounts with their channels
-   */
   getConnectedAccounts: () => {
     return api.get("/youtube/oauth/accounts");
   },
-
-  /**
-   * Disconnect a YouTube account
-   * @param {string} email - Email of the account to disconnect
-   * @returns {Promise} Success message
-   */
   disconnectAccount: (email) => {
     return api.delete(`/youtube/oauth/accounts/${encodeURIComponent(email)}`);
   },
-
-  /**
-   * Handle OAuth callback (this would typically be called by your backend)
-   * @param {string} code - Authorization code from Google
-   * @param {string} state - State parameter for validation
-   * @returns {Promise} Connection result
-   */
   handleCallback: (code, state) => {
     return api.get("/youtube/oauth/callback", {
       params: { code, state },

@@ -15,10 +15,9 @@ import java.util.Set;
 
 @Entity
 @Table(name = "video_metadata")
-// CHANGE: Replaced @Data with more specific and safer annotations for entities.
 @Getter
 @Setter
-@ToString(exclude = {"videoTask", "videoChapters"}) // Exclude collections and relationships from toString
+@ToString(exclude = {"videoTask", "videoChapters", "revision", "rawVideo"})
 @NoArgsConstructor
 @AllArgsConstructor
 public class VideoMetadata {
@@ -27,10 +26,20 @@ public class VideoMetadata {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // NOTE: videoTask is often just an ID link, LAZY fetching is more appropriate.
-    @ManyToOne(fetch = FetchType.EAGER)
+    // UPDATED: Support for both task-level and specific video metadata
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "video_task_id")
     private VideoTask videoTask;
+
+    // NEW: Link to specific revision (for revision-specific metadata)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "revision_id")
+    private Revision revision;
+
+    // NEW: Link to specific raw video (for raw video-specific metadata)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "raw_video_id")
+    private RawVideo rawVideo;
 
     @Column(nullable = false, length = 100)
     private String title;
@@ -38,8 +47,7 @@ public class VideoMetadata {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    // NOTE: @ElementCollection is the standard JPA way to store a collection of basic types like String.
-    @ElementCollection(fetch = FetchType.EAGER) // EAGER is often fine for a small set of strings
+    @ElementCollection(fetch = FetchType.EAGER)
     @Column(name = "tag")
     private Set<String> tags = new HashSet<>();
 
@@ -70,10 +78,28 @@ public class VideoMetadata {
     @Column(nullable = false)
     private String license = "YouTube Standard License";
 
-    @OneToMany(mappedBy = "videoMetadata", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    // NEW: YouTube Channel selection
+    @Column(name = "youtube_channel_id")
+    private String youtubeChannelId;
+
+    @Column(name = "youtube_channel_name")
+    private String youtubeChannelName;
+
+    // NEW: Video type for shorts support
+    @Enumerated(EnumType.STRING)
+    @Column(name = "video_type")
+    private VideoType videoType = VideoType.MAIN;
+
+    // NEW: Shorts-specific metadata
+    @Column(name = "is_short")
+    private Boolean isShort = false;
+
+    @Column(name = "short_hashtags")
+    private String shortHashtags;
+
+    @OneToMany(mappedBy = "videoMetadata", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JsonManagedReference
     private List<VideoChapter> videoChapters = new ArrayList<>();
-
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
@@ -83,7 +109,7 @@ public class VideoMetadata {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // Convenience methods remain the same, very useful!
+    // Convenience methods
     public void addChapter(VideoChapter chapter) {
         videoChapters.add(chapter);
         chapter.setVideoMetadata(this);
@@ -92,5 +118,29 @@ public class VideoMetadata {
     public void removeChapter(VideoChapter chapter) {
         videoChapters.remove(chapter);
         chapter.setVideoMetadata(null);
+    }
+
+    // Helper methods to determine what this metadata is for
+    public boolean isForRevision() {
+        return revision != null;
+    }
+
+    public boolean isForRawVideo() {
+        return rawVideo != null;
+    }
+
+    public boolean isForTask() {
+        return revision == null && rawVideo == null;
+    }
+
+    // Get the target identifier for this metadata
+    public String getTargetIdentifier() {
+        if (revision != null) {
+            return "revision-" + revision.getId();
+        }
+        if (rawVideo != null) {
+            return "rawvideo-" + rawVideo.getId();
+        }
+        return "task-" + videoTask.getId();
     }
 }

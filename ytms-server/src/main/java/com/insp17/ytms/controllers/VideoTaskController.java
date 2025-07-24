@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-
 @Slf4j
 @RestController
 @RequestMapping("/api/tasks")
@@ -52,7 +51,6 @@ public class VideoTaskController {
 
     @Autowired
     private YouTubeAccountService youTubeAccountService;
-
 
     @GetMapping
     public ResponseEntity<List<VideoTaskDTO>> getAllTasks(@CurrentUser UserPrincipal userPrincipal) {
@@ -104,11 +102,25 @@ public class VideoTaskController {
                 task.setTaskStatus(TaskStatus.ASSIGNED);
             }
 
+            // Handle legacy single video (backward compatibility)
             if (createTaskRequest.getRawVideoUrl() != null && !createTaskRequest.getRawVideoUrl().isEmpty()) {
                 task.setRawVideoUrl(createTaskRequest.getRawVideoUrl());
                 task.setRawVideoFilename(createTaskRequest.getRawVideoFilename());
             }
 
+            // Handle multiple raw videos (NEW)
+            if (createTaskRequest.getRawVideos() != null && !createTaskRequest.getRawVideos().isEmpty()) {
+                for (CreateTaskRequest.RawVideoInfo videoInfo : createTaskRequest.getRawVideos()) {
+                    RawVideo rawVideo = new RawVideo(
+                            task,
+                            videoInfo.getFilename(),
+                            videoInfo.getUrl(),
+                            videoInfo.getType() != null ? videoInfo.getType() : "main",
+                            videoInfo.getSize()
+                    );
+                    task.addRawVideo(rawVideo);
+                }
+            }
 
             VideoTask createdTask = videoTaskService.createTask(task);
 
@@ -133,6 +145,7 @@ public class VideoTaskController {
             return ResponseEntity.ok(new VideoTaskDTO(createdTask));
 
         } catch (Exception e) {
+            log.error("Failed to create task", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -147,7 +160,6 @@ public class VideoTaskController {
             String signedUrl = "";
             if (folder.equals("thumbnails")) {
                 signedUrl = fileStorageService.generateImageUploadUrl(objectName, type);
-
             } else {
                 signedUrl = fileStorageService.generateResumableUploadUrl(objectName, type);
             }
@@ -252,7 +264,6 @@ public class VideoTaskController {
         return ResponseEntity.noContent().build();
     }
 
-
     @GetMapping("/editor/{editorId}")
     public ResponseEntity<List<VideoTaskDTO>> getTasksByEditor(@PathVariable Long editorId) {
         List<VideoTask> tasks = videoTaskService.getTasksByEditor(editorId);
@@ -288,6 +299,30 @@ public class VideoTaskController {
         return ResponseEntity.ok(response);
     }
 
+    // NEW: Get specific raw video URL
+    @GetMapping("/{id}/raw-video/{videoId}/video-url")
+    public ResponseEntity<Map<String, String>> getRawVideoUrl(@PathVariable Long id, @PathVariable Long videoId, @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(id, user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        RawVideo rawVideo = videoTaskService.getRawVideoById(videoId);
+        if (rawVideo == null || !rawVideo.getVideoTask().getId().equals(id)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        String objectName = rawVideo.getUrl().replace("gs://" + fileStorageService.getGcpBucketName() + "/", "");
+        String signedUrl = fileStorageService.generateSignedUrlForDownload(objectName);
+
+        Map<String, String> response = new HashMap<>();
+        response.put("url", signedUrl);
+        response.put("objectName", objectName);
+
+        return ResponseEntity.ok(response);
+    }
+
+    // Legacy single video upload (kept for backward compatibility)
     @PostMapping("/upload-to-youtube")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> uploadToYouTube(@RequestBody UploadVideoRequest uploadVideoRequest, @CurrentUser UserPrincipal userPrincipal) {
@@ -302,21 +337,18 @@ public class VideoTaskController {
                 return ResponseEntity.badRequest().body(Map.of("message", "Task is not in READY status."));
             }
 
-            // Get the selected channel
             YouTubeChannel channel = youTubeChannelService.getChannelById(uploadVideoRequest.getChannelId()).orElseThrow(() -> new RuntimeException("Channel doesn't exist"));
 
-            // Verify the channel is accessible to the user
             if (!youTubeChannelService.canUserAccessChannel(uploadVideoRequest.getChannelId(), user)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "You don't have access to this channel"));
             }
 
-            // Check if the YouTube account is connected
             if (!youTubeAccountService.isAccountConnected(channel.getYoutubeChannelOwnerEmail())) {
                 return ResponseEntity.badRequest().body(Map.of("message", "YouTube account not connected. Please connect the account first.", "accountEmail", channel.getYoutubeChannelOwnerEmail()));
             }
 
             youTubeService.uploadVideo(task, channel, uploadVideoRequest, user);
-            videoTaskService.updateTaskStatus(task.getId(),TaskStatus.UPLOADING, user);
+            videoTaskService.updateTaskStatus(task.getId(), TaskStatus.UPLOADING, user);
             return ResponseEntity.ok(Map.of("message", "Uploading to YouTube initiated!"));
 
         } catch (Exception e) {
@@ -325,9 +357,52 @@ public class VideoTaskController {
         }
     }
 
-    /**
-     * Get available channels for video upload
-     */
+    // NEW: Multiple video upload support
+    @PostMapping("/upload-multiple-to-youtube")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> uploadMultipleToYouTube(@RequestBody MultiVideoUploadRequest uploadRequest, @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(uploadRequest.getTaskId(), user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        try {
+            VideoTask task = videoTaskService.getTaskByIdWithDetails(uploadRequest.getTaskId()).orElseThrow(() -> new RuntimeException("Task not found."));
+            if (task.getTaskStatus() != TaskStatus.READY) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Task is not in READY status."));
+            }
+
+            // Validate all uploads
+            for (MultiVideoUploadRequest.VideoUploadItem uploadItem : uploadRequest.getUploads()) {
+                YouTubeChannel channel = youTubeChannelService.getChannelById(uploadItem.getChannelId())
+                        .orElseThrow(() -> new RuntimeException("Channel doesn't exist: " + uploadItem.getChannelId()));
+
+                if (!youTubeChannelService.canUserAccessChannel(uploadItem.getChannelId(), user)) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(Map.of("message", "You don't have access to channel: " + channel.getChannelName()));
+                }
+
+                if (!youTubeAccountService.isAccountConnected(channel.getYoutubeChannelOwnerEmail())) {
+                    return ResponseEntity.badRequest()
+                            .body(Map.of("message", "YouTube account not connected: " + channel.getYoutubeChannelOwnerEmail()));
+                }
+            }
+
+            // Start multiple uploads
+            youTubeService.uploadMultipleVideos(task, uploadRequest.getUploads(), user);
+            videoTaskService.updateTaskStatus(task.getId(), TaskStatus.UPLOADING, user);
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Multiple video uploads to YouTube initiated!",
+                    "uploadCount", uploadRequest.getUploads().size()
+            ));
+
+        } catch (Exception e) {
+            log.error("Multiple YouTube upload failed for task {}: {}", uploadRequest.getTaskId(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", e.getMessage()));
+        }
+    }
+
     @GetMapping("/{taskId}/available-channels")
     @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
     public ResponseEntity<Map<String, Object>> getAvailableChannelsForTask(@PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
@@ -338,17 +413,20 @@ public class VideoTaskController {
         }
 
         try {
-            // Get channels grouped by account
             Map<String, List<YouTubeChannel>> groupedChannels = youTubeChannelService.getChannelsGroupedByOwner(userPrincipal.getId());
 
-            // Filter to only include connected accounts
             Map<String, List<Map<String, Object>>> availableChannels = new HashMap<>();
 
             for (Map.Entry<String, List<YouTubeChannel>> entry : groupedChannels.entrySet()) {
                 String accountEmail = entry.getKey();
 
                 if (youTubeAccountService.isAccountConnected(accountEmail)) {
-                    List<Map<String, Object>> channelList = entry.getValue().stream().map(channel -> Map.<String, Object>of("id", channel.getId(), "name", channel.getChannelName(), "channelId", channel.getChannelId(), "thumbnailUrl", channel.getThumbnailUrl())).collect(Collectors.toList());
+                    List<Map<String, Object>> channelList = entry.getValue().stream().map(channel -> Map.<String, Object>of(
+                            "id", channel.getId(),
+                            "name", channel.getChannelName(),
+                            "channelId", channel.getChannelId(),
+                            "thumbnailUrl", channel.getThumbnailUrl()
+                    )).collect(Collectors.toList());
 
                     availableChannels.put(accountEmail, channelList);
                 }

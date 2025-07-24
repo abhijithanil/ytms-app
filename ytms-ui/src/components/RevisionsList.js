@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
-import {
-  Upload,
-  Save,
-  Video,
-  FileVideo,
-  CheckCircle,
-  Download,
-  Trash2
-} from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import {
+  Video,
+  Upload,
+  FileVideo,
+  User,
+  Download,
+  Trash2,
+  X,
+  Plus,
+  Play,
+  CheckSquare,
+  Square,
+  Youtube
+} from 'lucide-react';
 
 const RevisionsList = ({
   task,
   revisions,
   selectedRevision,
+  selectedRevisionsForUpload = [],
   user,
   showUploadRevision,
   setShowUploadRevision,
@@ -21,83 +27,130 @@ const RevisionsList = ({
   setNewRevisionFile,
   newRevisionNotes,
   setNewRevisionNotes,
+  newRevisionType,
+  setNewRevisionType,
   isVideoPlaying,
   onRevisionSelect,
-  onRawVideoSelect,
   onRevisionUpload,
   onRevisionDelete,
   onDownload,
+  onToggleRevisionForUpload,
   canUploadRevision,
   isMobile = false
 }) => {
-  // Helper function to check if a revision is currently playing
-  const isRevisionPlaying = (revision) => {
-    return selectedRevision?.id === revision.id && isVideoPlaying;
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const formatDate = (dateString) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch (error) {
+      return 'Invalid date';
+    }
   };
 
-  // Helper function to check if raw video is currently playing
-  const isRawVideoPlaying = () => {
-    return !selectedRevision && isVideoPlaying;
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setNewRevisionFile(file);
+    }
   };
 
-  const content = (
-    <div className={isMobile ? "p-4" : ""}>
-      {!isMobile && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Revisions History
-          </h3>
+  const isRevisionSelected = (revisionId) => {
+    return selectedRevisionsForUpload.some(r => r.id === revisionId);
+  };
 
-          {canUploadRevision() && (
-            <button
-              onClick={() => setShowUploadRevision(!showUploadRevision)}
-              className="btn-primary text-sm flex items-center justify-center space-x-2 w-full sm:w-auto"
-            >
-              <Upload className="h-4 w-4" />
-              <span>Upload Revision</span>
-            </button>
-          )}
-        </div>
-      )}
+  const getRevisionTypeIcon = (revision) => {
+    // You can extend this to detect type from filename or add type field to revision
+    return <Video className="h-4 w-4 text-green-600" />;
+  };
 
-      {/* Upload button for mobile */}
-      {isMobile && canUploadRevision() && (
-        <div className="mb-4">
+  const getRevisionTypeBadge = (revision) => {
+    // For now, assume all revisions are main videos
+    // You can extend this logic based on your needs
+    return (
+      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+        Main
+      </span>
+    );
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
+          <Video className="h-5 w-5 text-primary-600" />
+          <span>Revisions ({revisions?.length || 0})</span>
+        </h3>
+        
+        {canUploadRevision() && (
           <button
             onClick={() => setShowUploadRevision(!showUploadRevision)}
-            className="btn-primary text-sm flex items-center justify-center space-x-2 w-full"
+            className="btn-primary text-sm flex items-center space-x-2"
           >
-            <Upload className="h-4 w-4" />
-            <span>Upload Revision</span>
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Upload Revision</span>
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Upload Revision Form */}
+      {/* Upload Form */}
       {showUploadRevision && (
-        <form
-          onSubmit={onRevisionUpload}
-          className="mb-6 p-4 bg-gray-50 rounded-lg"
-        >
-          <div className="space-y-4">
+        <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+          <h4 className="text-md font-medium text-gray-900 mb-3">Upload New Revision</h4>
+          
+          <form onSubmit={onRevisionUpload} className="space-y-4">
+            {/* File Upload */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Video File *
+                Video File
               </label>
               <input
                 type="file"
                 accept="video/*"
-                onChange={(e) => setNewRevisionFile(e.target.files[0])}
-                className="input-field w-full text-sm"
+                onChange={handleFileSelect}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
               />
               {newRevisionFile && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Selected: {newRevisionFile.name}
+                <p className="text-sm text-gray-600 mt-1">
+                  Selected: {newRevisionFile.name} ({Math.round(newRevisionFile.size / (1024 * 1024))}MB)
                 </p>
               )}
             </div>
 
+            {/* Video Type Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Video Type
+              </label>
+              <div className="flex space-x-4">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    name="revisionType"
+                    value="main"
+                    checked={newRevisionType === 'main'}
+                    onChange={(e) => setNewRevisionType(e.target.value)}
+                    className="mr-2 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">Main Video</span>
+                </label>
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    name="revisionType"
+                    value="short"
+                    checked={newRevisionType === 'short'}
+                    onChange={(e) => setNewRevisionType(e.target.value)}
+                    className="mr-2 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">YouTube Short</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Notes */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Notes (Optional)
@@ -106,166 +159,186 @@ const RevisionsList = ({
                 value={newRevisionNotes}
                 onChange={(e) => setNewRevisionNotes(e.target.value)}
                 rows={3}
-                className="input-field w-full text-sm"
-                placeholder="Add notes about this revision..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                placeholder="Describe the changes in this revision..."
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button 
-                type="submit" 
-                className="btn-primary text-sm flex items-center justify-center flex-1"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Upload Revision
-              </button>
+            {/* Actions */}
+            <div className="flex justify-end space-x-3">
               <button
                 type="button"
-                onClick={() => setShowUploadRevision(false)}
-                className="btn-secondary text-sm flex-1"
+                onClick={() => {
+                  setShowUploadRevision(false);
+                  setNewRevisionFile(null);
+                  setNewRevisionNotes('');
+                  setNewRevisionType('main');
+                }}
+                className="btn-secondary text-sm"
               >
                 Cancel
               </button>
+              <button
+                type="submit"
+                disabled={!newRevisionFile}
+                className="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Upload Revision
+              </button>
             </div>
-          </div>
-        </form>
+          </form>
+        </div>
       )}
 
-      {/* Raw Video */}
-      {task.rawVideoUrl && (
-        <div
-          className={`p-4 border rounded-lg cursor-pointer transition-all mb-3 ${
-            !selectedRevision
-              ? "border-primary-500 bg-primary-50 shadow-sm"
-              : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-          }`}
-          onClick={onRawVideoSelect}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3 flex-1 min-w-0">
-              <Video className="h-5 w-5 text-blue-500 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 text-sm lg:text-base">
-                  Raw Video (Original)
-                </p>
-                <p className="text-xs lg:text-sm text-gray-500 truncate">
-                  Uploaded{" "}
-                  {formatDistanceToNow(new Date(task.createdAt), {
-                    addSuffix: true,
-                  })}
-                  {isRawVideoPlaying() && (
-                    <span className="ml-2 text-green-600 font-medium">
-                      • Playing...
-                    </span>
-                  )}
-                </p>
-              </div>
-            </div>
-
-            {!selectedRevision && (
-              <CheckCircle className="h-5 w-5 text-primary-500 flex-shrink-0" />
-            )}
+      {/* Multi-selection notice */}
+      {selectedRevisionsForUpload.length > 0 && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center space-x-2">
+            <Youtube className="h-4 w-4 text-blue-600" />
+            <span className="text-sm text-blue-800 font-medium">
+              {selectedRevisionsForUpload.length} revision(s) selected for YouTube upload
+            </span>
           </div>
         </div>
       )}
 
-      {/* Revision List */}
+      {/* Revisions List */}
       <div className="space-y-3">
-        {revisions.map((revision) => (
-          <div
-            key={revision.id}
-            className={`p-4 border rounded-lg cursor-pointer transition-all ${
-              selectedRevision?.id === revision.id
-                ? "border-primary-500 bg-primary-50 shadow-sm"
-                : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-            }`}
-            onClick={() => onRevisionSelect(revision)}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3 flex-1 min-w-0">
-                <FileVideo className="h-5 w-5 text-purple-500 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 text-sm lg:text-base">
-                    Revision #{revision.revisionNumber}
-                  </p>
-                  <p className="text-xs lg:text-sm text-gray-500">
-                    {formatDistanceToNow(new Date(revision.createdAt), {
-                      addSuffix: true,
-                    })}
-                    {" by "} {revision.uploadedBy.username}
-                    {isRevisionPlaying(revision) && (
-                      <span className="ml-2 text-green-600 font-medium">
-                        • Playing...
-                      </span>
-                    )}
-                  </p>
-                  {revision.notes && (
-                    <p className="text-xs lg:text-sm text-gray-600 mt-1 italic break-words">
-                      "{revision.notes}"
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2 flex-shrink-0">
-                {selectedRevision?.id === revision.id && (
-                  <CheckCircle className="h-5 w-5 text-primary-500" />
-                )}
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDownload(`/files/download/revision/${revision.id}`);
-                  }}
-                  className="p-1 hover:bg-gray-200 rounded transition-colors"
-                  title="Download"
-                >
-                  <Download className="h-4 w-4 text-gray-500" />
-                </button>
-                
-                {(user.role === 'ADMIN' || revision.uploadedBy.id === user.id) && (
+        {revisions && revisions.length > 0 ? (
+          revisions.map((revision) => (
+            <div
+              key={revision.id}
+              className={`border rounded-lg p-4 transition-all hover:shadow-sm ${
+                selectedRevision?.id === revision.id
+                  ? 'border-primary-300 bg-primary-50'
+                  : isRevisionSelected(revision.id)
+                  ? 'border-blue-300 bg-blue-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-start space-x-3">
+                {/* Selection Checkbox */}
+                {task.status === 'READY' && (
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRevisionDelete(revision.id);
-                    }}
-                    className="p-1 hover:bg-red-100 rounded transition-colors"
-                    title="Delete Revision"
+                    onClick={() => onToggleRevisionForUpload && onToggleRevisionForUpload(revision)}
+                    className="mt-1 hover:bg-gray-100 rounded p-1 transition-colors"
+                    title="Select for YouTube upload"
                   >
-                    <Trash2 className="h-4 w-4 text-red-500" />
+                    {isRevisionSelected(revision.id) ? (
+                      <CheckSquare className="h-4 w-4 text-blue-600" />
+                    ) : (
+                      <Square className="h-4 w-4 text-gray-400" />
+                    )}
                   </button>
                 )}
+
+                {/* Play/Video Icon */}
+                <div 
+                  className="relative cursor-pointer mt-1"
+                  onClick={() => onRevisionSelect(revision)}
+                >
+                  {getRevisionTypeIcon(revision)}
+                  {selectedRevision?.id === revision.id && (
+                    <div className="absolute -top-1 -right-1 h-3 w-3 bg-green-500 rounded-full flex items-center justify-center">
+                      <Play className="h-2 w-2 text-white fill-current" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Revision Info */}
+                <div className="flex-1 min-w-0">
+                  <div 
+                    className="cursor-pointer"
+                    onClick={() => onRevisionSelect(revision)}
+                  >
+                    <div className="flex items-center space-x-2 mb-1">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Revision #{revision.revisionNumber}
+                      </h4>
+                      {getRevisionTypeBadge(revision)}
+                      {selectedRevision?.id === revision.id && (
+                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
+                          Playing
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center space-x-2 text-xs text-gray-500 mb-1">
+                      <User className="h-3 w-3" />
+                      <span>{revision.uploadedBy?.username}</span>
+                      <span>•</span>
+                      <span>{formatDate(revision.createdAt)}</span>
+                    </div>
+
+                    {revision.notes && (
+                      <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+                        {revision.notes}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center space-x-2 mt-3">
+                    <button
+                      onClick={() => onRevisionSelect(revision)}
+                      className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                      disabled={isVideoPlaying && selectedRevision?.id === revision.id}
+                    >
+                      {selectedRevision?.id === revision.id && isVideoPlaying ? 'Playing' : 'Play'}
+                    </button>
+                    
+                    <span className="text-gray-300">•</span>
+                    
+                    <button
+                      onClick={() => onDownload(`/files/download/revision/${revision.id}`)}
+                      className="text-xs text-gray-600 hover:text-gray-700 flex items-center space-x-1"
+                    >
+                      <Download className="h-3 w-3" />
+                      <span>Download</span>
+                    </button>
+
+                    {/* Delete button - only show for revision owner or admin */}
+                    {(user.id === revision.uploadedBy?.id || user.role === 'ADMIN') && (
+                      <>
+                        <span className="text-gray-300">•</span>
+                        <button
+                          onClick={() => onRevisionDelete(revision.id)}
+                          className="text-xs text-red-600 hover:text-red-700 flex items-center space-x-1"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          <span>Delete</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
+          ))
+        ) : (
+          <div className="text-center py-12">
+            <FileVideo className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500 text-sm">No revisions uploaded yet</p>
+            {canUploadRevision() && (
+              <button
+                onClick={() => setShowUploadRevision(true)}
+                className="btn-primary mt-4 text-sm"
+              >
+                Upload First Revision
+              </button>
+            )}
           </div>
-        ))}
+        )}
       </div>
 
-      {/* Empty State */}
-      {revisions.length === 0 && (
-        <div className="text-center py-8">
-          <FileVideo className="h-8 lg:h-12 w-8 lg:w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500 text-sm lg:text-base">No revisions uploaded yet</p>
-          {canUploadRevision() && (
-            <button
-              onClick={() => setShowUploadRevision(true)}
-              className="btn-primary mt-4 text-sm"
-            >
-              Upload First Revision
-            </button>
-          )}
+      {/* Upload instructions for multi-selection */}
+      {task.status === 'READY' && revisions && revisions.length > 0 && (
+        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+          <p className="text-xs text-gray-600">
+            💡 <strong>Tip:</strong> Select multiple revisions to upload different videos (e.g., main video + YouTube short) to different channels.
+          </p>
         </div>
       )}
-    </div>
-  );
-
-  if (isMobile) {
-    return content;
-  }
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
-      {content}
     </div>
   );
 };

@@ -1,9 +1,10 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Download, AlertCircle, FileVideo } from 'lucide-react';
+import { Download, AlertCircle, FileVideo, Play } from 'lucide-react';
 
 const VideoPlayer = ({
   task,
   selectedRevision,
+  selectedRawVideo,
   currentVideoUrl,
   videoError,
   isVideoPlaying,
@@ -35,9 +36,29 @@ const VideoPlayer = ({
   const handleRetryLoad = () => {
     if (selectedRevision) {
       onRevisionSelect(selectedRevision);
-    } else {
-      onRawVideoSelect();
+    } else if (selectedRawVideo) {
+      onRawVideoSelect(selectedRawVideo);
+    } else if (task.rawVideos && task.rawVideos.length > 0) {
+      onRawVideoSelect(task.rawVideos[0]);
     }
+  };
+
+  const getVideoTitle = () => {
+    if (selectedRevision) {
+      return `Revision #${selectedRevision.revisionNumber}`;
+    } else if (selectedRawVideo) {
+      return `${selectedRawVideo.filename} (${selectedRawVideo.type === 'short' ? 'Short' : 'Main'})`;
+    }
+    return "No Video Selected";
+  };
+
+  const getDownloadEndpoint = () => {
+    if (selectedRevision) {
+      return `/files/download/revision/${selectedRevision.id}`;
+    } else if (selectedRawVideo) {
+      return `/files/download/raw-video/${selectedRawVideo.id}`;
+    }
+    return null;
   };
 
   return (
@@ -45,22 +66,15 @@ const VideoPlayer = ({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
         <h3 className="text-lg font-semibold text-gray-900">
-          {selectedRevision
-            ? `Revision #${selectedRevision.revisionNumber}`
-            : "Raw Video (Original)"}
+          {getVideoTitle()}
         </h3>
 
         <div className="flex space-x-2">
           {currentVideoUrl && (
             <button
-              onClick={() =>
-                onDownload(
-                  selectedRevision
-                    ? `/files/download/revision/${selectedRevision.id}`
-                    : `/files/download/video/${task.id}`
-                )
-              }
+              onClick={() => onDownload(getDownloadEndpoint())}
               className="btn-secondary text-sm flex items-center space-x-2 flex-shrink-0"
+              disabled={!getDownloadEndpoint()}
             >
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Download</span>
@@ -119,13 +133,13 @@ const VideoPlayer = ({
             style={{ minHeight: videoContainerHeight }}
           >
             <FileVideo className="h-8 lg:h-12 w-8 lg:w-12 text-gray-400 mb-4" />
-            <p className="text-gray-500 text-sm lg:text-base">No video available</p>
-            {task.rawVideoUrl && (
+            <p className="text-gray-500 text-sm lg:text-base">No video selected</p>
+            {task.rawVideos && task.rawVideos.length > 0 && (
               <button
-                onClick={onRawVideoSelect}
+                onClick={() => onRawVideoSelect(task.rawVideos[0])}
                 className="btn-primary mt-4 text-sm"
               >
-                Load Raw Video
+                Load First Video
               </button>
             )}
           </div>
@@ -138,6 +152,31 @@ const VideoPlayer = ({
           <p className="text-sm text-blue-800">
             <strong>Revision Note:</strong> {selectedRevision.notes}
           </p>
+        </div>
+      )}
+
+      {/* Raw Video Info */}
+      {selectedRawVideo && (
+        <div className="mt-4 p-3 bg-green-50 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-green-800">
+                <strong>Type:</strong> {selectedRawVideo.type === 'short' ? 'YouTube Short' : 'Main Video'}
+              </p>
+              <p className="text-xs text-green-600 mt-1">
+                Size: {Math.round(selectedRawVideo.size / (1024 * 1024))}MB
+              </p>
+            </div>
+            <div className="flex items-center">
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                selectedRawVideo.type === 'short' 
+                  ? 'bg-purple-100 text-purple-800' 
+                  : 'bg-blue-100 text-blue-800'
+              }`}>
+                {selectedRawVideo.type === 'short' ? 'Short' : 'Main'}
+              </span>
+            </div>
+          </div>
         </div>
       )}
     </div>

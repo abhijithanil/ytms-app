@@ -16,8 +16,14 @@ public class CreateTaskRequest {
     private PrivacyLevel privacyLevel;
     private String deadline;
     private Long assignedEditorId;
+
+    // Legacy single video support (kept for backward compatibility)
     private String rawVideoUrl;
     private String rawVideoFilename;
+
+    // NEW: Multiple raw videos support
+    @JsonProperty("rawVideos")
+    private List<RawVideoInfo> rawVideos = new ArrayList<>();
 
     @JsonProperty("tags")
     private List<String> tags = new ArrayList<>();
@@ -30,6 +36,56 @@ public class CreateTaskRequest {
 
     @JsonProperty("audioInstructionUrls")
     private List<String> audioInstructionUrls = new ArrayList<>();
+
+    // Inner class for raw video information
+    public static class RawVideoInfo {
+        private String url;
+        private String filename;
+        private String type; // "main" or "short"
+        private Long size;
+
+        public RawVideoInfo() {}
+
+        public RawVideoInfo(String url, String filename, String type, Long size) {
+            this.url = url;
+            this.filename = filename;
+            this.type = type;
+            this.size = size;
+        }
+
+        // Getters and setters
+        public String getUrl() {
+            return url;
+        }
+
+        public void setUrl(String url) {
+            this.url = url;
+        }
+
+        public String getFilename() {
+            return filename;
+        }
+
+        public void setFilename(String filename) {
+            this.filename = filename;
+        }
+
+        public String getType() {
+            return type;
+        }
+
+        public void setType(String type) {
+            this.type = type;
+        }
+
+        public Long getSize() {
+            return size;
+        }
+
+        public void setSize(Long size) {
+            this.size = size;
+        }
+    }
 
     // Default constructor
     public CreateTaskRequest() {
@@ -100,6 +156,14 @@ public class CreateTaskRequest {
         this.rawVideoFilename = rawVideoFilename;
     }
 
+    public List<RawVideoInfo> getRawVideos() {
+        return rawVideos != null ? rawVideos : new ArrayList<>();
+    }
+
+    public void setRawVideos(List<RawVideoInfo> rawVideos) {
+        this.rawVideos = rawVideos != null ? rawVideos : new ArrayList<>();
+    }
+
     public List<String> getTags() {
         return tags != null ? tags : new ArrayList<>();
     }
@@ -143,6 +207,7 @@ public class CreateTaskRequest {
                 ", assignedEditorId=" + assignedEditorId +
                 ", rawVideoUrl='" + rawVideoUrl + '\'' +
                 ", rawVideoFilename='" + rawVideoFilename + '\'' +
+                ", rawVideos=" + rawVideos +
                 ", tags=" + tags +
                 ", userIds=" + userIds +
                 ", comments=" + comments +

@@ -1,8 +1,6 @@
 package com.insp17.ytms.entity;
 
-
 import jakarta.persistence.*;
-
 import java.time.LocalDateTime;
 
 @Entity
@@ -25,6 +23,9 @@ public class Revision {
     @Column(name = "edited_video_filename")
     private String editedVideoFilename;
 
+    @Column(name = "type")
+    private String type = "main"; // "main" or "short"
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 
@@ -35,15 +36,29 @@ public class Revision {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    // Constructors, getters, setters
+    // Constructors
     public Revision() {
     }
 
-    public Revision(VideoTask videoTask, Integer revisionNumber, String editedVideoUrl, String editedVideoFilename, String notes, User uploadedBy) {
+    public Revision(VideoTask videoTask, Integer revisionNumber, String editedVideoUrl,
+                    String editedVideoFilename, String notes, User uploadedBy) {
         this.videoTask = videoTask;
         this.revisionNumber = revisionNumber;
         this.editedVideoUrl = editedVideoUrl;
         this.editedVideoFilename = editedVideoFilename;
+        this.notes = notes;
+        this.uploadedBy = uploadedBy;
+        this.createdAt = LocalDateTime.now();
+        this.type = "main"; // default type
+    }
+
+    public Revision(VideoTask videoTask, Integer revisionNumber, String editedVideoUrl,
+                    String editedVideoFilename, String type, String notes, User uploadedBy) {
+        this.videoTask = videoTask;
+        this.revisionNumber = revisionNumber;
+        this.editedVideoUrl = editedVideoUrl;
+        this.editedVideoFilename = editedVideoFilename;
+        this.type = type;
         this.notes = notes;
         this.uploadedBy = uploadedBy;
         this.createdAt = LocalDateTime.now();
@@ -88,6 +103,14 @@ public class Revision {
 
     public void setEditedVideoFilename(String editedVideoFilename) {
         this.editedVideoFilename = editedVideoFilename;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
     }
 
     public String getNotes() {

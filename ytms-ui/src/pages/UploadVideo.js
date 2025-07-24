@@ -18,6 +18,8 @@ import {
   Trash2,
   Check,
   RotateCcw,
+  Plus,
+  FileVideo,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { tasksAPI, usersAPI } from "../services/api";
@@ -106,7 +108,7 @@ const UploadVideo = () => {
     tags: [],
   });
 
-  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]); // Changed to array for multiple files
   const [audioInstructions, setAudioInstructions] = useState([]);
   const [editors, setEditors] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
@@ -171,11 +173,16 @@ const UploadVideo = () => {
       return;
     }
 
-    const file = acceptedFiles[0];
-    if (file) {
-      setUploadedFile(file);
-      toast.success("Video file selected!");
-    }
+    // Handle multiple files
+    const newFiles = acceptedFiles.map((file, index) => ({
+      id: Date.now() + index,
+      file,
+      type: file.size > 50 * 1024 * 1024 ? 'main' : 'short', // Auto-detect based on size (50MB threshold)
+      customType: 'main' // User can change this
+    }));
+
+    setUploadedFiles(prev => [...prev, ...newFiles]);
+    toast.success(`${acceptedFiles.length} video file(s) selected!`);
   }, []);
 
   const {
@@ -185,7 +192,6 @@ const UploadVideo = () => {
   } = useDropzone({
     onDrop: onVideoDrop,
     accept: { "video/*": [".mp4", ".mov"] },
-    maxFiles: 1,
     maxSize: 10000 * 1024 * 1024,
   });
 
@@ -218,9 +224,15 @@ const UploadVideo = () => {
     }
   };
 
-  const removeUploadedFile = () => {
-    setUploadedFile(null);
+  const removeUploadedFile = (fileId) => {
+    setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
     toast.info("Video file removed");
+  };
+
+  const updateFileType = (fileId, newType) => {
+    setUploadedFiles(prev => 
+      prev.map(f => f.id === fileId ? { ...f, customType: newType } : f)
+    );
   };
 
   const handleUserSelection = (userId) => {
@@ -245,6 +257,10 @@ const UploadVideo = () => {
   const validateForm = () => {
     if (!formData.title.trim()) {
       toast.error("Please enter a task title");
+      return false;
+    }
+    if (uploadedFiles.length === 0) {
+      toast.error("Please select at least one video file");
       return false;
     }
     if (formData.privacyLevel === "SELECTED" && selectedUsers.length === 0) {
@@ -272,7 +288,6 @@ const UploadVideo = () => {
           type: "audio/webm",
         });
         setCurrentAudioBlob(audioBlob);
-        // Stop all tracks on the stream to turn off the mic indicator
         stream.getTracks().forEach((track) => track.stop());
       };
 
@@ -354,7 +369,6 @@ const UploadVideo = () => {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
 
-      // Step 1: Initialize resumable upload
       xhr.open("POST", signedUrl, true);
       xhr.setRequestHeader("X-Goog-Resumable", "start");
       xhr.setRequestHeader("Content-Type", file.type);
@@ -362,7 +376,6 @@ const UploadVideo = () => {
 
       xhr.onload = () => {
         if (xhr.status === 201) {
-          // Get the upload URL from the Location header
           const uploadUrl = xhr.getResponseHeader("Location");
 
           if (!uploadUrl) {
@@ -370,7 +383,6 @@ const UploadVideo = () => {
             return;
           }
 
-          // Step 2: Upload the actual file
           const uploadXhr = new XMLHttpRequest();
           uploadXhr.open("PUT", uploadUrl, true);
           uploadXhr.setRequestHeader("Content-Type", file.type);
@@ -431,8 +443,7 @@ const UploadVideo = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validateForm() || !uploadedFile) {
-      if (!uploadedFile) toast.error("Please select a video file.");
+    if (!validateForm()) {
       return;
     }
 
@@ -444,52 +455,67 @@ const UploadVideo = () => {
     let currentToastId;
 
     try {
-      // 1. Upload Video File
-      const signedUrlResponse = await tasksAPI.generateUploadUrl(
-        uploadedFile.name,
-        uploadedFile.type,
-        "raw-videos"
-      );
-      const { signedUrl, objectName } = signedUrlResponse.data;
-
-      currentToastId = toast.custom(
-        (t) => (
-          <UploadProgressToast
-            progress={0}
-            fileName={uploadedFile.name}
-            onCancel={() => {
-              toast.dismiss(t.id);
-              handleCancelUpload();
-            }}
-          />
-        ),
-        { duration: Infinity }
-      );
-      setUploadToastId(currentToastId);
-
-      const handleProgress = (progress) => {
-        setUploadProgress(progress);
-        toast.custom(
+      // 1. Upload Video Files
+      const videoUrls = [];
+      
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const fileData = uploadedFiles[i];
+        const file = fileData.file;
+        
+        currentToastId = toast.custom(
           (t) => (
             <UploadProgressToast
-              progress={progress}
-              fileName={uploadedFile.name}
+              progress={0}
+              fileName={`${file.name} (${i + 1}/${uploadedFiles.length})`}
               onCancel={() => {
                 toast.dismiss(t.id);
                 handleCancelUpload();
               }}
             />
           ),
-          { id: currentToastId }
+          { duration: Infinity }
         );
-      };
+        setUploadToastId(currentToastId);
 
-      await uploadFileToGCS(signedUrl, uploadedFile, handleProgress, source);
-      toast.dismiss(currentToastId);
-      setUploadToastId(null);
-      const videoGcsUrl = `gs://${
-        process.env.REACT_APP_GCP_BUCKET_NAME || "ytmthelper-inspire26"
-      }/${objectName}`;
+        const signedUrlResponse = await tasksAPI.generateUploadUrl(
+          file.name,
+          file.type,
+          "raw-videos"
+        );
+        const { signedUrl, objectName } = signedUrlResponse.data;
+
+        const handleProgress = (progress) => {
+          setUploadProgress(progress);
+          toast.custom(
+            (t) => (
+              <UploadProgressToast
+                progress={progress}
+                fileName={`${file.name} (${i + 1}/${uploadedFiles.length})`}
+                onCancel={() => {
+                  toast.dismiss(t.id);
+                  handleCancelUpload();
+                }}
+              />
+            ),
+            { id: currentToastId }
+          );
+        };
+
+        await uploadFileToGCS(signedUrl, file, handleProgress, source);
+        
+        const videoGcsUrl = `gs://${
+          process.env.REACT_APP_GCP_BUCKET_NAME || "ytmthelper-inspire26"
+        }/${objectName}`;
+        
+        videoUrls.push({
+          url: videoGcsUrl,
+          filename: file.name,
+          type: fileData.customType,
+          size: file.size
+        });
+        
+        toast.dismiss(currentToastId);
+      }
 
       // 2. Upload Audio Instructions
       let audioInstructionUrls = [];
@@ -521,7 +547,7 @@ const UploadVideo = () => {
           toast.success("Audio instructions uploaded!", { id: audioToastId });
         } catch (uploadError) {
           toast.error("Failed to upload audio files.", { id: audioToastId });
-          throw uploadError; // Abort task creation if audio upload fails
+          throw uploadError;
         }
       }
 
@@ -548,8 +574,7 @@ const UploadVideo = () => {
         privacyLevel: formData.privacyLevel,
         deadline: formData.deadline || null,
         assignedEditorId: formData.assignedEditorId || null,
-        rawVideoUrl: videoGcsUrl,
-        rawVideoFilename: uploadedFile.name,
+        rawVideos: videoUrls, // Changed to array
         tags: tags,
         userIds: formData.privacyLevel === "SELECTED" ? selectedUsers : [],
         comments: commentList,
@@ -595,7 +620,7 @@ const UploadVideo = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Create New Task</h1>
           <p className="text-gray-600">
-            Upload raw video and assign to an editor
+            Upload raw videos and assign to an editor
           </p>
         </div>
       </div>
@@ -834,53 +859,92 @@ const UploadVideo = () => {
             {/* Video Upload */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-4">
-                Raw Video File *
+                Raw Video Files *
               </label>
-              {!uploadedFile ? (
-                <div
-                  {...getVideoRootProps()}
-                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-                    isVideoDragActive
-                      ? "border-primary-500 bg-primary-50"
-                      : "border-gray-300 hover:border-gray-400"
-                  }`}
-                >
-                  <input {...getVideoInputProps()} />
-                  <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    {isVideoDragActive
-                      ? "Drop video file here"
-                      : "Upload Raw Video"}
-                  </h3>
-                  <p className="text-gray-500 mb-2">
-                    Drag & drop or click to browse
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    Supports: MP4, MOV (max 10GB)
-                  </p>
-                </div>
-              ) : (
-                <div className="border border-gray-200 rounded-xl p-4 bg-green-50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <File className="h-5 w-5 text-green-600" />
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {uploadedFile.name}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {formatFileSize(uploadedFile.size)}
-                        </p>
+              
+              {/* Upload Zone */}
+              <div
+                {...getVideoRootProps()}
+                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all mb-4 ${
+                  isVideoDragActive
+                    ? "border-primary-500 bg-primary-50"
+                    : "border-gray-300 hover:border-gray-400"
+                }`}
+              >
+                <input {...getVideoInputProps()} />
+                <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  {isVideoDragActive
+                    ? "Drop video files here"
+                    : "Upload Raw Videos"}
+                </h3>
+                <p className="text-gray-500 mb-2">
+                  Drag & drop or click to browse (multiple files supported)
+                </p>
+                <p className="text-xs text-gray-400">
+                  Supports: MP4, MOV (max 10GB per file)
+                </p>
+              </div>
+
+              {/* Uploaded Files List */}
+              {uploadedFiles.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-gray-700">
+                    Uploaded Files ({uploadedFiles.length})
+                  </h4>
+                  {uploadedFiles.map((fileData) => (
+                    <div key={fileData.id} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-3">
+                          <FileVideo className="h-5 w-5 text-blue-600" />
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {fileData.file.name}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {formatFileSize(fileData.file.size)}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeUploadedFile(fileData.id)}
+                          className="p-1 hover:bg-gray-200 rounded"
+                        >
+                          <X className="h-4 w-4 text-gray-400" />
+                        </button>
+                      </div>
+                      
+                      {/* Video Type Selection */}
+                      <div className="flex items-center space-x-4">
+                        <span className="text-sm font-medium text-gray-700">Type:</span>
+                        <div className="flex space-x-4">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`video-type-${fileData.id}`}
+                              value="main"
+                              checked={fileData.customType === 'main'}
+                              onChange={() => updateFileType(fileData.id, 'main')}
+                              className="mr-2 text-primary-600 focus:ring-primary-500"
+                            />
+                            <span className="text-sm text-gray-700">Main Video</span>
+                          </label>
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`video-type-${fileData.id}`}
+                              value="short"
+                              checked={fileData.customType === 'short'}
+                              onChange={() => updateFileType(fileData.id, 'short')}
+                              className="mr-2 text-primary-600 focus:ring-primary-500"
+                            />
+                            <span className="text-sm text-gray-700">YouTube Short</span>
+                          </label>
+                        </div>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={removeUploadedFile}
-                      className="p-1 hover:bg-gray-100 rounded"
-                    >
-                      <X className="h-4 w-4 text-gray-400" />
-                    </button>
-                  </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -1019,7 +1083,7 @@ const UploadVideo = () => {
           </button>
           <button
             type="submit"
-            disabled={isSubmitting || !formData.title.trim() || !uploadedFile}
+            disabled={isSubmitting || !formData.title.trim() || uploadedFiles.length === 0}
             className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? "Creating Task..." : "Create Task"}

@@ -10,7 +10,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-// Updated VideoTask Entity with new fields
 @Entity
 @Table(name = "video_tasks")
 public class VideoTask {
@@ -24,11 +23,17 @@ public class VideoTask {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    // Legacy single video support (kept for backward compatibility)
     @Column(name = "raw_video_url")
     private String rawVideoUrl;
 
     @Column(name = "raw_video_filename")
     private String rawVideoFilename;
+
+    // NEW: Multiple raw videos support
+    @OneToMany(mappedBy = "videoTask", cascade = CascadeType.ALL, fetch = FetchType.EAGER, orphanRemoval = true)
+    @Fetch(FetchMode.SUBSELECT)
+    private List<RawVideo> rawVideos = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "assigned_editor_id")
@@ -81,7 +86,6 @@ public class VideoTask {
     @OneToMany(mappedBy = "videoTask", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private Set<TaskPermission> permissions = new HashSet<>();
 
-
     // Constructors
     public VideoTask() {
     }
@@ -108,6 +112,46 @@ public class VideoTask {
         this.privacyLevel = PrivacyLevel.ALL;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+    }
+
+    // Helper methods for raw videos
+    public void addRawVideo(RawVideo rawVideo) {
+        rawVideos.add(rawVideo);
+        rawVideo.setVideoTask(this);
+    }
+
+    public void removeRawVideo(RawVideo rawVideo) {
+        rawVideos.remove(rawVideo);
+        rawVideo.setVideoTask(null);
+    }
+
+    public void clearRawVideos() {
+        for (RawVideo rawVideo : rawVideos) {
+            rawVideo.setVideoTask(null);
+        }
+        rawVideos.clear();
+    }
+
+    // Get main videos (non-shorts)
+    public List<RawVideo> getMainVideos() {
+        return rawVideos.stream()
+                .filter(video -> "main".equals(video.getType()))
+                .toList();
+    }
+
+    // Get short videos
+    public List<RawVideo> getShortVideos() {
+        return rawVideos.stream()
+                .filter(video -> "short".equals(video.getType()))
+                .toList();
+    }
+
+    // Get first main video (for backward compatibility)
+    public RawVideo getPrimaryMainVideo() {
+        return rawVideos.stream()
+                .filter(video -> "main".equals(video.getType()))
+                .findFirst()
+                .orElse(null);
     }
 
     // Getters and setters
@@ -151,6 +195,14 @@ public class VideoTask {
         this.rawVideoFilename = rawVideoFilename;
     }
 
+    public List<RawVideo> getRawVideos() {
+        return rawVideos;
+    }
+
+    public void setRawVideos(List<RawVideo> rawVideos) {
+        this.rawVideos = rawVideos;
+    }
+
     public User getAssignedEditor() {
         return assignedEditor;
     }
@@ -166,7 +218,6 @@ public class VideoTask {
     public void setCreatedBy(User createdBy) {
         this.createdBy = createdBy;
     }
-
 
     public PrivacyLevel getPrivacyLevel() {
         return privacyLevel;
@@ -264,12 +315,16 @@ public class VideoTask {
         this.taskPriority = taskPriority;
     }
 
-
     public Set<String> getTags() {
         return tags;
     }
 
     public void setTags(Set<String> tags) {
         this.tags = tags;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
     }
 }

@@ -1,20 +1,29 @@
 package com.insp17.ytms.dtos;
 
-import com.insp17.ytms.entity.PrivacyLevel;
-import com.insp17.ytms.entity.TaskPriority;
-import com.insp17.ytms.entity.TaskStatus;
 import com.insp17.ytms.entity.VideoTask;
+import com.insp17.ytms.entity.TaskStatus;
+import com.insp17.ytms.entity.TaskPriority;
+import com.insp17.ytms.entity.PrivacyLevel;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class VideoTaskDTO {
     private Long id;
     private String title;
     private String description;
+
+    // Legacy single video support (kept for backward compatibility)
     private String rawVideoUrl;
     private String rawVideoFilename;
+
+    // NEW: Multiple raw videos support
+    private List<RawVideoDTO> rawVideos = new ArrayList<>();
+
     private UserDTO assignedEditor;
     private UserDTO createdBy;
     private TaskStatus status;
@@ -23,22 +32,33 @@ public class VideoTaskDTO {
     private LocalDateTime deadline;
     private LocalDateTime youtubeUploadTime;
     private String youtubeVideoId;
+    private Set<String> tags = new HashSet<>();
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private List<RevisionDTO> revisions;
-    private List<CommentDTO> comments;
-    private List<AudioInstructionDTO> audioInstructions;
-    private VideoMetadataResponseDTO videoMetadataResponseDTO;
 
-    public VideoTaskDTO() {
-    }
+    private List<RevisionDTO> revisions = new ArrayList<>();
+    private List<CommentDTO> comments = new ArrayList<>();
+    private List<AudioInstructionDTO> audioInstructions = new ArrayList<>();
+
+    // Constructors
+    public VideoTaskDTO() {}
 
     public VideoTaskDTO(VideoTask task) {
         this.id = task.getId();
         this.title = task.getTitle();
         this.description = task.getDescription();
+
+        // Legacy fields
         this.rawVideoUrl = task.getRawVideoUrl();
         this.rawVideoFilename = task.getRawVideoFilename();
+
+        // NEW: Multiple raw videos
+        if (task.getRawVideos() != null) {
+            this.rawVideos = task.getRawVideos().stream()
+                    .map(RawVideoDTO::new)
+                    .collect(Collectors.toList());
+        }
+
         this.assignedEditor = task.getAssignedEditor() != null ? new UserDTO(task.getAssignedEditor()) : null;
         this.createdBy = task.getCreatedBy() != null ? new UserDTO(task.getCreatedBy()) : null;
         this.status = task.getTaskStatus();
@@ -47,10 +67,10 @@ public class VideoTaskDTO {
         this.deadline = task.getDeadline();
         this.youtubeUploadTime = task.getYoutubeUploadTime();
         this.youtubeVideoId = task.getYoutubeVideoId();
+        this.tags = task.getTags() != null ? new HashSet<>(task.getTags()) : new HashSet<>();
         this.createdAt = task.getCreatedAt();
         this.updatedAt = task.getUpdatedAt();
 
-        // Only include collections if they are initialized
         if (task.getRevisions() != null) {
             this.revisions = task.getRevisions().stream()
                     .map(RevisionDTO::new)
@@ -68,6 +88,26 @@ public class VideoTaskDTO {
                     .map(AudioInstructionDTO::new)
                     .collect(Collectors.toList());
         }
+    }
+
+    // Helper methods
+    public List<RawVideoDTO> getMainVideos() {
+        return rawVideos.stream()
+                .filter(video -> "main".equals(video.getType()))
+                .collect(Collectors.toList());
+    }
+
+    public List<RawVideoDTO> getShortVideos() {
+        return rawVideos.stream()
+                .filter(video -> "short".equals(video.getType()))
+                .collect(Collectors.toList());
+    }
+
+    public RawVideoDTO getPrimaryMainVideo() {
+        return rawVideos.stream()
+                .filter(video -> "main".equals(video.getType()))
+                .findFirst()
+                .orElse(null);
     }
 
     // Getters and setters
@@ -109,6 +149,14 @@ public class VideoTaskDTO {
 
     public void setRawVideoFilename(String rawVideoFilename) {
         this.rawVideoFilename = rawVideoFilename;
+    }
+
+    public List<RawVideoDTO> getRawVideos() {
+        return rawVideos;
+    }
+
+    public void setRawVideos(List<RawVideoDTO> rawVideos) {
+        this.rawVideos = rawVideos;
     }
 
     public UserDTO getAssignedEditor() {
@@ -175,6 +223,14 @@ public class VideoTaskDTO {
         this.youtubeVideoId = youtubeVideoId;
     }
 
+    public Set<String> getTags() {
+        return tags;
+    }
+
+    public void setTags(Set<String> tags) {
+        this.tags = tags;
+    }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -213,13 +269,5 @@ public class VideoTaskDTO {
 
     public void setAudioInstructions(List<AudioInstructionDTO> audioInstructions) {
         this.audioInstructions = audioInstructions;
-    }
-
-    public VideoMetadataResponseDTO getVideoMetadataResponseDTO() {
-        return videoMetadataResponseDTO;
-    }
-
-    public void setVideoMetadataResponseDTO(VideoMetadataResponseDTO videoMetadataResponseDTO) {
-        this.videoMetadataResponseDTO = videoMetadataResponseDTO;
     }
 }
