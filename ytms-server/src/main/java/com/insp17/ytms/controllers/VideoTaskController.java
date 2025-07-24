@@ -3,6 +3,7 @@ package com.insp17.ytms.controllers;
 import com.google.api.services.youtube.model.Video;
 import com.insp17.ytms.dtos.*;
 import com.insp17.ytms.entity.*;
+import com.insp17.ytms.repository.RawVideoRepository;
 import com.insp17.ytms.service.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,11 +15,11 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.text.MessageFormat;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
 
 @Slf4j
 @RestController
@@ -53,6 +54,8 @@ public class VideoTaskController {
     @Autowired
     private YouTubeAccountService youTubeAccountService;
 
+    @Autowired
+    private RawVideoRepository rawVideoRepository;
 
     @GetMapping
     public ResponseEntity<List<VideoTaskDTO>> getAllTasks(@CurrentUser UserPrincipal userPrincipal) {
@@ -89,28 +92,9 @@ public class VideoTaskController {
     public ResponseEntity<VideoTaskDTO> createTask(@RequestBody CreateTaskRequest createTaskRequest, @CurrentUser UserPrincipal userPrincipal) {
         try {
             User creator = userService.getUserByIdPrivateUse(userPrincipal.getId());
-            VideoTask task = new VideoTask(createTaskRequest.getTitle(), createTaskRequest.getDescription(), creator);
 
-            task.setTaskPriority(createTaskRequest.getPriority());
-            task.setPrivacyLevel(createTaskRequest.getPrivacyLevel());
-
-            if (createTaskRequest.getDeadline() != null && !createTaskRequest.getDeadline().isEmpty()) {
-                task.setDeadline(LocalDateTime.parse(createTaskRequest.getDeadline()));
-            }
-
-            if (createTaskRequest.getAssignedEditorId() != null) {
-                User editor = userService.getUserByIdPrivateUse(createTaskRequest.getAssignedEditorId());
-                task.setAssignedEditor(editor);
-                task.setTaskStatus(TaskStatus.ASSIGNED);
-            }
-
-            if (createTaskRequest.getRawVideoUrl() != null && !createTaskRequest.getRawVideoUrl().isEmpty()) {
-                task.setRawVideoUrl(createTaskRequest.getRawVideoUrl());
-                task.setRawVideoFilename(createTaskRequest.getRawVideoFilename());
-            }
-
-
-            VideoTask createdTask = videoTaskService.createTask(task);
+            // Enhanced task creation with multiple videos support
+            VideoTask createdTask = videoTaskService.createTask(createTaskRequest, creator);
 
             if (createTaskRequest.getPrivacyLevel() == PrivacyLevel.SELECTED && createTaskRequest.getUserIds() != null) {
                 videoTaskService.setTaskPrivacy(createdTask.getId(), PrivacyLevel.SELECTED, createTaskRequest.getUserIds());
@@ -133,21 +117,244 @@ public class VideoTaskController {
             return ResponseEntity.ok(new VideoTaskDTO(createdTask));
 
         } catch (Exception e) {
+            log.error("Failed to create task", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
+    // NEW: Raw Videos Management Endpoints
+
+    @GetMapping("/{taskId}/raw-videos")
+    public ResponseEntity<List<RawVideoDto>> getRawVideos(@PathVariable Long taskId, @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(taskId, user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        List<RawVideo> rawVideos = videoTaskService.getRawVideosForTask(taskId);
+        List<RawVideoDto> rawVideoDTOs = rawVideos.stream()
+                .map(RawVideoDto::new)
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(rawVideoDTOs);
+    }
+
+    @PostMapping("/{taskId}/raw-videos")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+    public ResponseEntity<RawVideoDto> addRawVideo(@PathVariable Long taskId,
+                                                   @RequestBody RawVideoRequest request,
+                                                   @CurrentUser UserPrincipal userPrincipal) {
+        try {
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
+            if (!videoTaskService.canUserAccessTask(taskId, user)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            RawVideo rawVideo = videoTaskService.addRawVideoToTask(
+                    taskId,
+                    request.getVideoUrl(),
+                    request.getFilename(),
+                    request.getFileSize(),
+                    request.getDescription(),
+                    user
+            );
+
+            return ResponseEntity.ok(new RawVideoDto(rawVideo));
+
+        } catch (Exception e) {
+            log.error("Failed to add raw video to task {}", taskId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @PutMapping("/raw-videos/{rawVideoId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+    public ResponseEntity<RawVideoDto> updateRawVideo(@PathVariable Long rawVideoId,
+                                                      @RequestBody RawVideoUpdateRequest request,
+                                                      @CurrentUser UserPrincipal userPrincipal) {
+        try {
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
+            RawVideo updatedRawVideo = videoTaskService.updateRawVideo(
+                    rawVideoId,
+                    request.getDescription(),
+                    request.getOrder(),
+                    user
+            );
+
+            return ResponseEntity.ok(new RawVideoDto(updatedRawVideo));
+
+        } catch (Exception e) {
+            log.error("Failed to update raw video {}", rawVideoId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @DeleteMapping("/raw-videos/{rawVideoId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+    public ResponseEntity<Void> deleteRawVideo(@PathVariable Long rawVideoId,
+                                               @CurrentUser UserPrincipal userPrincipal) {
+        try {
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+            videoTaskService.deleteRawVideo(rawVideoId, user);
+            return ResponseEntity.noContent().build();
+
+        } catch (Exception e) {
+            log.error("Failed to delete raw video {}", rawVideoId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @PostMapping("/{taskId}/raw-videos/reorder")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+    public ResponseEntity<Void> reorderRawVideos(@PathVariable Long taskId,
+                                                 @RequestBody ReorderRequest request,
+                                                 @CurrentUser UserPrincipal userPrincipal) {
+        try {
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+            videoTaskService.reorderRawVideos(taskId, request.getRawVideoIds(), user);
+            return ResponseEntity.ok().build();
+
+        } catch (Exception e) {
+            log.error("Failed to reorder raw videos for task {}", taskId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    // NEW: Enhanced Video Information Endpoint
+    @GetMapping("/{taskId}/videos-info")
+    public ResponseEntity<TaskVideosInfoDTO> getTaskVideosInfo(@PathVariable Long taskId,
+                                                               @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(taskId, user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        VideoTaskService.TaskVideosInfo videosInfo = videoTaskService.getTaskVideosInfo(taskId);
+        TaskVideosInfoDTO dto = new TaskVideosInfoDTO(videosInfo);
+
+        return ResponseEntity.ok(dto);
+    }
+
+    // NEW: Video Count Summary
+    @GetMapping("/{taskId}/video-count")
+    public ResponseEntity<VideoCountSummaryDTO> getVideoCountSummary(@PathVariable Long taskId,
+                                                                     @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(taskId, user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        VideoTaskService.VideoCountSummary summary = videoTaskService.getVideoCountSummary(taskId);
+        VideoCountSummaryDTO dto = new VideoCountSummaryDTO(summary);
+
+        return ResponseEntity.ok(dto);
+    }
+
+    // NEW: Multiple Video Upload to YouTube
+    @PostMapping("/{taskId}/upload-multiple-to-youtube")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> uploadMultipleVideosToYouTube(@PathVariable Long taskId,
+                                                           @RequestBody MultipleUploadRequest request,
+                                                           @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(taskId, user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        try {
+            VideoTask task = videoTaskService.getTaskByIdWithDetails(taskId)
+                    .orElseThrow(() -> new RuntimeException("Task not found."));
+
+            if (task.getTaskStatus() != TaskStatus.READY) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("message", "Task is not in READY status."));
+            }
+
+            // Validate and process each video upload
+            for (VideoUploadItem uploadItem : request.getVideosToUpload()) {
+                // Validate channel access
+                if (!youTubeChannelService.canUserAccessChannel(uploadItem.getChannelId(), user)) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(Map.of("message", "You don't have access to channel ID: " + uploadItem.getChannelId()));
+                }
+
+                // Check account connection
+                YouTubeChannel channel = youTubeChannelService.getChannelById(uploadItem.getChannelId())
+                        .orElseThrow(() -> new RuntimeException("Channel not found"));
+
+                if (!youTubeAccountService.isAccountConnected(channel.getYoutubeChannelOwnerEmail())) {
+                    return ResponseEntity.badRequest()
+                            .body(Map.of("message", "YouTube account not connected: " + channel.getYoutubeChannelOwnerEmail(),
+                                    "accountEmail", channel.getYoutubeChannelOwnerEmail()));
+                }
+            }
+
+            // Start multiple video upload process
+            youTubeService.uploadMultipleVideos(task, request, user);
+            videoTaskService.updateTaskStatus(task.getId(), TaskStatus.UPLOADING, user);
+
+            return ResponseEntity.ok(Map.of("message", "Multiple video upload initiated!",
+                    "videoCount", request.getVideosToUpload().size()));
+
+        } catch (Exception e) {
+            log.error("Multiple YouTube upload failed for task {}: {}", taskId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    // NEW: Check Upload Requirements
+    @PostMapping("/{taskId}/check-upload-requirements")
+    public ResponseEntity<UploadRequirementsDTO> checkUploadRequirements(@PathVariable Long taskId,
+                                                                         @RequestBody CheckRequirementsRequest request,
+                                                                         @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        if (!videoTaskService.canUserAccessTask(taskId, user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        try {
+            UploadRequirementsDTO requirements = new UploadRequirementsDTO();
+
+            for (String videoIdentifier : request.getVideoIdentifiers()) {
+                VideoRequirementStatus status = new VideoRequirementStatus();
+                status.setVideoIdentifier(videoIdentifier);
+
+                // Check metadata
+                try {
+                    boolean hasMetadata = videoMetadataService.hasVideoMetadata(Long.valueOf(videoIdentifier));
+                    status.setHasMetadata(hasMetadata);
+                } catch (Exception e) {
+                    status.setHasMetadata(false);
+                    status.setMetadataError(e.getMessage());
+                }
+
+                requirements.addVideoRequirement(status);
+            }
+
+            return ResponseEntity.ok(requirements);
+
+        } catch (Exception e) {
+            log.error("Failed to check upload requirements for task {}", taskId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    // Existing endpoints remain the same...
     @PostMapping("/generate-upload-url")
     @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
-    public ResponseEntity<?> generateUploadUrl(@RequestParam("filename") String filename, @RequestParam("type") String type, @RequestParam("folder") String folder) {
+    public ResponseEntity<?> generateUploadUrl(@RequestParam("filename") String filename,
+                                               @RequestParam("type") String type,
+                                               @RequestParam("folder") String folder) {
         try {
             String uniqueFilename = fileStorageService.generateUniqueFilename(filename);
-
             String objectName = folder + "/" + uniqueFilename;
             String signedUrl = "";
+
             if (folder.equals("thumbnails")) {
                 signedUrl = fileStorageService.generateImageUploadUrl(objectName, type);
-
             } else {
                 signedUrl = fileStorageService.generateResumableUploadUrl(objectName, type);
             }
@@ -156,12 +363,12 @@ public class VideoTaskController {
             response.put("signedUrl", signedUrl);
             response.put("objectName", objectName);
             response.put("fileName", uniqueFilename);
-            System.out.println(response);
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Could not generate upload URL: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Could not generate upload URL: " + e.getMessage());
         }
     }
 
@@ -252,7 +459,6 @@ public class VideoTaskController {
         return ResponseEntity.noContent().build();
     }
 
-
     @GetMapping("/editor/{editorId}")
     public ResponseEntity<List<VideoTaskDTO>> getTasksByEditor(@PathVariable Long editorId) {
         List<VideoTask> tasks = videoTaskService.getTasksByEditor(editorId);
@@ -284,6 +490,30 @@ public class VideoTaskController {
         Map<String, String> response = new HashMap<>();
         response.put("url", signedUrl);
         response.put("objectName", objectName);
+
+        return ResponseEntity.ok(response);
+    }
+
+    // NEW: Get specific raw video URL
+    @GetMapping("/raw-videos/{rawVideoId}/video-url")
+    public ResponseEntity<Map<String, String>> getRawVideoUrl(@PathVariable Long rawVideoId,
+                                                              @CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
+        if (!videoTaskService.canUserAccessRawVideo(rawVideoId, user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        RawVideo rawVideo = rawVideoRepository.findById(rawVideoId)
+                .orElseThrow(() -> new RuntimeException("Raw video not found"));
+
+        String objectName = rawVideo.getVideoUrl().replace("gs://" + fileStorageService.getGcpBucketName() + "/", "");
+        String signedUrl = fileStorageService.generateSignedUrlForDownload(objectName);
+
+        Map<String, String> response = new HashMap<>();
+        response.put("url", signedUrl);
+        response.put("objectName", objectName);
+        response.put("filename", rawVideo.getFilename());
 
         return ResponseEntity.ok(response);
     }
@@ -361,4 +591,5 @@ public class VideoTaskController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Failed to fetch available channels"));
         }
     }
+
 }

@@ -15,10 +15,9 @@ import java.util.Set;
 
 @Entity
 @Table(name = "video_metadata")
-// CHANGE: Replaced @Data with more specific and safer annotations for entities.
 @Getter
 @Setter
-@ToString(exclude = {"videoTask", "videoChapters"}) // Exclude collections and relationships from toString
+@ToString(exclude = {"videoTask", "videoChapters", "revision", "rawVideo"})
 @NoArgsConstructor
 @AllArgsConstructor
 public class VideoMetadata {
@@ -27,10 +26,19 @@ public class VideoMetadata {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // NOTE: videoTask is often just an ID link, LAZY fetching is more appropriate.
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "video_task_id")
     private VideoTask videoTask;
+
+    // NEW: Support for revision-specific metadata
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "revision_id")
+    private Revision revision;
+
+    // NEW: Support for raw video-specific metadata
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "raw_video_id")
+    private RawVideo rawVideo;
 
     @Column(nullable = false, length = 100)
     private String title;
@@ -38,8 +46,7 @@ public class VideoMetadata {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    // NOTE: @ElementCollection is the standard JPA way to store a collection of basic types like String.
-    @ElementCollection(fetch = FetchType.EAGER) // EAGER is often fine for a small set of strings
+    @ElementCollection(fetch = FetchType.EAGER)
     @Column(name = "tag")
     private Set<String> tags = new HashSet<>();
 
@@ -74,7 +81,6 @@ public class VideoMetadata {
     @JsonManagedReference
     private List<VideoChapter> videoChapters = new ArrayList<>();
 
-
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -83,7 +89,7 @@ public class VideoMetadata {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // Convenience methods remain the same, very useful!
+    // Convenience methods
     public void addChapter(VideoChapter chapter) {
         videoChapters.add(chapter);
         chapter.setVideoMetadata(this);
@@ -92,5 +98,29 @@ public class VideoMetadata {
     public void removeChapter(VideoChapter chapter) {
         videoChapters.remove(chapter);
         chapter.setVideoMetadata(null);
+    }
+
+    // Helper methods to determine metadata type
+    public boolean isRevisionMetadata() {
+        return revision != null;
+    }
+
+    public boolean isRawVideoMetadata() {
+        return rawVideo != null;
+    }
+
+    public boolean isTaskMetadata() {
+        return revision == null && rawVideo == null;
+    }
+
+    // Get the video identifier for this metadata
+    public String getVideoIdentifier() {
+        if (revision != null) {
+            return "revision-" + revision.getId();
+        } else if (rawVideo != null) {
+            return "raw-" + rawVideo.getId();
+        } else {
+            return "task-" + videoTask.getId();
+        }
     }
 }

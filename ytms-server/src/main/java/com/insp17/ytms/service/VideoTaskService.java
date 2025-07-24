@@ -1,6 +1,8 @@
 package com.insp17.ytms.service;
 
 import com.insp17.ytms.dtos.AudioInstructionDTO;
+import com.insp17.ytms.dtos.CreateTaskRequest;
+import com.insp17.ytms.dtos.RawVideoDto;
 import com.insp17.ytms.dtos.TaskUpdateRequest;
 import com.insp17.ytms.entity.*;
 import com.insp17.ytms.repository.*;
@@ -38,6 +40,9 @@ public class VideoTaskService {
     private TaskPermissionRepository taskPermissionRepository;
 
     @Autowired
+    private RawVideoRepository rawVideoRepository;
+
+    @Autowired
     private FileStorageService fileStorageService;
 
     @Autowired
@@ -71,10 +76,127 @@ public class VideoTaskService {
         return videoTaskRepository.findByIdWithAllDetails(id);
     }
 
+    // Enhanced task creation with multiple raw videos support
+    public VideoTask createTask(CreateTaskRequest createTaskRequest, User creator) {
+        VideoTask task = new VideoTask(createTaskRequest.getTitle(), createTaskRequest.getDescription(), creator);
+
+        task.setTaskPriority(createTaskRequest.getPriority());
+        task.setPrivacyLevel(createTaskRequest.getPrivacyLevel());
+
+        if (createTaskRequest.getDeadline() != null && !createTaskRequest.getDeadline().isEmpty()) {
+            task.setDeadline(LocalDateTime.parse(createTaskRequest.getDeadline()));
+        }
+
+        if (createTaskRequest.getAssignedEditorId() != null) {
+            User editor = userRepository.findById(createTaskRequest.getAssignedEditorId())
+                    .orElseThrow(() -> new RuntimeException("Editor not found"));
+            task.setAssignedEditor(editor);
+            task.setTaskStatus(TaskStatus.ASSIGNED);
+        }
+
+        // Legacy single video support (backward compatibility)
+        if (createTaskRequest.getRawVideoUrl() != null && !createTaskRequest.getRawVideoUrl().isEmpty()) {
+            task.setRawVideoUrl(createTaskRequest.getRawVideoUrl());
+            task.setRawVideoFilename(createTaskRequest.getRawVideoFilename());
+        }
+
+        VideoTask savedTask = videoTaskRepository.save(task);
+
+        // NEW: Handle multiple raw videos
+        if (createTaskRequest.getRawVideos() != null && !createTaskRequest.getRawVideos().isEmpty()) {
+            for (RawVideoDto rawVideoDto : createTaskRequest.getRawVideos()) {
+                RawVideo rawVideo = new RawVideo(
+                        savedTask,
+                        rawVideoDto.getVideoUrl(),
+                        rawVideoDto.getFilename(),
+                        rawVideoDto.getFileSize(),
+                        rawVideoDto.getOrder(),
+                        rawVideoDto.getDescription(),
+                        creator
+                );
+                rawVideoRepository.save(rawVideo);
+            }
+        }
+
+        // Handle privacy settings
+        if (createTaskRequest.getPrivacyLevel() == PrivacyLevel.SELECTED && createTaskRequest.getUserIds() != null) {
+            setTaskPrivacy(savedTask.getId(), PrivacyLevel.SELECTED, createTaskRequest.getUserIds());
+        }
+
+        return savedTask;
+    }
+
+    // Legacy method - keeping for backward compatibility
     public VideoTask createTask(VideoTask task) {
-        // This method is now corrected to only accept the task object.
-        // File handling is done via direct upload before this is called.
         return videoTaskRepository.save(task);
+    }
+
+    // NEW: Add raw video to existing task
+    public RawVideo addRawVideoToTask(Long taskId, String videoUrl, String filename, Long fileSize,
+                                      String description, User uploadedBy) {
+        VideoTask task = getTaskById(taskId);
+
+        // Determine the next order number
+        Optional<Integer> maxOrder = rawVideoRepository.findMaxVideoOrderByTaskId(taskId);
+        int nextOrder = maxOrder.orElse(0) + 1;
+
+        // Account for legacy raw video
+        if (task.getRawVideoUrl() != null) {
+            nextOrder++;
+        }
+
+        RawVideo rawVideo = new RawVideo(task, videoUrl, filename, fileSize, nextOrder, description, uploadedBy);
+        return rawVideoRepository.save(rawVideo);
+    }
+
+    // NEW: Get raw videos for task
+    public List<RawVideo> getRawVideosForTask(Long taskId) {
+        return rawVideoRepository.findByVideoTaskIdOrderByVideoOrderAsc(taskId);
+    }
+
+    // NEW: Delete raw video
+    public void deleteRawVideo(Long rawVideoId, User user) {
+        RawVideo rawVideo = rawVideoRepository.findById(rawVideoId)
+                .orElseThrow(() -> new RuntimeException("Raw video not found"));
+
+        // Check permissions
+        if (!canUserAccessTask(rawVideo.getVideoTask().getId(), user)) {
+            throw new RuntimeException("Access denied");
+        }
+
+        if (user.getRole() != UserRole.ADMIN && !rawVideo.getUploadedBy().getId().equals(user.getId())) {
+            throw new RuntimeException("Only the uploader or admin can delete this video");
+        }
+
+        // Delete file from storage
+        fileStorageService.deleteFileFromGCP(rawVideo.getVideoUrl());
+
+        rawVideoRepository.deleteById(rawVideoId);
+    }
+
+    // NEW: Update raw video
+    public RawVideo updateRawVideo(Long rawVideoId, String description, Integer order, User user) {
+        RawVideo rawVideo = rawVideoRepository.findById(rawVideoId)
+                .orElseThrow(() -> new RuntimeException("Raw video not found"));
+
+        // Check permissions
+        if (!canUserAccessTask(rawVideo.getVideoTask().getId(), user)) {
+            throw new RuntimeException("Access denied");
+        }
+
+        if (user.getRole() != UserRole.ADMIN && !rawVideo.getUploadedBy().getId().equals(user.getId())) {
+            throw new RuntimeException("Only the uploader or admin can update this video");
+        }
+
+        if (description != null) {
+            rawVideo.setDescription(description);
+        }
+
+        if (order != null) {
+            rawVideo.setVideoOrder(order);
+        }
+
+        return rawVideoRepository.save(rawVideo);
     }
 
     public VideoTask assignEditor(Long taskId, Long editorId, User assignedBy) {
@@ -204,6 +326,14 @@ public class VideoTaskService {
         return taskPermissionRepository.existsByVideoTaskIdAndUserIdAndPermissionType(taskId, userId, PermissionType.DOWNLOAD);
     }
 
+    // NEW: Check if user can access specific raw video
+    public boolean canUserAccessRawVideo(Long rawVideoId, User user) {
+        RawVideo rawVideo = rawVideoRepository.findById(rawVideoId)
+                .orElseThrow(() -> new RuntimeException("Raw video not found"));
+
+        return canUserAccessTask(rawVideo.getVideoTask().getId(), user);
+    }
+
     public void scheduleYouTubeUpload(Long taskId, LocalDateTime uploadTime) {
         VideoTask task = getTaskById(taskId);
         task.setYoutubeUploadTime(uploadTime);
@@ -269,10 +399,18 @@ public class VideoTaskService {
     }
 
     public void deleteTask(Long id) {
-
         VideoTask videoTask = videoTaskRepository.findById(id).orElseThrow(() -> new RuntimeException("Video not found"));
 
-        fileStorageService.deleteFileFromGCP(videoTask.getRawVideoUrl());
+        // Delete legacy raw video
+        if (videoTask.getRawVideoUrl() != null) {
+            fileStorageService.deleteFileFromGCP(videoTask.getRawVideoUrl());
+        }
+
+        // Delete new raw videos
+        List<RawVideo> rawVideos = rawVideoRepository.findByVideoTaskIdOrderByCreatedAtAsc(id);
+        rawVideos.forEach(rawVideo -> fileStorageService.deleteFileFromGCP(rawVideo.getVideoUrl()));
+
+        // Delete revisions and audio instructions
         videoTask.getRevisions().forEach(e -> fileStorageService.deleteFileFromGCP(e.getEditedVideoUrl()));
         videoTask.getAudioInstructions().forEach(e -> fileStorageService.deleteFileFromGCP(e.getAudioUrl()));
 
@@ -282,6 +420,7 @@ public class VideoTaskService {
     public VideoTask updateTask(Long id, TaskUpdateRequest taskUpdateRequest) {
         VideoTask videoTask = videoTaskRepository.findById(id).orElseThrow(() -> new RuntimeException("Video not found"));
         boolean hasModificationItem = false;
+
         if (taskUpdateRequest.getDeadline() != null && !taskUpdateRequest.getDeadline().isEmpty()) {
             Instant instant = Instant.parse(taskUpdateRequest.getDeadline());
             videoTask.setDeadline(LocalDateTime.ofInstant(instant, ZoneOffset.UTC));
@@ -304,7 +443,7 @@ public class VideoTaskService {
         }
 
         if (taskUpdateRequest.getPrivacyLevel() != null) {
-            videoTask.setTaskPriority(taskUpdateRequest.getPriority());
+            videoTask.setPrivacyLevel(taskUpdateRequest.getPrivacyLevel());
             hasModificationItem = true;
         }
 
@@ -325,6 +464,120 @@ public class VideoTaskService {
         updateTaskStatus(taskId, taskStatus, updatedBy);
     }
 
+    // NEW: Enhanced methods for multiple video support
+
+    /**
+     * Get all videos (raw videos + revisions) for a task with proper ordering
+     */
+    public TaskVideosInfo getTaskVideosInfo(Long taskId) {
+        VideoTask task = getTaskById(taskId);
+        List<RawVideo> rawVideos = getRawVideosForTask(taskId);
+        List<Revision> revisions = revisionRepository.findByVideoTaskIdOrderByRevisionNumberDesc(taskId);
+
+        return new TaskVideosInfo(task, rawVideos, revisions);
+    }
+
+    /**
+     * Check if task has any videos available
+     */
+    public boolean taskHasVideos(Long taskId) {
+        VideoTask task = getTaskById(taskId);
+
+        // Check legacy raw video
+        if (task.getRawVideoUrl() != null && !task.getRawVideoUrl().isEmpty()) {
+            return true;
+        }
+
+        // Check new raw videos
+        long rawVideoCount = rawVideoRepository.countByVideoTaskId(taskId);
+        if (rawVideoCount > 0) {
+            return true;
+        }
+
+        // Check revisions
+        return !task.getRevisions().isEmpty();
+    }
+
+    /**
+     * Get video count summary for task
+     */
+    public VideoCountSummary getVideoCountSummary(Long taskId) {
+        VideoTask task = getTaskById(taskId);
+        long rawVideoCount = rawVideoRepository.countByVideoTaskId(taskId);
+        long revisionCount = task.getRevisions().size();
+
+        // Add legacy raw video to count
+        if (task.getRawVideoUrl() != null) {
+            rawVideoCount++;
+        }
+
+        return new VideoCountSummary(rawVideoCount, revisionCount, rawVideoCount + revisionCount);
+    }
+
+    /**
+     * Reorder raw videos for a task
+     */
+    public void reorderRawVideos(Long taskId, List<Long> rawVideoIds, User user) {
+        if (!canUserAccessTask(taskId, user)) {
+            throw new RuntimeException("Access denied");
+        }
+
+        for (int i = 0; i < rawVideoIds.size(); i++) {
+            Long rawVideoId = rawVideoIds.get(i);
+            RawVideo rawVideo = rawVideoRepository.findById(rawVideoId)
+                    .orElseThrow(() -> new RuntimeException("Raw video not found: " + rawVideoId));
+
+            if (!rawVideo.getVideoTask().getId().equals(taskId)) {
+                throw new RuntimeException("Raw video does not belong to this task");
+            }
+
+            rawVideo.setVideoOrder(i + 1);
+            rawVideoRepository.save(rawVideo);
+        }
+    }
+
+    // Inner classes for structured data return
+    public static class TaskVideosInfo {
+        private final VideoTask task;
+        private final List<RawVideo> rawVideos;
+        private final List<Revision> revisions;
+
+        public TaskVideosInfo(VideoTask task, List<RawVideo> rawVideos, List<Revision> revisions) {
+            this.task = task;
+            this.rawVideos = rawVideos;
+            this.revisions = revisions;
+        }
+
+        public VideoTask getTask() { return task; }
+        public List<RawVideo> getRawVideos() { return rawVideos; }
+        public List<Revision> getRevisions() { return revisions; }
+
+        public boolean hasLegacyRawVideo() {
+            return task.getRawVideoUrl() != null && !task.getRawVideoUrl().isEmpty();
+        }
+
+        public int getTotalVideoCount() {
+            int count = rawVideos.size() + revisions.size();
+            if (hasLegacyRawVideo()) count++;
+            return count;
+        }
+    }
+
+    public static class VideoCountSummary {
+        private final long rawVideoCount;
+        private final long revisionCount;
+        private final long totalCount;
+
+        public VideoCountSummary(long rawVideoCount, long revisionCount, long totalCount) {
+            this.rawVideoCount = rawVideoCount;
+            this.revisionCount = revisionCount;
+            this.totalCount = totalCount;
+        }
+
+        public long getRawVideoCount() { return rawVideoCount; }
+        public long getRevisionCount() { return revisionCount; }
+        public long getTotalCount() { return totalCount; }
+    }
 
     public static class DashboardStats {
         private long totalTasks;

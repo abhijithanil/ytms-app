@@ -7,10 +7,13 @@ import axios from "axios";
 // API imports
 import api, {
   tasksAPI,
+  rawVideoAPI,
   revisionsAPI,
   commentsAPI,
   metadataAPI,
   youtubeChannelAPI,
+  fileAPI,
+  videoUtils,
 } from "../services/api";
 
 // Context
@@ -28,6 +31,7 @@ import MobileCollapsibleSidebar from "../components/MobileCollapsibleSidebar";
 import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
 import VideoMetadataModal from "../components/VideoMetadataModal";
 import EditTaskModal from "../components/EditTaskModal";
+import MultipleVideoUploadModal from "../components/MultipleVideoUploadModal";
 
 // Icons for loading state
 import { AlertCircle } from "lucide-react";
@@ -43,15 +47,21 @@ const TaskDetails = () => {
   const [task, setTask] = useState(null);
   const [metadata, setMetadata] = useState({});
   const [revisions, setRevisions] = useState([]);
+  const [rawVideos, setRawVideos] = useState([]); // NEW
   const [comments, setComments] = useState([]);
   const [audioInstructions, setAudioInstructions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Video state
-  const [selectedRevision, setSelectedRevision] = useState(null);
+  // Enhanced video state
+  const [selectedVideo, setSelectedVideo] = useState(null); // {type: 'raw|revision|legacy_raw', id: number, ...videoData}
   const [currentVideoUrl, setCurrentVideoUrl] = useState("");
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [videoError, setVideoError] = useState(null);
+
+  // Multiple video upload state
+  const [selectedVideosForUpload, setSelectedVideosForUpload] = useState([]);
+  const [showMultipleUploadModal, setShowMultipleUploadModal] = useState(false);
+  const [missingMetadataVideos, setMissingMetadataVideos] = useState([]);
 
   // Comments state
   const [newComment, setNewComment] = useState("");
@@ -127,10 +137,7 @@ const TaskDetails = () => {
         setCurrentUploadDuration(formatUploadDuration(uploadStartTime));
       };
 
-      // Update immediately
       updateDuration();
-
-      // Update every second
       uploadDurationRef.current = setInterval(updateDuration, 1000);
 
       return () => {
@@ -167,16 +174,25 @@ const TaskDetails = () => {
     fetchTaskAndChannelDetails();
   }, [id]);
 
-  // Auto-select video when task/revisions change
+  // Enhanced auto-select video when task/revisions/raw videos change
   useEffect(() => {
-    if (task && revisions && !isUploading) {
-      if (revisions.length > 0) {
-        handleRevisionSelect(revisions[0]);
+    if (task && !isUploading && !selectedVideo) {
+      // Priority: Latest revision > Latest raw video > Legacy raw video
+      if (revisions && revisions.length > 0) {
+        const latestRevision = revisions.sort((a, b) => 
+          new Date(b.createdAt) - new Date(a.createdAt)
+        )[0];
+        handleRevisionSelect(latestRevision);
+      } else if (rawVideos && rawVideos.length > 0) {
+        const latestRawVideo = rawVideos.sort((a, b) => 
+          new Date(b.createdAt) - new Date(a.createdAt)
+        )[0];
+        handleRawVideoSelect(latestRawVideo);
       } else if (task.rawVideoUrl) {
-        handleRawVideoSelect();
+        handleRawVideoSelect(null); // Legacy raw video
       }
     }
-  }, [task, revisions, isUploading]);
+  }, [task, revisions, rawVideos, isUploading, selectedVideo]);
 
   // Check for ongoing uploads when component mounts
   useEffect(() => {
@@ -188,7 +204,6 @@ const TaskDetails = () => {
         console.log("Found existing upload data:", uploadData);
         const { startTime, channelId } = JSON.parse(uploadData);
 
-        // Check if upload has been running too long (60 minutes max)
         const timeElapsed = Date.now() - startTime;
         const maxUploadTime = 60 * 60 * 1000;
 
@@ -199,7 +214,6 @@ const TaskDetails = () => {
           return;
         }
 
-        // Resume upload tracking
         setIsUploading(true);
         setUploadStartTime(startTime);
         setSelectedChannelId(channelId);
@@ -214,7 +228,6 @@ const TaskDetails = () => {
   const startUploadPolling = useCallback(() => {
     console.log("Starting upload polling...");
 
-    // Clear any existing polling
     if (uploadPollingRef.current) {
       clearInterval(uploadPollingRef.current);
     }
@@ -227,11 +240,9 @@ const TaskDetails = () => {
         
         console.log("Current task status:", updatedTask.status);
 
-        // Only continue polling if status is UPLOADING
         if (updatedTask.status !== "UPLOADING") {
           console.log("Status is no longer UPLOADING, stopping polling...");
           
-          // Stop all polling and timers
           if (uploadPollingRef.current) {
             clearInterval(uploadPollingRef.current);
             uploadPollingRef.current = null;
@@ -242,17 +253,14 @@ const TaskDetails = () => {
             uploadDurationRef.current = null;
           }
 
-          // Clean up upload state
           const uploadKey = `upload_${id}`;
           localStorage.removeItem(uploadKey);
           setIsUploading(false);
           setUploadStartTime(null);
           setCurrentUploadDuration("");
 
-          // Update task state
           setTask(updatedTask);
 
-          // Show appropriate toast based on final status
           if (updatedTask.status === "COMPLETED" || updatedTask.status === "UPLOADED") {
             toast.success("Upload completed successfully!", {
               duration: 5000,
@@ -268,19 +276,17 @@ const TaskDetails = () => {
             });
           }
 
-          return; // Exit polling
+          return;
         }
 
-        // If still UPLOADING, update task state if changed
         if (task?.status !== updatedTask.status) {
           setTask(updatedTask);
         }
 
       } catch (error) {
         console.warn("Error polling task status:", error);
-        // Continue polling on network errors - they might be temporary
       }
-    }, 5000); // Poll every 5 seconds
+    }, 5000);
   }, [id, task?.status]);
 
   // API Functions
@@ -294,6 +300,7 @@ const TaskDetails = () => {
         audioResponse,
         metadataResponse,
         channelsResponse,
+        rawVideosResponse, // NEW
       ] = await Promise.all([
         tasksAPI.getTaskById(id),
         revisionsAPI.getRevisionsByTask(id),
@@ -304,6 +311,10 @@ const TaskDetails = () => {
           return { data: null };
         }),
         youtubeChannelAPI.getAllChannels(),
+        rawVideoAPI.getRawVideos(id).catch((error) => {
+          console.warn("Raw videos fetch failed but was handled:", error);
+          return { data: [] };
+        }),
       ]);
 
       setTask(taskResponse.data);
@@ -312,6 +323,7 @@ const TaskDetails = () => {
       setAudioInstructions(audioResponse.data);
       setMetadata(metadataResponse.data);
       setChannels(channelsResponse.data);
+      setRawVideos(rawVideosResponse.data);
     } catch (error) {
       console.error("Failed to fetch page details:", error);
       toast.error("Failed to load page details");
@@ -320,8 +332,7 @@ const TaskDetails = () => {
     }
   };
 
-  const fetchAndSetVideoUrl = async (url) => {
-    // Skip video URL fetching during upload to prevent interrupting playback
+  const fetchAndSetVideoUrl = async (endpoint, videoData = null) => {
     if (isUploading) {
       console.log("Skipping video URL fetch during upload");
       return;
@@ -331,14 +342,21 @@ const TaskDetails = () => {
       setVideoError(null);
       setCurrentVideoUrl("");
 
-      const response = await api.get(url);
-      if (response.status !== 200) {
-        throw new Error(`Server responded with status ${response.status}`);
+      let videoUrl;
+      if (videoData) {
+        // For raw videos and revisions, we can construct the streaming URL directly
+        videoUrl = fileAPI.getVideoStreamingUrl(videoData.type, videoData.id, task?.id);
+      } else {
+        // For legacy endpoints that return signed URLs
+        const response = await api.get(endpoint);
+        if (response.status !== 200) {
+          throw new Error(`Server responded with status ${response.status}`);
+        }
+        videoUrl = response.data.url;
       }
 
-      const signedUrl = response.data.url;
-      if (signedUrl) {
-        setCurrentVideoUrl(signedUrl);
+      if (videoUrl) {
+        setCurrentVideoUrl(videoUrl);
       } else {
         throw new Error("Received an empty URL from the server.");
       }
@@ -348,11 +366,36 @@ const TaskDetails = () => {
     }
   };
 
+  // Enhanced video selection handlers
+  const handleRawVideoSelect = async (rawVideo) => {
+    if (!task) return;
+    
+    if (rawVideo) {
+      // New raw video
+      const videoData = { type: 'raw', id: rawVideo.id, ...rawVideo };
+      setSelectedVideo(videoData);
+      fetchAndSetVideoUrl(null, videoData);
+    } else {
+      // Legacy raw video
+      const videoData = { type: 'legacy_raw', id: null, taskId: task.id };
+      setSelectedVideo(videoData);
+      fetchAndSetVideoUrl(`/tasks/${task.id}/video-url`);
+    }
+  };
+
+  const handleRevisionSelect = async (revision) => {
+    if (!task) return;
+    const videoData = { type: 'revision', id: revision.id, ...revision };
+    setSelectedVideo(videoData);
+    fetchAndSetVideoUrl(null, videoData);
+  };
+
   // Task handlers
   const handleTaskUpdate = useCallback((updatedTask) => {
     setTask(updatedTask);
   }, []);
 
+  // Enhanced video upload handlers
   const handleUploadVideo = async () => {
     if (!selectedChannelId) {
       toast.error("Please select a YouTube channel first.");
@@ -365,13 +408,11 @@ const TaskDetails = () => {
       return;
     }
 
-    // Prevent multiple uploads
     if (isUploading || uploadPollingRef.current) {
       console.log("Upload already in progress, ignoring request");
       return;
     }
 
-    // Set loading state and store in localStorage
     setIsUploading(true);
     const startTime = Date.now();
     setUploadStartTime(startTime);
@@ -387,12 +428,10 @@ const TaskDetails = () => {
     );
 
     try {
-      // Update the task with the channel owner's email
       await tasksAPI.updateTask(id, {
         youtubeChannelOwnerEmail: selectedChannel.youtubeChannelOwnerEmail,
       });
 
-      // Trigger the YouTube upload
       const response = await tasksAPI.doYoutubeUpload({
         videoId: id,
         channelId: selectedChannel.id,
@@ -405,15 +444,12 @@ const TaskDetails = () => {
         );
       }
 
-      // Update task status
       setTask((prev) => ({ ...prev, status: "UPLOADING" }));
       toast.success(response?.data?.message || "Upload started successfully!");
 
-      // Start polling after successful upload initiation
       startUploadPolling();
 
     } catch (error) {
-      // Clean up on error
       localStorage.removeItem(uploadKey);
       setIsUploading(false);
       setUploadStartTime(null);
@@ -435,6 +471,74 @@ const TaskDetails = () => {
         navigate("/settings");
       }
       console.error("Failed to initiate YouTube upload:", error);
+    }
+  };
+
+  // NEW: Multiple video upload handler
+  const handleMultipleVideoUpload = async (selectedVideos) => {
+    try {
+      // Check metadata for each selected video
+      const videosWithoutMetadata = [];
+      
+      for (const video of selectedVideos) {
+        try {
+          const hasMetadata = await checkVideoMetadata(video.videoIdentifier);
+          if (!hasMetadata) {
+            videosWithoutMetadata.push(video);
+          }
+        } catch (error) {
+          console.error("Error checking metadata for", video.videoIdentifier, error);
+          videosWithoutMetadata.push(video);
+        }
+      }
+      
+      if (videosWithoutMetadata.length > 0) {
+        setMissingMetadataVideos(videosWithoutMetadata);
+        toast.error(`Please add metadata for ${videosWithoutMetadata.length} video(s) before uploading`);
+        return;
+      }
+      
+      // Prepare upload request
+      const uploadRequest = {
+        videosToUpload: selectedVideos.map(video => ({
+          videoType: video.type,
+          videoId: video.id,
+          channelId: video.channelId,
+          videoIdentifier: video.videoIdentifier
+        }))
+      };
+
+      setIsUploading(true);
+      const startTime = Date.now();
+      setUploadStartTime(startTime);
+
+      const response = await tasksAPI.uploadMultipleToYouTube(id, uploadRequest);
+      
+      if (response.status === 200) {
+        setTask((prev) => ({ ...prev, status: "UPLOADING" }));
+        toast.success(`Successfully initiated upload for ${selectedVideos.length} video(s)`);
+        setShowMultipleUploadModal(false);
+        startUploadPolling();
+      } else {
+        throw new Error(response?.data?.message || "Upload failed");
+      }
+      
+    } catch (error) {
+      setIsUploading(false);
+      setUploadStartTime(null);
+      toast.error("Failed to upload videos: " + (error.response?.data?.message || error.message));
+      console.error("Multiple upload error:", error);
+    }
+  };
+
+  // Video metadata check
+  const checkVideoMetadata = async (videoIdentifier) => {
+    try {
+      const response = await metadataAPI.hasMetadata(videoIdentifier);
+      return response.data.hasMetadata;
+    } catch (error) {
+      console.error("Error checking metadata:", error);
+      return false;
     }
   };
 
@@ -482,18 +586,6 @@ const TaskDetails = () => {
   };
 
   // Video handlers
-  const handleRevisionSelect = async (revision) => {
-    if (!task) return;
-    setSelectedRevision(revision);
-    fetchAndSetVideoUrl(`/revisions/${revision.id}/task/${task.id}/video-url`);
-  };
-
-  const handleRawVideoSelect = async () => {
-    if (!task) return;
-    setSelectedRevision(null);
-    fetchAndSetVideoUrl(`/tasks/${task.id}/video-url`);
-  };
-
   const handleVideoPlay = () => setIsVideoPlaying(true);
   const handleVideoPause = () => setIsVideoPlaying(false);
   const handleVideoError = (e) => {
@@ -1104,6 +1196,43 @@ const TaskDetails = () => {
     return isUploading || task?.status === "UPLOADING";
   }, [isUploading, task?.status]);
 
+  // Helper functions for video selection
+  const getAllAvailableVideos = () => {
+    const videos = [];
+    
+    // Legacy raw video
+    if (task?.rawVideoUrl) {
+      videos.push({
+        type: 'legacy_raw',
+        id: null,
+        name: 'Raw Video #1 (Original)',
+        videoIdentifier: videoUtils.generateVideoIdentifier('task', task.id)
+      });
+    }
+    
+    // New raw videos
+    rawVideos.forEach((rawVideo, index) => {
+      videos.push({
+        type: 'raw',
+        id: rawVideo.id,
+        name: `Raw Video #${(task?.rawVideoUrl ? 2 : 1) + index}${rawVideo.description ? ` - ${rawVideo.description}` : ''}`,
+        videoIdentifier: videoUtils.generateVideoIdentifier('raw', rawVideo.id)
+      });
+    });
+    
+    // Revisions
+    revisions.forEach((revision) => {
+      videos.push({
+        type: 'revision',
+        id: revision.id,
+        name: `Revision #${revision.revisionNumber}`,
+        videoIdentifier: videoUtils.generateVideoIdentifier('revision', revision.id)
+      });
+    });
+    
+    return videos;
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -1148,7 +1277,7 @@ const TaskDetails = () => {
           {/* Video Player */}
           <VideoPlayer
             task={task}
-            selectedRevision={selectedRevision}
+            selectedRevision={selectedVideo?.type === 'revision' ? selectedVideo : null}
             currentVideoUrl={currentVideoUrl}
             videoError={videoError}
             isVideoPlaying={isVideoPlaying}
@@ -1167,50 +1296,78 @@ const TaskDetails = () => {
             onStatusUpdate={handleStatusUpdate}
           />
 
-          {/* Final Actions Section for READY status */}
+          {/* Enhanced Final Actions Section for READY status */}
           {task.status === "READY" && !isUploadInProgress && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6 space-y-4">
               <h3 className="text-lg font-semibold text-gray-900">
                 Final Actions
               </h3>
 
-              {/* Channel Selection Dropdown */}
+              {/* Video Selection for Upload */}
               <div>
-                <label
-                  htmlFor="channel-select"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Choose YouTube Channel
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Videos to Upload
                 </label>
-                <select
-                  id="channel-select"
-                  value={selectedChannelId}
-                  onChange={(e) => setSelectedChannelId(e.target.value)}
-                  className="input-field w-full"
-                >
-                  <option value="" disabled>
-                    Select a channel...
-                  </option>
-                  {channels.map((channel) => (
-                    <option key={channel.id} value={channel.id}>
-                      {channel.channelName}
-                    </option>
+                <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-3">
+                  {getAllAvailableVideos().map((video) => (
+                    <label key={video.videoIdentifier} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedVideosForUpload.some(v => v.videoIdentifier === video.videoIdentifier)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedVideosForUpload(prev => [...prev, video]);
+                          } else {
+                            setSelectedVideosForUpload(prev => 
+                              prev.filter(v => v.videoIdentifier !== video.videoIdentifier)
+                            );
+                          }
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">{video.name}</span>
+                    </label>
                   ))}
-                </select>
+                </div>
+                
+                {selectedVideosForUpload.length > 0 && (
+                  <p className="text-sm text-gray-600 mt-2">
+                    {selectedVideosForUpload.length} video(s) selected for upload
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
-                  onClick={handleUploadVideo}
-                  disabled={!selectedChannelId}
+                  onClick={() => {
+                    if (selectedVideosForUpload.length === 0) {
+                      toast.error("Please select at least one video to upload");
+                      return;
+                    }
+                    if (selectedVideosForUpload.length === 1) {
+                      // Single video upload (existing flow)
+                      handleUploadVideo();
+                    } else {
+                      // Multiple video upload (new flow)
+                      setShowMultipleUploadModal(true);
+                    }
+                  }}
+                  disabled={selectedVideosForUpload.length === 0}
                   className="flex-1 bg-green-600 text-white px-4 py-3 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors flex items-center justify-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  <span>Upload Now</span>
+                  <span>
+                    {selectedVideosForUpload.length === 0 
+                      ? "Select Videos to Upload" 
+                      : selectedVideosForUpload.length === 1 
+                      ? "Upload Now" 
+                      : `Upload ${selectedVideosForUpload.length} Videos`
+                    }
+                  </span>
                 </button>
 
                 <button
                   onClick={() => setShowScheduleModal(true)}
-                  disabled={!selectedChannelId}
+                  disabled={selectedVideosForUpload.length === 0}
                   className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors flex items-center justify-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
                   <span>Schedule Upload</span>
@@ -1258,7 +1415,6 @@ const TaskDetails = () => {
                       Your video is being uploaded to YouTube. This process may
                       take several minutes depending on video size and quality.
                     </p>
-                    {/* Real-time timestamp updates */}
                     {currentUploadDuration && (
                       <div className="mt-2 text-xs text-yellow-600 bg-yellow-100 px-2 py-1 rounded inline-block">
                         Upload started {currentUploadDuration} ago
@@ -1268,7 +1424,6 @@ const TaskDetails = () => {
                 </div>
               </div>
 
-              {/* Show selected channel info during upload */}
               {selectedChannelName && (
                 <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
                   <span className="font-medium">Uploading to:</span>{" "}
@@ -1276,7 +1431,6 @@ const TaskDetails = () => {
                 </div>
               )}
 
-              {/* Progress indicator */}
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
                   className="bg-yellow-400 h-2 rounded-full animate-pulse"
@@ -1346,7 +1500,8 @@ const TaskDetails = () => {
               <RevisionsList
                 task={task}
                 revisions={revisions}
-                selectedRevision={selectedRevision}
+                rawVideos={rawVideos}
+                selectedVideo={selectedVideo}
                 user={user}
                 showUploadRevision={showUploadRevision}
                 setShowUploadRevision={setShowUploadRevision}
@@ -1423,11 +1578,12 @@ const TaskDetails = () => {
             canEditTask={canEditTask}
           />
 
-          {/* Revisions List */}
+          {/* Enhanced Revisions List */}
           <RevisionsList
             task={task}
             revisions={revisions}
-            selectedRevision={selectedRevision}
+            rawVideos={rawVideos}
+            selectedVideo={selectedVideo}
             user={user}
             showUploadRevision={showUploadRevision}
             setShowUploadRevision={setShowUploadRevision}
@@ -1499,6 +1655,18 @@ const TaskDetails = () => {
         isRequired={!!pendingStatus}
         pendingStatus={pendingStatus}
       />
+
+      {/* Multiple Video Upload Modal */}
+      {showMultipleUploadModal && (
+        <MultipleVideoUploadModal
+          isOpen={showMultipleUploadModal}
+          onClose={() => setShowMultipleUploadModal(false)}
+          selectedVideos={selectedVideosForUpload}
+          channels={channels}
+          onUpload={handleMultipleVideoUpload}
+          task={task}
+        />
+      )}
     </div>
   );
 };

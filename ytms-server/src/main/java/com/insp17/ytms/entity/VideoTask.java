@@ -10,7 +10,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-// Updated VideoTask Entity with new fields
 @Entity
 @Table(name = "video_tasks")
 public class VideoTask {
@@ -24,6 +23,7 @@ public class VideoTask {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    // Legacy single video support - keeping for backward compatibility
     @Column(name = "raw_video_url")
     private String rawVideoUrl;
 
@@ -68,6 +68,11 @@ public class VideoTask {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt = LocalDateTime.now();
 
+    // NEW: Multiple raw videos support
+    @OneToMany(mappedBy = "videoTask", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @Fetch(FetchMode.SUBSELECT)
+    private List<RawVideo> rawVideos = new ArrayList<>();
+
     @OneToMany(mappedBy = "videoTask", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @Fetch(FetchMode.SUBSELECT)
     private List<Revision> revisions = new ArrayList<>();
@@ -80,7 +85,6 @@ public class VideoTask {
 
     @OneToMany(mappedBy = "videoTask", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private Set<TaskPermission> permissions = new HashSet<>();
-
 
     // Constructors
     public VideoTask() {
@@ -108,6 +112,32 @@ public class VideoTask {
         this.privacyLevel = PrivacyLevel.ALL;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+    }
+
+    // Helper methods for raw videos
+    public void addRawVideo(RawVideo rawVideo) {
+        rawVideos.add(rawVideo);
+        rawVideo.setVideoTask(this);
+    }
+
+    public void removeRawVideo(RawVideo rawVideo) {
+        rawVideos.remove(rawVideo);
+        rawVideo.setVideoTask(null);
+    }
+
+    // Check if task has any raw videos (legacy or new format)
+    public boolean hasRawVideos() {
+        return (rawVideoUrl != null && !rawVideoUrl.isEmpty()) || !rawVideos.isEmpty();
+    }
+
+    // Get total count of raw videos
+    public int getRawVideoCount() {
+        int count = 0;
+        if (rawVideoUrl != null && !rawVideoUrl.isEmpty()) {
+            count++;
+        }
+        count += rawVideos.size();
+        return count;
     }
 
     // Getters and setters
@@ -167,7 +197,6 @@ public class VideoTask {
         this.createdBy = createdBy;
     }
 
-
     public PrivacyLevel getPrivacyLevel() {
         return privacyLevel;
     }
@@ -214,6 +243,14 @@ public class VideoTask {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public List<RawVideo> getRawVideos() {
+        return rawVideos;
+    }
+
+    public void setRawVideos(List<RawVideo> rawVideos) {
+        this.rawVideos = rawVideos;
     }
 
     public List<Revision> getRevisions() {
@@ -263,7 +300,6 @@ public class VideoTask {
     public void setTaskPriority(TaskPriority taskPriority) {
         this.taskPriority = taskPriority;
     }
-
 
     public Set<String> getTags() {
         return tags;

@@ -18,6 +18,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.insp17.ytms.dtos.*;
 import com.insp17.ytms.entity.*;
+import com.insp17.ytms.repository.RawVideoRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -72,6 +74,12 @@ public class YouTubeService {
     private VideoTaskService videoTaskService;
     @Autowired
     private CommentService commentService;
+    @Autowired
+    private RevisionService revisionService;
+    @Autowired
+    private YouTubeChannelService youTubeChannelService;
+    @Autowired
+    private RawVideoRepository rawVideoRepository;
 
 
     private final YouTubeService self;
@@ -468,7 +476,7 @@ public class YouTubeService {
 
             if (thumbnailData == null || thumbnailData.length == 0) {
                 // Handle with sending notification
-               return;
+                return;
             }
 
             // Validate thumbnail size (max 2MB for YouTube)
@@ -777,5 +785,264 @@ public class YouTubeService {
         }
 
         throw new IllegalArgumentException("Invalid timestamp format: " + timestamp);
+    }
+
+
+    // Add this method to the existing YouTubeService.java
+
+    /**
+     * Upload multiple videos to YouTube with individual channel and metadata support
+     */
+    @Async("youtubeUploadExecutor")
+    public void uploadMultipleVideos(VideoTask task,
+                                     MultipleUploadRequest request,
+                                     User user) throws IOException, GeneralSecurityException {
+        log.info("Starting multiple video upload for task: {} with {} videos",
+                task.getId(), request.getVideosToUpload().size());
+
+        List<CompletableFuture<VideoUploadResult>> uploadFutures = new ArrayList<>();
+
+        for (VideoUploadItem uploadItem : request.getVideosToUpload()) {
+            CompletableFuture<VideoUploadResult> uploadFuture = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return uploadSingleVideoItem(task, uploadItem, user);
+                } catch (Exception e) {
+                    log.error("Failed to upload video item: {}", uploadItem.getVideoIdentifier(), e);
+                    return new VideoUploadResult(uploadItem.getVideoIdentifier(), false, e.getMessage(), null);
+                }
+            });
+
+            uploadFutures.add(uploadFuture);
+        }
+
+        // Wait for all uploads to complete and process results
+        try {
+            List<VideoUploadResult> results = uploadFutures.stream()
+                    .map(CompletableFuture::join)
+                    .collect(Collectors.toList());
+
+            processMultipleUploadResults(task, results, user);
+
+        } catch (Exception e) {
+            log.error("Error in multiple video upload for task {}: {}", task.getId(), e.getMessage());
+            videoTaskService.updateTaskStatus(task.getId(), TaskStatus.READY, user);
+
+            String errorComment = "Multiple video upload failed: " + e.getMessage();
+            commentService.addComment(task.getId(), errorComment, user);
+        }
+    }
+
+    /**
+     * Upload a single video item as part of multiple upload
+     */
+    private VideoUploadResult uploadSingleVideoItem(VideoTask task,
+                                                    VideoUploadItem uploadItem,
+                                                    User user) throws IOException, GeneralSecurityException {
+
+        String videoIdentifier = uploadItem.getVideoIdentifier();
+        log.info("Uploading video item: {} to channel: {}", videoIdentifier, uploadItem.getChannelId());
+
+        try {
+            // Get channel
+            YouTubeChannel channel = youTubeChannelService.getChannelById(uploadItem.getChannelId())
+                    .orElseThrow(() -> new IOException("Channel not found: " + uploadItem.getChannelId()));
+
+            // Get video data based on type
+            VideoData videoData = getVideoDataForUpload(task, uploadItem);
+
+            // Get metadata
+            VideoMetadataResponseDTO metadata = videoMetadataService.getVideoMetadata(Long.valueOf(videoIdentifier));
+            if (metadata == null) {
+                throw new IOException("No metadata found for video: " + videoIdentifier);
+            }
+
+            // Validate metadata
+            validateMetadata(metadata);
+
+            // Download video file
+            byte[] fileContent = fileStorageService.downloadFile(videoData.getVideoUrl());
+            validateVideoFile(fileContent, videoData.getFilename());
+
+            // Create video object
+            Video videoObject = createVideoObjectWithoutThumbnail(metadata);
+
+            // Upload video
+            String videoId = performVideoUpload(fileContent, videoData.getFilename(), metadata, channel, videoObject);
+
+            // Upload thumbnail if available
+            if (metadata.getThumbnailUrl() != null && !metadata.getThumbnailUrl().trim().isEmpty()) {
+                try {
+                    YouTube youtubeService = getYouTubeService(channel);
+                    uploadThumbnail(youtubeService, videoId, metadata.getThumbnailUrl());
+                    log.info("Successfully uploaded thumbnail for video: {}", videoId);
+                } catch (Exception thumbnailError) {
+                    log.error("Failed to upload thumbnail for video {}: {}", videoId, thumbnailError.getMessage());
+                    // Don't fail the entire upload if thumbnail fails
+                }
+            }
+
+            log.info("Successfully uploaded video: {} -> YouTube ID: {}", videoIdentifier, videoId);
+            return new VideoUploadResult(videoIdentifier, true, null, videoId);
+
+        } catch (Exception e) {
+            log.error("Failed to upload video item {}: {}", videoIdentifier, e.getMessage());
+            return new VideoUploadResult(videoIdentifier, false, e.getMessage(), null);
+        }
+    }
+
+    /**
+     * Get video data (URL, filename) for upload based on video type
+     */
+    private VideoData getVideoDataForUpload(VideoTask task, VideoUploadItem uploadItem)
+            throws IOException {
+
+        switch (uploadItem.getVideoType()) {
+            case "revision":
+                Revision revision = revisionService.getRevisionById(uploadItem.getVideoId());
+                return new VideoData(revision.getEditedVideoUrl(), revision.getEditedVideoFilename());
+
+            case "raw":
+                RawVideo rawVideo = rawVideoRepository.findById(uploadItem.getVideoId())
+                        .orElseThrow(() -> new IOException("Raw video not found: " + uploadItem.getVideoId()));
+                return new VideoData(rawVideo.getVideoUrl(), rawVideo.getFilename());
+
+            case "legacy_raw":
+                if (task.getRawVideoUrl() == null) {
+                    throw new IOException("No legacy raw video found for task: " + task.getId());
+                }
+                return new VideoData(task.getRawVideoUrl(), task.getRawVideoFilename());
+
+            default:
+                throw new IOException("Unknown video type: " + uploadItem.getVideoType());
+        }
+    }
+
+    /**
+     * Perform the actual video upload to YouTube
+     */
+    private String performVideoUpload(byte[] fileContent, String filename,
+                                      VideoMetadataResponseDTO metadata, YouTubeChannel channel,
+                                      Video videoObject) throws IOException, GeneralSecurityException {
+
+        try (InputStream inputStream = new ByteArrayInputStream(fileContent)) {
+            InputStreamContent mediaContent = new InputStreamContent("video/*", inputStream);
+            mediaContent.setLength(fileContent.length);
+
+            YouTube youtubeService = getYouTubeService(channel);
+
+            YouTube.Videos.Insert videoInsert = youtubeService.videos()
+                    .insert(Collections.singletonList("snippet,status"), videoObject, mediaContent);
+
+            // Configure upload
+            MediaHttpUploader uploader = videoInsert.getMediaHttpUploader();
+            uploader.setDirectUploadEnabled(false);
+            uploader.setChunkSize(MediaHttpUploader.MINIMUM_CHUNK_SIZE);
+            uploader.setProgressListener(createProgressListener(metadata.getTitle()));
+
+            Video uploadedVideo = videoInsert.execute();
+            return uploadedVideo.getId();
+        }
+    }
+
+    /**
+     * Process results of multiple video uploads
+     */
+    private void processMultipleUploadResults(VideoTask task, List<VideoUploadResult> results, User user) {
+        long successCount = results.stream().mapToLong(r -> r.isSuccess() ? 1 : 0).sum();
+        long failureCount = results.size() - successCount;
+
+        log.info("Multiple upload completed for task {}: {} success, {} failures",
+                task.getId(), successCount, failureCount);
+
+        // Update task status based on results
+        TaskStatus newStatus;
+        if (successCount == results.size()) {
+            newStatus = TaskStatus.COMPLETED;
+        } else if (successCount > 0) {
+            newStatus = TaskStatus.READY; // Partial success - allow retry
+        } else {
+            newStatus = TaskStatus.READY; // All failed - allow retry
+        }
+
+        videoTaskService.updateTaskStatus(task.getId(), newStatus, user);
+
+        // Create summary comment
+        StringBuilder commentBuilder = new StringBuilder();
+        commentBuilder.append(String.format("Multiple video upload completed: %d/%d successful\n\n",
+                successCount, results.size()));
+
+        // Add successful uploads
+        if (successCount > 0) {
+            commentBuilder.append("✅ Successful uploads:\n");
+            results.stream()
+                    .filter(VideoUploadResult::isSuccess)
+                    .forEach(result -> {
+                        commentBuilder.append(String.format("• %s -> https://youtube.com/watch?v=%s\n",
+                                result.getVideoIdentifier(), result.getYoutubeVideoId()));
+                    });
+            commentBuilder.append("\n");
+        }
+
+        // Add failed uploads
+        if (failureCount > 0) {
+            commentBuilder.append("❌ Failed uploads:\n");
+            results.stream()
+                    .filter(result -> !result.isSuccess())
+                    .forEach(result -> {
+                        commentBuilder.append(String.format("• %s: %s\n",
+                                result.getVideoIdentifier(), result.getErrorMessage()));
+                    });
+        }
+
+        commentService.addComment(task.getId(), commentBuilder.toString(), user);
+    }
+
+    // Helper classes
+    private static class VideoData {
+        private final String videoUrl;
+        private final String filename;
+
+        public VideoData(String videoUrl, String filename) {
+            this.videoUrl = videoUrl;
+            this.filename = filename;
+        }
+
+        public String getVideoUrl() {
+            return videoUrl;
+        }
+
+        public String getFilename() {
+            return filename;
+        }
+    }
+
+    private static class VideoUploadResult {
+        private final String videoIdentifier;
+        private final boolean success;
+        private final String errorMessage;
+        private final String youtubeVideoId;
+
+        public VideoUploadResult(String videoIdentifier, boolean success, String errorMessage, String youtubeVideoId) {
+            this.videoIdentifier = videoIdentifier;
+            this.success = success;
+            this.errorMessage = errorMessage;
+            this.youtubeVideoId = youtubeVideoId;
+        }
+
+        public String getVideoIdentifier() {
+            return videoIdentifier;
+        }
+
+        public boolean isSuccess() {
+            return success;
+        }
+
+        public String getErrorMessage() {
+            return errorMessage;
+        }
+
+        public String getYoutubeVideoId() {
+            return youtubeVideoId;
+        }
     }
 }
