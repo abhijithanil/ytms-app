@@ -1,11 +1,8 @@
 package com.insp17.ytms.dtos;
 
 import com.insp17.ytms.entity.RawVideo;
-import com.insp17.ytms.entity.VideoType;
 import lombok.Getter;
 import lombok.Setter;
-
-import java.time.LocalDateTime;
 
 @Getter
 @Setter

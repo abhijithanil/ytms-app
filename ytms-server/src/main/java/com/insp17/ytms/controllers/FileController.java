@@ -2,11 +2,7 @@ package com.insp17.ytms.controllers;
 
 import com.insp17.ytms.dtos.CurrentUser;
 import com.insp17.ytms.dtos.UserPrincipal;
-import com.insp17.ytms.entity.AudioInstruction;
-import com.insp17.ytms.entity.RawVideo;
-import com.insp17.ytms.entity.Revision;
-import com.insp17.ytms.entity.User;
-import com.insp17.ytms.entity.VideoTask;
+import com.insp17.ytms.entity.*;
 import com.insp17.ytms.repository.AudioInstructionRepository;
 import com.insp17.ytms.service.FileStorageService;
 import com.insp17.ytms.service.RevisionService;

@@ -407,6 +407,20 @@ public class VideoTaskService {
         return revisionRepository.findByVideoTaskIdOrderByRevisionNumberDesc(taskId);
     }
 
+    public boolean canUserAccessRevision(Long revisionId, User user) {
+        Revision revision = revisionRepository.findById(revisionId).orElseThrow(() -> new RuntimeException("Revision doesn't exist"));
+        VideoTask task = getTaskById(revision.getVideoTask().getId());
+
+        if (user == null) return false;
+        Long userId = user.getId();
+        if (user.getRole() == UserRole.ADMIN) return true;
+        if (task.getCreatedBy().getId().equals(userId)) return true;
+        if (task.getAssignedEditor() != null && task.getAssignedEditor().getId().equals(userId)) return true;
+        if (task.getPrivacyLevel() == PrivacyLevel.ALL) return true;
+
+        return taskPermissionRepository.existsByVideoTaskIdAndUserIdAndPermissionType(task.getId(), userId, PermissionType.VIEW);
+    }
+
     public static class DashboardStats {
         private long totalTasks;
         private long inProgress;

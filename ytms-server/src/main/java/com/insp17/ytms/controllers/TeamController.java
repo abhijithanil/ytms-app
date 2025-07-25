@@ -2,7 +2,6 @@ package com.insp17.ytms.controllers;
 
 import com.insp17.ytms.dtos.InviteRequest;
 import com.insp17.ytms.dtos.UserResponse;
-import com.insp17.ytms.entity.User;
 import com.insp17.ytms.service.EmailService;
 import com.insp17.ytms.service.UUIDService;
 import com.insp17.ytms.service.UserService;

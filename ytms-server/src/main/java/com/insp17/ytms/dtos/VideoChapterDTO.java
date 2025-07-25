@@ -17,6 +17,8 @@ public class VideoChapterDTO {
     @NotBlank(message = "Chapter timestamp is required")
     private String timestamp;
 
+    private Integer order;
+
     @Override
     public String toString() {
         return title + " : " + timestamp;

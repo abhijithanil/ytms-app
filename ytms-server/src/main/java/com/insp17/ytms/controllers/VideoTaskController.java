@@ -1,6 +1,5 @@
 package com.insp17.ytms.controllers;
 
-import com.google.api.services.youtube.model.Video;
 import com.insp17.ytms.dtos.*;
 import com.insp17.ytms.entity.*;
 import com.insp17.ytms.service.*;
@@ -12,7 +11,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
-import java.text.MessageFormat;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;

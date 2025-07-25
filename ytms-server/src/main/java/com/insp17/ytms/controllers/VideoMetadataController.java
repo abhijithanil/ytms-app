@@ -1,10 +1,12 @@
 package com.insp17.ytms.controllers;
 
-import com.insp17.ytms.dtos.*;
+import com.insp17.ytms.dtos.CurrentUser;
+import com.insp17.ytms.dtos.UserPrincipal;
+import com.insp17.ytms.dtos.VideoMetadataDTO;
 import com.insp17.ytms.entity.User;
+import com.insp17.ytms.service.UserService;
 import com.insp17.ytms.service.VideoMetadataService;
 import com.insp17.ytms.service.VideoTaskService;
-import com.insp17.ytms.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -34,7 +36,7 @@ public class VideoMetadataController {
 
     @PostMapping("/{taskId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
-    public ResponseEntity<VideoMetadataResponseDTO> createTaskMetadata(
+    public ResponseEntity<VideoMetadataDTO> createTaskMetadata(
             @PathVariable Long taskId,
             @RequestBody VideoMetadataDTO metadataDTO,
             @CurrentUser UserPrincipal userPrincipal) {
@@ -45,7 +47,7 @@ public class VideoMetadataController {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
 
-            VideoMetadataResponseDTO response = videoMetadataService.createOrUpdateVideoMetadata(taskId, metadataDTO);
+            VideoMetadataDTO response = videoMetadataService.createOrUpdateVideoMetadata(taskId, metadataDTO);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -55,7 +57,7 @@ public class VideoMetadataController {
     }
 
     @GetMapping("/task/{taskId}")
-    public ResponseEntity<VideoMetadataResponseDTO> getTaskMetadata(
+    public ResponseEntity<VideoMetadataDTO> getTaskMetadata(
             @PathVariable Long taskId,
             @CurrentUser UserPrincipal userPrincipal) {
 
@@ -65,7 +67,7 @@ public class VideoMetadataController {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
 
-            VideoMetadataResponseDTO response = videoMetadataService.getVideoMetadata(taskId);
+            VideoMetadataDTO response = videoMetadataService.getVideoMetadata(taskId);
             return ResponseEntity.ok(response);
 
         } catch (RuntimeException e) {
@@ -73,6 +75,28 @@ public class VideoMetadataController {
                 return ResponseEntity.notFound().build();
             }
             log.error("Failed to get task metadata for task {}: {}", taskId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @PutMapping("/{taskId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+    public ResponseEntity<VideoMetadataDTO> updateTaskMetadata(
+            @PathVariable Long taskId,
+            @RequestBody VideoMetadataDTO metadataDTO,
+            @CurrentUser UserPrincipal userPrincipal) {
+
+        try {
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+            if (!videoTaskService.canUserAccessTask(taskId, user)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            VideoMetadataDTO response = videoMetadataService.createOrUpdateVideoMetadata(taskId, metadataDTO);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Failed to update task metadata for task {}: {}", taskId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -102,7 +126,7 @@ public class VideoMetadataController {
 
     @PostMapping("/revision/{revisionId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
-    public ResponseEntity<VideoMetadataResponseDTO> createRevisionMetadata(
+    public ResponseEntity<VideoMetadataDTO> createRevisionMetadata(
             @PathVariable Long revisionId,
             @RequestBody VideoMetadataDTO metadataDTO,
             @CurrentUser UserPrincipal userPrincipal) {
@@ -111,14 +135,11 @@ public class VideoMetadataController {
             User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
 
             // Check access through the revision's parent task
-            // Note: This would require getting the revision first to check task access
-            // For now, we'll implement basic permission check
-            if (user.getRole() != com.insp17.ytms.entity.UserRole.ADMIN &&
-                    user.getRole() != com.insp17.ytms.entity.UserRole.EDITOR) {
+            if (!videoTaskService.canUserAccessRevision(revisionId, user)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
 
-            VideoMetadataResponseDTO response = videoMetadataService.createOrUpdateRevisionMetadata(revisionId, metadataDTO);
+            VideoMetadataDTO response = videoMetadataService.createOrUpdateRevisionMetadata(revisionId, metadataDTO);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -128,14 +149,19 @@ public class VideoMetadataController {
     }
 
     @GetMapping("/revision/{revisionId}")
-    public ResponseEntity<VideoMetadataResponseDTO> getRevisionMetadata(
+    public ResponseEntity<VideoMetadataDTO> getRevisionMetadata(
             @PathVariable Long revisionId,
             @CurrentUser UserPrincipal userPrincipal) {
 
         try {
             User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
 
-            VideoMetadataResponseDTO response = videoMetadataService.getRevisionMetadata(revisionId);
+            // Check access through the revision's parent task
+            if (!videoTaskService.canUserAccessRevision(revisionId, user)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            VideoMetadataDTO response = videoMetadataService.getRevisionMetadata(revisionId);
             return ResponseEntity.ok(response);
 
         } catch (RuntimeException e) {
@@ -143,6 +169,30 @@ public class VideoMetadataController {
                 return ResponseEntity.notFound().build();
             }
             log.error("Failed to get revision metadata for revision {}: {}", revisionId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @PutMapping("/revision/{revisionId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+    public ResponseEntity<VideoMetadataDTO> updateRevisionMetadata(
+            @PathVariable Long revisionId,
+            @RequestBody VideoMetadataDTO metadataDTO,
+            @CurrentUser UserPrincipal userPrincipal) {
+
+        try {
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
+            // Check access through the revision's parent task
+            if (!videoTaskService.canUserAccessRevision(revisionId, user)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            VideoMetadataDTO response = videoMetadataService.createOrUpdateRevisionMetadata(revisionId, metadataDTO);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Failed to update revision metadata for revision {}: {}", revisionId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -156,6 +206,11 @@ public class VideoMetadataController {
         try {
             User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
 
+            // Check access through the revision's parent task
+            if (!videoTaskService.canUserAccessRevision(revisionId, user)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
             videoMetadataService.deleteRevisionMetadata(revisionId);
             return ResponseEntity.noContent().build();
 
@@ -165,11 +220,89 @@ public class VideoMetadataController {
         }
     }
 
+    // === MULTIPLE REVISIONS METADATA ENDPOINTS ===
+
+    @PostMapping("/revisions/multiple")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+    public ResponseEntity<Map<Long, VideoMetadataDTO>> createMultipleRevisionMetadata(
+            @RequestBody Map<Long, VideoMetadataDTO> metadataMap,
+            @CurrentUser UserPrincipal userPrincipal) {
+
+        try {
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
+            // Validate access to all revisions
+            for (Long revisionId : metadataMap.keySet()) {
+                if (!videoTaskService.canUserAccessRevision(revisionId, user)) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+                }
+            }
+
+            Map<Long, VideoMetadataDTO> response = videoMetadataService.createOrUpdateMultipleRevisionMetadata(metadataMap);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Failed to create multiple revision metadata: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @PostMapping("/revisions/get-multiple")
+    public ResponseEntity<Map<Long, VideoMetadataDTO>> getMultipleRevisionMetadata(
+            @RequestBody Map<String, List<Long>> request,
+            @CurrentUser UserPrincipal userPrincipal) {
+
+        try {
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+            List<Long> revisionIds = request.get("revisionIds");
+
+            if (revisionIds == null || revisionIds.isEmpty()) {
+                return ResponseEntity.badRequest().build();
+            }
+
+            // Validate access to all revisions
+            for (Long revisionId : revisionIds) {
+                if (!videoTaskService.canUserAccessRevision(revisionId, user)) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+                }
+            }
+
+            Map<Long, VideoMetadataDTO> response = videoMetadataService.getMultipleRevisionMetadata(revisionIds);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Failed to get multiple revision metadata: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    // === BATCH OPERATIONS FOR TASK REVISIONS ===
+
+    @GetMapping("/task/{taskId}/revisions/all")
+    public ResponseEntity<Map<Long, VideoMetadataDTO>> getAllRevisionMetadataForTask(
+            @PathVariable Long taskId,
+            @CurrentUser UserPrincipal userPrincipal) {
+
+        try {
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+            if (!videoTaskService.canUserAccessTask(taskId, user)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            Map<Long, VideoMetadataDTO> response = videoMetadataService.getAllRevisionMetadataForTask(taskId);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Failed to get all revision metadata for task {}: {}", taskId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
     // === RAW VIDEO-SPECIFIC METADATA ENDPOINTS ===
 
     @PostMapping("/raw-video/{rawVideoId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
-    public ResponseEntity<VideoMetadataResponseDTO> createRawVideoMetadata(
+    public ResponseEntity<VideoMetadataDTO> createRawVideoMetadata(
             @PathVariable Long rawVideoId,
             @RequestBody VideoMetadataDTO metadataDTO,
             @CurrentUser UserPrincipal userPrincipal) {
@@ -182,7 +315,7 @@ public class VideoMetadataController {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
 
-            VideoMetadataResponseDTO response = videoMetadataService.createOrUpdateRawVideoMetadata(rawVideoId, metadataDTO);
+            VideoMetadataDTO response = videoMetadataService.createOrUpdateRawVideoMetadata(rawVideoId, metadataDTO);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -192,14 +325,14 @@ public class VideoMetadataController {
     }
 
     @GetMapping("/raw-video/{rawVideoId}")
-    public ResponseEntity<VideoMetadataResponseDTO> getRawVideoMetadata(
+    public ResponseEntity<VideoMetadataDTO> getRawVideoMetadata(
             @PathVariable Long rawVideoId,
             @CurrentUser UserPrincipal userPrincipal) {
 
         try {
             User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
 
-            VideoMetadataResponseDTO response = videoMetadataService.getRawVideoMetadata(rawVideoId);
+            VideoMetadataDTO response = videoMetadataService.getRawVideoMetadata(rawVideoId);
             return ResponseEntity.ok(response);
 
         } catch (RuntimeException e) {
@@ -207,6 +340,30 @@ public class VideoMetadataController {
                 return ResponseEntity.notFound().build();
             }
             log.error("Failed to get raw video metadata for raw video {}: {}", rawVideoId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @PutMapping("/raw-video/{rawVideoId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+    public ResponseEntity<VideoMetadataDTO> updateRawVideoMetadata(
+            @PathVariable Long rawVideoId,
+            @RequestBody VideoMetadataDTO metadataDTO,
+            @CurrentUser UserPrincipal userPrincipal) {
+
+        try {
+            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
+            if (user.getRole() != com.insp17.ytms.entity.UserRole.ADMIN &&
+                    user.getRole() != com.insp17.ytms.entity.UserRole.EDITOR) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            VideoMetadataDTO response = videoMetadataService.createOrUpdateRawVideoMetadata(rawVideoId, metadataDTO);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Failed to update raw video metadata for raw video {}: {}", rawVideoId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -229,55 +386,29 @@ public class VideoMetadataController {
         }
     }
 
-    // === MULTI-VIDEO METADATA ENDPOINTS ===
+    // === MULTI-VIDEO METADATA ENDPOINTS (Legacy Support) ===
 
     @PostMapping("/multiple/revisions")
     @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
-    public ResponseEntity<Map<Long, VideoMetadataResponseDTO>> createMultipleRevisionMetadata(
+    public ResponseEntity<Map<Long, VideoMetadataDTO>> createMultipleRevisionMetadataLegacy(
             @RequestBody Map<Long, VideoMetadataDTO> metadataMap,
             @CurrentUser UserPrincipal userPrincipal) {
 
-        try {
-            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
-
-            if (user.getRole() != com.insp17.ytms.entity.UserRole.ADMIN &&
-                    user.getRole() != com.insp17.ytms.entity.UserRole.EDITOR) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-
-            Map<Long, VideoMetadataResponseDTO> response = videoMetadataService.createOrUpdateMultipleRevisionMetadata(metadataMap);
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            log.error("Failed to create multiple revision metadata: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        // This is an alias for the new endpoint for backward compatibility
+        return createMultipleRevisionMetadata(metadataMap, userPrincipal);
     }
 
     @PostMapping("/multiple/revisions/get")
-    public ResponseEntity<Map<Long, VideoMetadataResponseDTO>> getMultipleRevisionMetadata(
+    public ResponseEntity<Map<Long, VideoMetadataDTO>> getMultipleRevisionMetadataLegacy(
             @RequestBody Map<String, List<Long>> request,
             @CurrentUser UserPrincipal userPrincipal) {
 
-        try {
-            User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
-            List<Long> revisionIds = request.get("revisionIds");
-
-            if (revisionIds == null || revisionIds.isEmpty()) {
-                return ResponseEntity.badRequest().build();
-            }
-
-            Map<Long, VideoMetadataResponseDTO> response = videoMetadataService.getMultipleRevisionMetadata(revisionIds);
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            log.error("Failed to get multiple revision metadata: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        // This is an alias for the new endpoint for backward compatibility
+        return getMultipleRevisionMetadata(request, userPrincipal);
     }
 
     @PostMapping("/multiple/raw-videos/get")
-    public ResponseEntity<Map<Long, VideoMetadataResponseDTO>> getMultipleRawVideoMetadata(
+    public ResponseEntity<Map<Long, VideoMetadataDTO>> getMultipleRawVideoMetadata(
             @RequestBody Map<String, List<Long>> request,
             @CurrentUser UserPrincipal userPrincipal) {
 
@@ -289,7 +420,7 @@ public class VideoMetadataController {
                 return ResponseEntity.badRequest().build();
             }
 
-            Map<Long, VideoMetadataResponseDTO> response = videoMetadataService.getMultipleRawVideoMetadata(rawVideoIds);
+            Map<Long, VideoMetadataDTO> response = videoMetadataService.getMultipleRawVideoMetadata(rawVideoIds);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -301,7 +432,7 @@ public class VideoMetadataController {
     // === UTILITY ENDPOINTS ===
 
     @GetMapping("/task/{taskId}/all")
-    public ResponseEntity<List<VideoMetadataResponseDTO>> getAllMetadataForTask(
+    public ResponseEntity<List<VideoMetadataDTO>> getAllMetadataForTask(
             @PathVariable Long taskId,
             @CurrentUser UserPrincipal userPrincipal) {
 
@@ -311,7 +442,7 @@ public class VideoMetadataController {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
 
-            List<VideoMetadataResponseDTO> response = videoMetadataService.getAllMetadataForTask(taskId);
+            List<VideoMetadataDTO> response = videoMetadataService.getAllMetadataForTask(taskId);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -321,7 +452,7 @@ public class VideoMetadataController {
     }
 
     @GetMapping("/task/{taskId}/exists")
-    public ResponseEntity<Map<String, Boolean>> checkMetadataExists(
+    public ResponseEntity<Map<String, Object>> checkMetadataExists(
             @PathVariable Long taskId,
             @CurrentUser UserPrincipal userPrincipal) {
 
@@ -335,10 +466,10 @@ public class VideoMetadataController {
             boolean hasAnyMetadata = videoMetadataService.hasAnyMetadataForTask(taskId);
             long metadataCount = videoMetadataService.getMetadataCountForTask(taskId);
 
-            Map<String, Boolean> response = Map.of(
+            Map<String, Object> response = Map.of(
                     "hasTaskMetadata", hasTaskMetadata,
                     "hasAnyMetadata", hasAnyMetadata,
-                    "metadataCount", metadataCount > 0
+                    "metadataCount", metadataCount
             );
 
             return ResponseEntity.ok(response);
@@ -356,6 +487,11 @@ public class VideoMetadataController {
 
         try {
             User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
+            // Check access through the revision's parent task
+            if (!videoTaskService.canUserAccessRevision(revisionId, user)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
 
             boolean hasMetadata = videoMetadataService.hasRevisionMetadata(revisionId);
             Map<String, Boolean> response = Map.of("hasMetadata", hasMetadata);
@@ -387,8 +523,8 @@ public class VideoMetadataController {
         }
     }
 
-//    // === LEGACY COMPATIBILITY ENDPOINTS ===
-//
+    // === LEGACY COMPATIBILITY ENDPOINTS ===
+
 //    @PostMapping("/{taskId}")
 //    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
 //    public ResponseEntity<VideoMetadataResponseDTO> createMetadata(
@@ -407,5 +543,26 @@ public class VideoMetadataController {
 //
 //        // This is an alias for getTaskMetadata for backward compatibility
 //        return getTaskMetadata(taskId, userPrincipal);
+//    }
+//
+//    @PutMapping("/{taskId}")
+//    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+//    public ResponseEntity<VideoMetadataResponseDTO> updateMetadata(
+//            @PathVariable Long taskId,
+//            @RequestBody VideoMetadataDTO metadataDTO,
+//            @CurrentUser UserPrincipal userPrincipal) {
+//
+//        // This is an alias for updateTaskMetadata for backward compatibility
+//        return updateTaskMetadata(taskId, metadataDTO, userPrincipal);
+//    }
+//
+//    @DeleteMapping("/{taskId}")
+//    @PreAuthorize("hasRole('ADMIN') or hasRole('EDITOR')")
+//    public ResponseEntity<Void> deleteMetadata(
+//            @PathVariable Long taskId,
+//            @CurrentUser UserPrincipal userPrincipal) {
+//
+//        // This is an alias for deleteTaskMetadata for backward compatibility
+//        return deleteTaskMetadata(taskId, userPrincipal);
 //    }
 }

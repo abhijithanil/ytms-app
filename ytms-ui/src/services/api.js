@@ -3,7 +3,8 @@
 import axios from "axios";
 
 // Ensure no double slashes in API URL construction
-const API_BASE_URL = process.env.REACT_APP_API_URL ||  "http://localhost:8080/api"
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || "http://localhost:8080/api";
 
 // Fixed: Extract methods to avoid instanceof issues
 const { isCancel } = axios;
@@ -128,7 +129,10 @@ export const authAPI = {
   },
   acceptInvite: async (token, userDetails) => {
     try {
-      const response = await api.post(`/auth/accept-invite/${token}`, userDetails);
+      const response = await api.post(
+        `/auth/accept-invite/${token}`,
+        userDetails
+      );
       return response.data;
     } catch (error) {
       console.error("Accept invite error:", error);
@@ -313,10 +317,12 @@ export const tasksAPI = {
     return api.post(`/tasks/${taskId}/privacy`, privacyData);
   },
   scheduleYouTubeUpload: (taskId, uploadTime) => {
-    console.log(`Scheduling YouTube upload for task ${taskId} at ${uploadTime}`);
+    console.log(
+      `Scheduling YouTube upload for task ${taskId} at ${uploadTime}`
+    );
     return api.post(`/tasks/${taskId}/schedule-upload`, { uploadTime });
   },
-  
+
   // Updated: Single video upload (legacy support)
   doYoutubeUpload: (uploadRequest) => {
     const uploadApi = axios.create({
@@ -336,7 +342,7 @@ export const tasksAPI = {
     return api.post(`/tasks/upload-to-youtube`, uploadRequest);
   },
 
-  // New: Multiple video upload support  
+  // New: Multiple video upload support
   doMultiVideoYoutubeUpload: (uploadRequest) => {
     console.log("Starting multi-video YouTube upload:", uploadRequest);
     const uploadApi = axios.create({
@@ -357,7 +363,9 @@ export const tasksAPI = {
   },
 
   addAudioInstruction: (audioInstruction) => {
-    console.log(`Adding audio instruction to task ${audioInstruction.videoTaskId}`);
+    console.log(
+      `Adding audio instruction to task ${audioInstruction.videoTaskId}`
+    );
     return api.post(
       `/tasks/${audioInstruction.videoTaskId}/audio-instructions`,
       audioInstruction
@@ -439,28 +447,64 @@ export const commentsAPI = {
 
 // Metadata API - Updated for multiple videos support
 export const metadataAPI = {
-  createMetadata: (taskId, metadataData) => {
-    return api.post(`/metadata/${taskId}`, metadataData, {
-      headers: { "Content-Type": "application/json" },
-    });
-  },
-  getMetadata: (taskId) => {
-    console.log(`Fetching metadata for task ${taskId}`);
-    return api.get(`/metadata/task/${taskId}`);
-  },
-  // New: Multiple video metadata support
-  createMultipleMetadata: (metadataMap) => {
-    console.log("Creating metadata for multiple videos:", metadataMap);
-    return api.post("/metadata/multiple", metadataMap, {
-      headers: { "Content-Type": "application/json" },
-    });
-  },
-  getMultipleMetadata: (revisionIds) => {
-    console.log(`Fetching metadata for revisions:`, revisionIds);
-    return api.post("/metadata/multiple/get", { revisionIds }, {
-      headers: { "Content-Type": "application/json" },
-    });
-  },
+  // Task-level metadata endpoints
+  createMetadata: (taskId, metadataData) =>
+    api.post(`/metadata/${taskId}`, metadataData),
+
+  getMetadata: (taskId) => api.get(`/metadata/task/${taskId}`),
+
+  updateMetadata: (taskId, metadataData) =>
+    api.put(`/metadata/${taskId}`, metadataData),
+
+  deleteMetadata: (taskId) => api.delete(`/metadata/task/${taskId}`),
+
+  // NEW: Revision-specific metadata endpoints
+  createRevisionMetadata: (revisionId, metadataData) =>
+    api.post(`/metadata/revision/${revisionId}`, metadataData),
+
+  getRevisionMetadata: (revisionId) =>
+    api.get(`/metadata/revision/${revisionId}`),
+
+  updateRevisionMetadata: (revisionId, metadataData) =>
+    api.put(`/metadata/revision/${revisionId}`, metadataData),
+
+  deleteRevisionMetadata: (revisionId) =>
+    api.delete(`/metadata/revision/${revisionId}`),
+
+  // NEW: Multiple revisions metadata endpoints
+  createMultipleRevisionMetadata: (metadataMap) =>
+    api.post("/metadata/revisions/multiple", metadataMap),
+
+  getMultipleRevisionMetadata: (revisionIds) =>
+    api.post("/metadata/revisions/get-multiple", { revisionIds }),
+
+  // NEW: Get all revision metadata for a task
+  getAllRevisionMetadataForTask: (taskId) =>
+    api.get(`/metadata/task/${taskId}/revisions/all`),
+
+  // Raw video metadata endpoints
+  createRawVideoMetadata: (rawVideoId, metadataData) =>
+    api.post(`/metadata/raw-video/${rawVideoId}`, metadataData),
+
+  getRawVideoMetadata: (rawVideoId) =>
+    api.get(`/metadata/raw-video/${rawVideoId}`),
+
+  updateRawVideoMetadata: (rawVideoId, metadataData) =>
+    api.put(`/metadata/raw-video/${rawVideoId}`, metadataData),
+
+  deleteRawVideoMetadata: (rawVideoId) =>
+    api.delete(`/metadata/raw-video/${rawVideoId}`),
+
+  // Utility endpoints
+  getAllMetadataForTask: (taskId) => api.get(`/metadata/task/${taskId}/all`),
+
+  checkMetadataExists: (taskId) => api.get(`/metadata/task/${taskId}/exists`),
+
+  checkRevisionMetadataExists: (revisionId) =>
+    api.get(`/metadata/revision/${revisionId}/exists`),
+
+  checkRawVideoMetadataExists: (rawVideoId) =>
+    api.get(`/metadata/raw-video/${rawVideoId}/exists`),
 };
 
 // File API - Updated for multiple videos support
@@ -496,20 +540,28 @@ export const fileAPI = {
   },
   getVideoUrl: (taskId) => {
     const token = localStorage.getItem("token");
-    return `${API_BASE_URL}/files/video/${taskId}?Authorization=Bearer ${encodeURIComponent(token)}`;
+    return `${API_BASE_URL}/files/video/${taskId}?Authorization=Bearer ${encodeURIComponent(
+      token
+    )}`;
   },
   // New: Get specific raw video URL
   getRawVideoUrl: (taskId, videoId) => {
     const token = localStorage.getItem("token");
-    return `${API_BASE_URL}/files/raw-video/${taskId}/${videoId}?Authorization=Bearer ${encodeURIComponent(token)}`;
+    return `${API_BASE_URL}/files/raw-video/${taskId}/${videoId}?Authorization=Bearer ${encodeURIComponent(
+      token
+    )}`;
   },
   getRevisionUrl: (revisionId) => {
     const token = localStorage.getItem("token");
-    return `${API_BASE_URL}/files/revision/${revisionId}?Authorization=Bearer ${encodeURIComponent(token)}`;
+    return `${API_BASE_URL}/files/revision/${revisionId}?Authorization=Bearer ${encodeURIComponent(
+      token
+    )}`;
   },
   getAudioUrl: (audioId) => {
     const token = localStorage.getItem("token");
-    return `${API_BASE_URL}/files/audio/${audioId}?Authorization=Bearer ${encodeURIComponent(token)}`;
+    return `${API_BASE_URL}/files/audio/${audioId}?Authorization=Bearer ${encodeURIComponent(
+      token
+    )}`;
   },
 };
 
@@ -532,7 +584,9 @@ export const dashboardAPI = {
 // Storage API
 export const storageAPI = {
   generateSignedUrl: (filename, folder, contentType) => {
-    console.log(`Generating signed URL for ${filename} in ${folder} with type ${contentType}`);
+    console.log(
+      `Generating signed URL for ${filename} in ${folder} with type ${contentType}`
+    );
     const params = new URLSearchParams({
       filename: filename,
       type: contentType,
@@ -580,7 +634,10 @@ export const fileUtils = {
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
     const extension = fileUtils.getFileExtension(originalName);
-    const nameWithoutExt = originalName.substring(0, originalName.lastIndexOf("."));
+    const nameWithoutExt = originalName.substring(
+      0,
+      originalName.lastIndexOf(".")
+    );
     return `${nameWithoutExt}_${timestamp}_${random}.${extension}`;
   },
 };
@@ -663,7 +720,10 @@ export const youtubeChannelUtils = {
   validateChannelData: (channelData) => {
     const errors = [];
 
-    if (!channelData.channelName || channelData.channelName.trim().length === 0) {
+    if (
+      !channelData.channelName ||
+      channelData.channelName.trim().length === 0
+    ) {
       errors.push("Channel name is required");
     }
 
@@ -671,11 +731,19 @@ export const youtubeChannelUtils = {
       errors.push("Channel name must not exceed 100 characters");
     }
 
-    if (!channelData.channelId || !youtubeChannelUtils.validateChannelId(channelData.channelId)) {
-      errors.push("Valid YouTube channel ID is required (format: UC followed by 22 characters)");
+    if (
+      !channelData.channelId ||
+      !youtubeChannelUtils.validateChannelId(channelData.channelId)
+    ) {
+      errors.push(
+        "Valid YouTube channel ID is required (format: UC followed by 22 characters)"
+      );
     }
 
-    if (channelData.channelUrl && !youtubeChannelUtils.validateChannelUrl(channelData.channelUrl)) {
+    if (
+      channelData.channelUrl &&
+      !youtubeChannelUtils.validateChannelUrl(channelData.channelUrl)
+    ) {
       errors.push("Invalid YouTube channel URL format");
     }
 

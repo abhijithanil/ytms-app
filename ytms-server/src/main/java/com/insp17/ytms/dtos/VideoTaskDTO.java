@@ -1,8 +1,6 @@
 package com.insp17.ytms.dtos;
 
 import com.insp17.ytms.entity.VideoTask;
-import com.insp17.ytms.entity.RawVideo;
-import com.insp17.ytms.entity.Revision;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -47,7 +45,8 @@ public class VideoTaskDTO {
     private Integer totalMainVideos;
     private Integer totalShortVideos;
 
-    public VideoTaskDTO() {}
+    public VideoTaskDTO() {
+    }
 
     public VideoTaskDTO(VideoTask task) {
         this.id = task.getId();

@@ -55,7 +55,7 @@ public class YouTubeService {
             ".mov", ".mpeg4", ".mp4", ".avi", ".wmv", ".mpegps", ".flv", ".3gpp", ".webm"
     );
     private static final List<String> VALID_PRIVACY_STATUSES = Arrays.asList("private", "public", "unlisted");
-
+    private final YouTubeService self;
     @Value("${gcp.project-id}")
     private String projectId;
     @Value("${gcp.client-secret-key:client_data}")
@@ -74,8 +74,6 @@ public class YouTubeService {
     private CommentService commentService;
     @Autowired
     private RevisionService revisionService;
-
-    private final YouTubeService self;
 
     @Autowired
     public YouTubeService(@Lazy YouTubeService self) {
@@ -145,9 +143,9 @@ public class YouTubeService {
                 }
 
                 // Get metadata - either from upload item or from revision-specific metadata
-                VideoMetadataResponseDTO metadata;
+                VideoMetadataDTO metadata;
                 if (uploadItem.getMetadata() != null) {
-                    metadata = convertToResponseDTO(uploadItem.getMetadata());
+                    metadata = uploadItem.getMetadata();
                 } else {
                     // Try to get revision-specific metadata, fallback to task metadata
                     try {
@@ -218,7 +216,7 @@ public class YouTubeService {
      * Upload a single revision video (used by both single and multi-upload)
      */
     @Async("youtubeUploadExecutor")
-    public void uploadSingleRevisionVideo(Revision revision, VideoMetadataResponseDTO metadata,
+    public void uploadSingleRevisionVideo(Revision revision, VideoMetadataDTO metadata,
                                           YouTubeChannel channel, VideoTask task, User user) throws IOException {
 
         log.info("Downloading video file from: {}", revision.getEditedVideoUrl());
@@ -298,7 +296,7 @@ public class YouTubeService {
                 .orElseThrow(() -> new IOException("No revisions found for this task"));
 
         // Get and validate metadata
-        VideoMetadataResponseDTO metadata = videoMetadataService.getVideoMetadata(task.getId());
+        VideoMetadataDTO metadata = videoMetadataService.getVideoMetadata(task.getId());
         if (metadata == null) {
             throw new IOException("Video metadata is required for YouTube upload");
         }
@@ -309,7 +307,7 @@ public class YouTubeService {
     }
 
     @Async("youtubeUploadExecutor")
-    public void uploadVideoOperations(Revision latestRevision, VideoMetadataResponseDTO metadata, YouTubeChannel channel, VideoTask task, UploadVideoRequest uploadVideoRequest, User user) throws IOException {
+    public void uploadVideoOperations(Revision latestRevision, VideoMetadataDTO metadata, YouTubeChannel channel, VideoTask task, UploadVideoRequest uploadVideoRequest, User user) throws IOException {
 
         // Use the single revision upload method
         uploadSingleRevisionVideo(latestRevision, metadata, channel, task, user);
@@ -387,7 +385,7 @@ public class YouTubeService {
     /**
      * Updated metadata validation to include thumbnail requirements
      */
-    private void validateMetadata(VideoMetadataResponseDTO metadata) throws IOException {
+    private void validateMetadata(VideoMetadataDTO metadata) throws IOException {
         if (metadata.getTitle() == null || metadata.getTitle().trim().isEmpty()) {
             throw new IOException("Video title is required");
         }
@@ -462,7 +460,7 @@ public class YouTubeService {
     /**
      * Creates Video object WITHOUT thumbnail (thumbnail uploaded separately)
      */
-    private Video createVideoObjectWithoutThumbnail(VideoMetadataResponseDTO metadata) throws IOException {
+    private Video createVideoObjectWithoutThumbnail(VideoMetadataDTO metadata) throws IOException {
         VideoSnippet snippet = new VideoSnippet();
         snippet.setTitle(metadata.getTitle());
         snippet.setDescription(formatDescriptionWithChapters(metadata));
@@ -624,7 +622,7 @@ public class YouTubeService {
     /**
      * Format description with chapters
      */
-    private String formatDescriptionWithChapters(VideoMetadataResponseDTO metadata) throws IOException {
+    private String formatDescriptionWithChapters(VideoMetadataDTO metadata) throws IOException {
         StringBuilder description = new StringBuilder();
 
         // Add main description first
@@ -729,25 +727,6 @@ public class YouTubeService {
         throw new IllegalArgumentException("Invalid timestamp format: " + timestamp);
     }
 
-    /**
-     * Helper method to convert VideoMetadataDTO to VideoMetadataResponseDTO
-     */
-    private VideoMetadataResponseDTO convertToResponseDTO(VideoMetadataDTO dto) {
-        VideoMetadataResponseDTO responseDTO = new VideoMetadataResponseDTO();
-        responseDTO.setTitle(dto.getTitle());
-        responseDTO.setDescription(dto.getDescription());
-        responseDTO.setTags(dto.getTags());
-        responseDTO.setThumbnailUrl(dto.getThumbnailUrl());
-        responseDTO.setCategory(dto.getCategory());
-        responseDTO.setLanguage(dto.getLanguage());
-        responseDTO.setPrivacyStatus(dto.getPrivacyStatus());
-        responseDTO.setAgeRestriction(dto.getAgeRestriction());
-        responseDTO.setMadeForKids(dto.getMadeForKids());
-        responseDTO.setRecordingDetails(dto.getRecordingDetails());
-        responseDTO.setLicense(dto.getLicense());
-        responseDTO.setVideoChapters(dto.getVideoChapters());
-        return responseDTO;
-    }
 
     /**
      * Helper method to get channel by ID (should be implemented in YouTubeChannelService)
@@ -802,7 +781,7 @@ public class YouTubeService {
     /**
      * Update existing video metadata on YouTube
      */
-    public Video updateVideoMetadata(String videoId, VideoMetadataResponseDTO metadata, YouTubeChannel channel)
+    public Video updateVideoMetadata(String videoId, VideoMetadataDTO metadata, YouTubeChannel channel)
             throws IOException, GeneralSecurityException {
 
         validateMetadata(metadata);

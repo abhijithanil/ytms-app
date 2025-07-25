@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
+import TaskEditorAssigner from "./TaskEditorAssigner";
 import {
   Calendar,
   User,
@@ -119,15 +120,13 @@ const TaskInfoSidebar = ({
             </div>
           </div>
 
-          {task.assignedEditor && (
-            <div className="flex items-start space-x-3">
-              <User className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-700">Assigned to</p>
-                <p className="text-sm text-gray-600 truncate">{task.assignedEditor.username}</p>
-              </div>
-            </div>
-          )}
+          {/* Task Editor Assignment Section */}
+          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <TaskEditorAssigner 
+              task={task} 
+              onTaskUpdate={onTaskUpdate}
+            />
+          </div>
 
           <div className="flex items-start space-x-3">
             <Calendar className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />

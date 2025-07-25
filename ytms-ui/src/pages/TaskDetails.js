@@ -35,6 +35,7 @@ import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
 import VideoMetadataModal from "../components/VideoMetadataModal";
 import MultiVideoMetadataModal from "../components/MultiVideoMetadataModal";
 import EditTaskModal from "../components/EditTaskModal";
+import SingleRevisionMetadataModal from "../components/SingleRevisionMetadataModal";
 
 // Icons for loading state
 import { AlertCircle, Youtube, Settings, X, Check } from "lucide-react";
@@ -50,6 +51,7 @@ const TaskDetails = () => {
   const [task, setTask] = useState(null);
   const [metadata, setMetadata] = useState({});
   const [multiVideoMetadata, setMultiVideoMetadata] = useState({});
+  const [revisionMetadata, setRevisionMetadata] = useState({}); // NEW: Individual revision metadata
   const [revisions, setRevisions] = useState([]);
   const [comments, setComments] = useState([]);
   const [audioInstructions, setAudioInstructions] = useState([]);
@@ -58,9 +60,7 @@ const TaskDetails = () => {
   // Video state
   const [selectedRevision, setSelectedRevision] = useState(null);
   const [selectedRawVideo, setSelectedRawVideo] = useState(null);
-  const [selectedRevisionsForUpload, setSelectedRevisionsForUpload] = useState(
-    []
-  );
+  const [selectedRevisionsForUpload, setSelectedRevisionsForUpload] = useState([]);
   const [currentVideoUrl, setCurrentVideoUrl] = useState("");
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [videoError, setVideoError] = useState(null);
@@ -94,10 +94,10 @@ const TaskDetails = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showVideoMetadataModal, setShowVideoMetadataModal] = useState(false);
-  const [showMultiVideoMetadataModal, setShowMultiVideoMetadataModal] =
-    useState(false);
-  const [showUploadSelectionModal, setShowUploadSelectionModal] =
-    useState(false);
+  const [showMultiVideoMetadataModal, setShowMultiVideoMetadataModal] = useState(false);
+  const [showSingleRevisionMetadataModal, setShowSingleRevisionMetadataModal] = useState(false); // NEW
+  const [selectedRevisionForMetadata, setSelectedRevisionForMetadata] = useState(null); // NEW
+  const [showUploadSelectionModal, setShowUploadSelectionModal] = useState(false);
   const [pendingStatus, setPendingStatus] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -176,31 +176,35 @@ const TaskDetails = () => {
     };
   }, []);
 
+  // NEW: Fetch revision metadata from server
+  const fetchRevisionMetadata = async (taskId) => {
+    try {
+      const response = await metadataAPI.getAllRevisionMetadataForTask(taskId);
+      if (response.data) {
+        setRevisionMetadata(response.data);
+      }
+    } catch (error) {
+      console.warn("Failed to fetch revision metadata:", error);
+      // Don't show error toast as this might be expected (no metadata exists yet)
+    }
+  };
+
   // Initial data fetch
   useEffect(() => {
     fetchTaskAndChannelDetails();
   }, [id]);
 
-  // Auto-select video when task/revisions change
+  // UPDATED: Auto-select video logic - prioritize latest revision
   useEffect(() => {
-    if (task && !isUploading) {
-      // First try to select a raw video if available
-      if (
-        task.rawVideos &&
-        task.rawVideos.length > 0 &&
-        !selectedRawVideo &&
-        !selectedRevision
-      ) {
-        handleRawVideoSelect(task.rawVideos[0]);
-      }
-      // If no raw videos but revisions exist, select latest revision
-      else if (
-        revisions &&
-        revisions.length > 0 &&
-        !selectedRevision &&
-        !selectedRawVideo
-      ) {
+    if (task && !isUploading && !selectedRevision && !selectedRawVideo) {
+      // First try to select latest revision if available
+      if (revisions && revisions.length > 0) {
+        // Revisions are typically ordered by creation date, get the first one (latest)
         handleRevisionSelect(revisions[0]);
+      }
+      // Only fall back to raw video if no revisions exist
+      else if (task.rawVideos && task.rawVideos.length > 0) {
+        handleRawVideoSelect(task.rawVideos[0]);
       }
     }
   }, [task, revisions, isUploading, selectedRawVideo, selectedRevision]);
@@ -301,7 +305,7 @@ const TaskDetails = () => {
     }, 5000);
   }, [id, task?.status]);
 
-  // API Functions
+  // UPDATED: Initial data fetch function
   const fetchTaskAndChannelDetails = async () => {
     try {
       setLoading(true);
@@ -330,6 +334,9 @@ const TaskDetails = () => {
       setAudioInstructions(audioResponse.data);
       setMetadata(metadataResponse.data);
       setChannels(channelsResponse.data);
+
+      // NEW: Fetch revision metadata after getting task details
+      await fetchRevisionMetadata(id);
     } catch (error) {
       console.error("Failed to fetch page details:", error);
       toast.error("Failed to load page details");
@@ -464,21 +471,47 @@ const TaskDetails = () => {
     }
   };
 
-  // Upload handling
+  // NEW: Handle single revision metadata modal
+  const handleShowRevisionMetadataModal = (revision) => {
+    setSelectedRevisionForMetadata(revision);
+    setShowSingleRevisionMetadataModal(true);
+  };
+
+  // NEW: Handle single revision metadata submit
+  const handleSingleRevisionMetadataSubmit = async (metadataData) => {
+    try {
+      const revisionId = selectedRevisionForMetadata.id;
+      await metadataAPI.createRevisionMetadata(revisionId, metadataData);
+      
+      // Update local state
+      setRevisionMetadata(prev => ({
+        ...prev,
+        [revisionId]: metadataData
+      }));
+      
+      toast.success("Revision metadata saved successfully");
+      setShowSingleRevisionMetadataModal(false);
+      setSelectedRevisionForMetadata(null);
+    } catch (error) {
+      console.error("Failed to save revision metadata:", error);
+      toast.error("Failed to save revision metadata");
+    }
+  };
+
+  // UPDATED: Multi-video upload validation
   const handleShowUploadSelection = () => {
     if (selectedRevisionsForUpload.length === 0) {
       toast.error("Please select at least one revision to upload.");
       return;
     }
 
-    // Check if metadata exists for selected revisions
+    // Check if metadata exists for selected revisions using revisionMetadata state
     const missingMetadata = selectedRevisionsForUpload.filter(
-      (revision) => !multiVideoMetadata[revision.id]
+      (revision) => !revisionMetadata[revision.id] || Object.keys(revisionMetadata[revision.id]).length === 0
     );
 
     if (missingMetadata.length > 0) {
-      toast.error("Please add metadata for all selected revisions first.");
-      setShowMultiVideoMetadataModal(true);
+      toast.error(`Please add metadata for all selected revisions first. Missing: ${missingMetadata.map(r => `#${r.revisionNumber}`).join(', ')}`);
       return;
     }
 
@@ -492,6 +525,7 @@ const TaskDetails = () => {
     }));
   };
 
+  // UPDATED: Multi-video upload using revision metadata
   const handleMultiVideoUpload = async () => {
     // Validate all selections have channels
     const missingChannels = selectedRevisionsForUpload.filter(
@@ -522,11 +556,11 @@ const TaskDetails = () => {
     );
 
     try {
-      // Prepare upload data for multiple videos
+      // Prepare upload data for multiple videos using revision metadata
       const uploadData = selectedRevisionsForUpload.map((revision) => ({
         revisionId: revision.id,
         channelId: uploadChannelSelections[revision.id],
-        metadata: multiVideoMetadata[revision.id],
+        metadata: revisionMetadata[revision.id], // Use revision-specific metadata
       }));
 
       const response = await tasksAPI.doMultiVideoYoutubeUpload({
@@ -1186,10 +1220,11 @@ const TaskDetails = () => {
     try {
       // Save metadata for each revision
       for (const [revisionId, metadataData] of Object.entries(metadataMap)) {
-        await metadataAPI.createMetadata(revisionId, metadataData);
+        await metadataAPI.createRevisionMetadata(revisionId, metadataData);
       }
 
       setMultiVideoMetadata(metadataMap);
+      setRevisionMetadata(prev => ({ ...prev, ...metadataMap }));
       toast.success("Metadata saved for all videos");
       fetchTaskAndChannelDetails();
     } catch (error) {
@@ -1342,7 +1377,7 @@ const TaskDetails = () => {
                           className="text-xs text-blue-700"
                         >
                           • Revision #{revision.revisionNumber}
-                          {multiVideoMetadata[revision.id] ? (
+                          {revisionMetadata[revision.id] && Object.keys(revisionMetadata[revision.id]).length > 0 ? (
                             <span className="text-green-600 ml-2">
                               ✓ Metadata ready
                             </span>
@@ -1488,7 +1523,9 @@ const TaskDetails = () => {
                 onRevisionDelete={handleRevisionDelete}
                 onDownload={handleDownload}
                 onToggleRevisionForUpload={handleToggleRevisionForUpload}
+                onShowRevisionMetadataModal={handleShowRevisionMetadataModal}
                 canUploadRevision={canUploadRevision}
+                revisionMetadata={revisionMetadata}
                 isMobile={true}
               />
               <AudioInstructions
@@ -1574,7 +1611,9 @@ const TaskDetails = () => {
             onRevisionDelete={handleRevisionDelete}
             onDownload={handleDownload}
             onToggleRevisionForUpload={handleToggleRevisionForUpload}
+            onShowRevisionMetadataModal={handleShowRevisionMetadataModal}
             canUploadRevision={canUploadRevision}
+            revisionMetadata={revisionMetadata}
           />
 
           {/* Audio Instructions */}
@@ -1638,8 +1677,22 @@ const TaskDetails = () => {
         onClose={() => setShowMultiVideoMetadataModal(false)}
         onSubmit={handleMultiVideoMetadataSubmit}
         selectedRevisions={selectedRevisionsForUpload}
-        existingMetadata={multiVideoMetadata}
+        existingMetadata={revisionMetadata}
       />
+
+      {/* NEW: Single Revision Metadata Modal */}
+      {selectedRevisionForMetadata && (
+        <SingleRevisionMetadataModal
+          isOpen={showSingleRevisionMetadataModal}
+          onClose={() => {
+            setShowSingleRevisionMetadataModal(false);
+            setSelectedRevisionForMetadata(null);
+          }}
+          onSubmit={handleSingleRevisionMetadataSubmit}
+          revision={selectedRevisionForMetadata}
+          initialData={revisionMetadata[selectedRevisionForMetadata?.id]}
+        />
+      )}
 
       {/* Upload Selection Modal */}
       {showUploadSelectionModal && (
@@ -1667,9 +1720,9 @@ const TaskDetails = () => {
                     <h4 className="font-medium text-gray-900">
                       Revision #{revision.revisionNumber}
                     </h4>
-                    {multiVideoMetadata[revision.id]?.title && (
+                    {revisionMetadata[revision.id]?.title && (
                       <span className="text-sm text-gray-500">
-                        "{multiVideoMetadata[revision.id].title}"
+                        "{revisionMetadata[revision.id].title}"
                       </span>
                     )}
                   </div>
