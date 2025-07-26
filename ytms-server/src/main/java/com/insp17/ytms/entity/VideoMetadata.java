@@ -36,11 +36,6 @@ public class VideoMetadata {
     @JoinColumn(name = "revision_id")
     private Revision revision;
 
-    // NEW: Link to specific raw video (for raw video-specific metadata)
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "raw_video_id")
-    private RawVideo rawVideo;
-
     // Basic Video Information
     @Column(nullable = false, length = 100)
     private String title;
@@ -231,25 +226,6 @@ public class VideoMetadata {
     // Helper methods to determine what this metadata is for
     public boolean isForRevision() {
         return revision != null;
-    }
-
-    public boolean isForRawVideo() {
-        return rawVideo != null;
-    }
-
-    public boolean isForTask() {
-        return revision == null && rawVideo == null;
-    }
-
-    // Get the target identifier for this metadata
-    public String getTargetIdentifier() {
-        if (revision != null) {
-            return "revision-" + revision.getId();
-        }
-        if (rawVideo != null) {
-            return "rawvideo-" + rawVideo.getId();
-        }
-        return "task-" + videoTask.getId();
     }
 
     // Helper method to check if this is short-form content

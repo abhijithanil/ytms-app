@@ -1,42 +1,38 @@
 import React, { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import TaskEditorAssigner from "./TaskEditorAssigner";
 import {
   Calendar,
   User,
-  Shield,
+  AlertCircle,
+  Edit,
+  Trash2,
+  Settings,
+  FileVideo,
+  Video,
   Clock,
   CheckCircle,
-  Edit3,
-  Trash2,
-  Video,
-  FileVideo,
-  Play,
-  Youtube,
-  Settings
+  XCircle,
+  ChevronDown,
+  ChevronUp,
+  Play
 } from 'lucide-react';
 
 const TaskInfoSidebar = ({
   task,
   user,
-  metadata,
   revisions,
   selectedRawVideo,
   onTaskUpdate,
   onShowEditModal,
   onShowDeleteModal,
-  onShowVideoMetadataModal,
   onRawVideoSelect,
   canDeleteTask,
   canEditTask,
   isMobile = false
 }) => {
-  const [activeVideoSection, setActiveVideoSection] = useState('raw'); // 'raw' or 'revisions'
-
-  if (!task) return null;
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const formatDate = (dateString) => {
-    if (!dateString) return 'Not set';
     try {
       return formatDistanceToNow(new Date(dateString), { addSuffix: true });
     } catch (error) {
@@ -44,313 +40,259 @@ const TaskInfoSidebar = ({
     }
   };
 
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'HIGH': return 'bg-red-100 text-red-800';
-      case 'MEDIUM': return 'bg-yellow-100 text-yellow-800';
-      case 'LOW': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'DRAFT': return 'bg-gray-100 text-gray-800';
-      case 'ASSIGNED': return 'bg-blue-100 text-blue-800';
-      case 'IN_PROGRESS': return 'bg-orange-100 text-orange-800';
-      case 'REVIEW': return 'bg-purple-100 text-purple-800';
-      case 'READY': return 'bg-green-100 text-green-800';
-      case 'SCHEDULED': return 'bg-indigo-100 text-indigo-800';
-      case 'UPLOADED': return 'bg-emerald-100 text-emerald-800';
-      case 'COMPLETED': return 'bg-emerald-100 text-emerald-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+    const statusColors = {
+      'PENDING': 'bg-yellow-100 text-yellow-800',
+      'IN_PROGRESS': 'bg-blue-100 text-blue-800',
+      'REVIEW': 'bg-purple-100 text-purple-800',
+      'READY': 'bg-green-100 text-green-800',
+      'UPLOADING': 'bg-orange-100 text-orange-800',
+      'COMPLETED': 'bg-emerald-100 text-emerald-800',
+      'FAILED': 'bg-red-100 text-red-800',
+      'CANCELLED': 'bg-gray-100 text-gray-800'
+    };
+    return statusColors[status] || 'bg-gray-100 text-gray-800';
   };
 
-  const formatStatus = (status) => {
-    return status?.replace('_', ' ').toLowerCase() || 'draft';
+  const getPriorityColor = (priority) => {
+    const priorityColors = {
+      'LOW': 'bg-gray-100 text-gray-800',
+      'MEDIUM': 'bg-yellow-100 text-yellow-800',
+      'HIGH': 'bg-orange-100 text-orange-800',
+      'URGENT': 'bg-red-100 text-red-800'
+    };
+    return priorityColors[priority] || 'bg-gray-100 text-gray-800';
   };
 
-  const hasMetadata = metadata && Object.keys(metadata).length > 0;
+  const getRawVideoTypeIcon = (type) => {
+    return type === 'short' ? (
+      <Video className="h-4 w-4 text-purple-600" />
+    ) : (
+      <FileVideo className="h-4 w-4 text-blue-600" />
+    );
+  };
+
+  const getRawVideoTypeBadge = (type) => {
+    return type === 'short' ? (
+      <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">
+        Short
+      </span>
+    ) : (
+      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+        Main
+      </span>
+    );
+  };
+
+  if (!task) return null;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Task Information</h3>
-        <div className="flex space-x-2">
-          {canEditTask() && (
-            <button
-              onClick={onShowEditModal}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Edit task"
-            >
-              <Edit3 className="h-4 w-4 text-gray-600" />
-            </button>
-          )}
-          {canDeleteTask() && (
-            <button
-              onClick={onShowDeleteModal}
-              className="p-2 hover:bg-red-100 rounded-lg transition-colors"
-              title="Delete task"
-            >
-              <Trash2 className="h-4 w-4 text-red-600" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Task Details */}
-      <div className="space-y-4">
-        <div className="flex items-center space-x-3">
-          <div className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(task.status)}`}>
-            {formatStatus(task.status)}
-          </div>
-          <div className={`px-3 py-1 rounded-full text-sm font-medium ${getPriorityColor(task.priority)}`}>
-            {task.priority?.toLowerCase()}
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-start space-x-3">
-            <User className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-700">Created by</p>
-              <p className="text-sm text-gray-600 truncate">{task.createdBy?.username}</p>
-            </div>
-          </div>
-
-          {/* Task Editor Assignment Section */}
-          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <TaskEditorAssigner 
-              task={task} 
-              onTaskUpdate={onTaskUpdate}
-            />
-          </div>
-
-          <div className="flex items-start space-x-3">
-            <Calendar className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-700">Created</p>
-              <p className="text-sm text-gray-600">{formatDate(task.createdAt)}</p>
-            </div>
-          </div>
-
-          {task.deadline && (
-            <div className="flex items-start space-x-3">
-              <Clock className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-700">Deadline</p>
-                <p className="text-sm text-gray-600">{formatDate(task.deadline)}</p>
-              </div>
-            </div>
-          )}
-
-          {task.privacyLevel === 'SELECTED' && (
-            <div className="flex items-start space-x-3">
-              <Shield className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-700">Privacy</p>
-                <p className="text-sm text-gray-600">Private (selected users)</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Video Files Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h4 className="text-md font-semibold text-gray-900">Videos</h4>
-        </div>
-
-        {/* Section Tabs */}
-        <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-          <button
-            onClick={() => setActiveVideoSection('raw')}
-            className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-              activeVideoSection === 'raw'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Raw Videos ({task.rawVideos?.length || 0})
-          </button>
-          <button
-            onClick={() => setActiveVideoSection('revisions')}
-            className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-              activeVideoSection === 'revisions'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Revisions ({revisions?.length || 0})
-          </button>
-        </div>
-
-        {/* Raw Videos Section */}
-        {activeVideoSection === 'raw' && (
-          <div className="space-y-2">
-            {task.rawVideos && task.rawVideos.length > 0 ? (
-              task.rawVideos.map((video, index) => (
-                <div
-                  key={video.id || index}
-                  className={`p-3 border rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${
-                    selectedRawVideo?.id === video.id 
-                      ? 'border-primary-300 bg-primary-50' 
-                      : 'border-gray-200'
-                  }`}
-                  onClick={() => onRawVideoSelect(video)}
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      {/* Collapsible Header */}
+      <div 
+        className="flex items-center justify-between p-4 lg:p-6 cursor-pointer hover:bg-gray-50 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <h3 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
+          <Settings className="h-5 w-5 text-primary-600" />
+          <span>Task Information</span>
+        </h3>
+        
+        <div className="flex items-center space-x-2">
+          {(canEditTask() || canDeleteTask()) && (
+            <div className="flex space-x-1">
+              {canEditTask() && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onShowEditModal();
+                  }}
+                  className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                  title="Edit task"
                 >
-                  <div className="flex items-center space-x-3">
-                    <div className="relative">
-                      <FileVideo className="h-5 w-5 text-blue-600" />
-                      {selectedRawVideo?.id === video.id && (
-                        <div className="absolute -top-1 -right-1 h-3 w-3 bg-green-500 rounded-full flex items-center justify-center">
-                          <Play className="h-2 w-2 text-white fill-current" />
+                  <Edit className="h-4 w-4" />
+                </button>
+              )}
+              {canDeleteTask() && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onShowDeleteModal();
+                  }}
+                  className="p-1 text-gray-400 hover:text-red-600 rounded"
+                  title="Delete task"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          )}
+          {isExpanded ? (
+            <ChevronUp className="h-5 w-5 text-gray-400" />
+          ) : (
+            <ChevronDown className="h-5 w-5 text-gray-400" />
+          )}
+        </div>
+      </div>
+
+      {/* Collapsible Content */}
+      {isExpanded && (
+        <div className="px-4 lg:px-6 pb-4 lg:pb-6 space-y-4">
+          {/* Status and Priority */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-1">Status</p>
+              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
+                {task.status.replace('_', ' ')}
+              </span>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-1">Priority</p>
+              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
+                {task.priority}
+              </span>
+            </div>
+          </div>
+
+          {/* Creator and Editor */}
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <User className="h-4 w-4 text-gray-400" />
+              <div className="flex-1">
+                <p className="text-xs font-medium text-gray-500">Created by</p>
+                <p className="text-sm text-gray-900">{task.createdBy?.username}</p>
+              </div>
+            </div>
+
+            {task.assignedEditor && (
+              <div className="flex items-center space-x-2">
+                <User className="h-4 w-4 text-gray-400" />
+                <div className="flex-1">
+                  <p className="text-xs font-medium text-gray-500">Assigned Editor</p>
+                  <p className="text-sm text-gray-900">{task.assignedEditor.username}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Dates */}
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-4 w-4 text-gray-400" />
+              <div className="flex-1">
+                <p className="text-xs font-medium text-gray-500">Created</p>
+                <p className="text-sm text-gray-900">{formatDate(task.createdAt)}</p>
+              </div>
+            </div>
+
+            {task.deadline && (
+              <div className="flex items-center space-x-2">
+                <Clock className="h-4 w-4 text-gray-400" />
+                <div className="flex-1">
+                  <p className="text-xs font-medium text-gray-500">Deadline</p>
+                  <p className="text-sm text-gray-900">
+                    {new Date(task.deadline).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Description */}
+          {task.description && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-2">Description</p>
+              <p className="text-sm text-gray-700 leading-relaxed">{task.description}</p>
+            </div>
+          )}
+
+          {/* Raw Videos Section */}
+          {task.rawVideos && task.rawVideos.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-3">Raw Videos ({task.rawVideos.length})</p>
+              <div className="space-y-2">
+                {task.rawVideos.map((rawVideo) => (
+                  <div
+                    key={rawVideo.id}
+                    className={`border rounded-lg p-3 cursor-pointer transition-all hover:shadow-sm ${
+                      selectedRawVideo?.id === rawVideo.id
+                        ? 'border-primary-300 bg-primary-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => onRawVideoSelect(rawVideo)}
+                  >
+                    <div className="flex items-start space-x-2">
+                      <div className="relative mt-0.5">
+                        {getRawVideoTypeIcon(rawVideo.type)}
+                        {selectedRawVideo?.id === rawVideo.id && (
+                          <div className="absolute -top-1 -right-1 h-2 w-2 bg-green-500 rounded-full flex items-center justify-center">
+                            <Play className="h-1 w-1 text-white fill-current" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {rawVideo.filename}
+                          </p>
+                          {getRawVideoTypeBadge(rawVideo.type)}
                         </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {video.filename}
-                      </p>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          video.type === 'short' 
-                            ? 'bg-purple-100 text-purple-700' 
-                            : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {video.type === 'short' ? 'Short' : 'Main'}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {Math.round((video.size || 0) / (1024 * 1024))}MB
-                        </span>
+                        <p className="text-xs text-gray-500">
+                          {Math.round(rawVideo.size / (1024 * 1024))}MB
+                        </p>
+                        {selectedRawVideo?.id === rawVideo.id && (
+                          <span className="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full mt-1">
+                            Selected
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-8">
-                <FileVideo className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">No raw videos uploaded</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Revisions Section */}
-        {activeVideoSection === 'revisions' && (
-          <div className="space-y-2">
-            {revisions && revisions.length > 0 ? (
-              revisions.map((revision) => (
-                <div
-                  key={revision.id}
-                  className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Video className="h-5 w-5 text-green-600" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900">
-                        Revision #{revision.revisionNumber}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        by {revision.uploadedBy?.username} • {formatDate(revision.createdAt)}
-                      </p>
-                      {revision.notes && (
-                        <p className="text-xs text-gray-600 mt-1 truncate">
-                          {revision.notes}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-8">
-                <Video className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">No revisions uploaded</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Video Metadata Section */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h4 className="text-md font-semibold text-gray-900">Video Metadata</h4>
-          <button
-            onClick={onShowVideoMetadataModal}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Edit metadata"
-          >
-            <Settings className="h-4 w-4 text-gray-600" />
-          </button>
-        </div>
-
-        {hasMetadata ? (
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <span className="text-sm text-green-700 font-medium">Metadata configured</span>
-            </div>
-            {metadata.title && (
-              <p className="text-sm text-gray-600">
-                <span className="font-medium">Title:</span> {metadata.title}
-              </p>
-            )}
-            {metadata.tags && metadata.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {metadata.tags.slice(0, 3).map((tag, index) => (
-                  <span
-                    key={index}
-                    className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full"
-                  >
-                    {tag}
-                  </span>
                 ))}
-                {metadata.tags.length > 3 && (
-                  <span className="text-xs text-gray-500">
-                    +{metadata.tags.length - 3} more
-                  </span>
-                )}
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center space-x-2 text-yellow-600">
-            <Youtube className="h-4 w-4" />
-            <span className="text-sm">Metadata not configured</span>
-          </div>
-        )}
-      </div>
+            </div>
+          )}
 
-      {/* Task Description */}
-      {task.description && (
-        <div className="space-y-2">
-          <h4 className="text-md font-semibold text-gray-900">Description</h4>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            {task.description}
-          </p>
-        </div>
-      )}
+          {/* Legacy Raw Video (for backward compatibility) */}
+          {task.rawVideoUrl && (!task.rawVideos || task.rawVideos.length === 0) && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-2">Raw Video</p>
+              <div className="flex items-center space-x-2 text-sm text-gray-700">
+                <FileVideo className="h-4 w-4 text-gray-400" />
+                <span className="truncate">{task.rawVideoFilename || 'Raw video file'}</span>
+              </div>
+            </div>
+          )}
 
-      {/* Tags */}
-      {task.tags && task.tags.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-md font-semibold text-gray-900">Tags</h4>
-          <div className="flex flex-wrap gap-2">
-            {task.tags.map((tag, index) => (
-              <span
-                key={index}
-                className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full"
-              >
-                {tag}
+          {/* Progress Indicators */}
+          <div className="border-t pt-4">
+            <p className="text-xs font-medium text-gray-500 mb-3">Progress</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-600">Revisions</span>
+                <div className="flex items-center space-x-1">
+                  <span className="text-xs font-medium text-gray-900">
+                    {revisions?.length || 0}
+                  </span>
+                  {revisions?.length > 0 ? (
+                    <CheckCircle className="h-3 w-3 text-green-500" />
+                  ) : (
+                    <XCircle className="h-3 w-3 text-gray-300" />
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Privacy Level */}
+          {task.privacyLevel && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-1">Privacy</p>
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                {task.privacyLevel.replace('_', ' ')}
               </span>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>

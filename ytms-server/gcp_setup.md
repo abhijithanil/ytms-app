@@ -1,0 +1,1 @@
+$env:GOOGLE_APPLICATION_CREDENTIALS="C:\servicekey\servicekey\inspire26-d6968a54a807.json"O

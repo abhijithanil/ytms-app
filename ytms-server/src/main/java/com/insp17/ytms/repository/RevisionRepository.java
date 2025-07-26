@@ -46,4 +46,7 @@ public interface RevisionRepository extends JpaRepository<Revision, Long> {
 
     @Query("SELECT r FROM Revision r WHERE r.videoTask.id = :taskId AND (r.type IN :types OR ('main' IN :types AND r.type IS NULL)) ORDER BY r.revisionNumber DESC")
     List<Revision> findByVideoTaskIdAndTypeIn(@Param("taskId") Long taskId, @Param("types") List<String> types);
+
+    @Query("SELECT r FROM Revision r WHERE r.videoTask.id = :taskId")
+    List<Revision> findByVideoTaskId(Long taskId);
 }

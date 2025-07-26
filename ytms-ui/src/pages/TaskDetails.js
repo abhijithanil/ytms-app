@@ -32,8 +32,6 @@ import AudioInstructions from "../components/AudioInstructions";
 import ApprovalSection from "../components/ApprovalSection";
 import MobileCollapsibleSidebar from "../components/MobileCollapsibleSidebar";
 import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
-import VideoMetadataModal from "../components/VideoMetadataModal";
-import MultiVideoMetadataModal from "../components/MultiVideoMetadataModal";
 import EditTaskModal from "../components/EditTaskModal";
 import SingleRevisionMetadataModal from "../components/SingleRevisionMetadataModal";
 
@@ -42,6 +40,36 @@ import { AlertCircle, Youtube, Settings, X, Check } from "lucide-react";
 
 const { isCancel, CancelToken } = axios;
 
+// Countdown Timer Component
+const CountdownTimer = ({ targetTime }) => {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = Date.now();
+      const target = new Date(targetTime).getTime();
+      const difference = target - now;
+
+      if (difference > 0) {
+        const hours = Math.floor(difference / (1000 * 60 * 60));
+        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+        
+        setTimeLeft(`${hours}h ${minutes}m ${seconds}s`);
+      } else {
+        setTimeLeft('Upload should start soon...');
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(interval);
+  }, [targetTime]);
+
+  return <span>{timeLeft}</span>;
+};
+
 const TaskDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -49,9 +77,7 @@ const TaskDetails = () => {
 
   // Core state
   const [task, setTask] = useState(null);
-  const [metadata, setMetadata] = useState({});
-  const [multiVideoMetadata, setMultiVideoMetadata] = useState({});
-  const [revisionMetadata, setRevisionMetadata] = useState({}); // NEW: Individual revision metadata
+  const [revisionMetadata, setRevisionMetadata] = useState({});
   const [revisions, setRevisions] = useState([]);
   const [comments, setComments] = useState([]);
   const [audioInstructions, setAudioInstructions] = useState([]);
@@ -93,12 +119,9 @@ const TaskDetails = () => {
   // Modal states
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showVideoMetadataModal, setShowVideoMetadataModal] = useState(false);
-  const [showMultiVideoMetadataModal, setShowMultiVideoMetadataModal] = useState(false);
-  const [showSingleRevisionMetadataModal, setShowSingleRevisionMetadataModal] = useState(false); // NEW
-  const [selectedRevisionForMetadata, setSelectedRevisionForMetadata] = useState(null); // NEW
+  const [showSingleRevisionMetadataModal, setShowSingleRevisionMetadataModal] = useState(false);
+  const [selectedRevisionForMetadata, setSelectedRevisionForMetadata] = useState(null);
   const [showUploadSelectionModal, setShowUploadSelectionModal] = useState(false);
-  const [pendingStatus, setPendingStatus] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleDateTime, setScheduleDateTime] = useState("");
@@ -176,7 +199,7 @@ const TaskDetails = () => {
     };
   }, []);
 
-  // NEW: Fetch revision metadata from server
+  // Fetch revision metadata from server
   const fetchRevisionMetadata = async (taskId) => {
     try {
       const response = await metadataAPI.getAllRevisionMetadataForTask(taskId);
@@ -194,7 +217,7 @@ const TaskDetails = () => {
     fetchTaskAndChannelDetails();
   }, [id]);
 
-  // UPDATED: Auto-select video logic - prioritize latest revision
+  // Auto-select video logic - prioritize latest revision, then raw video
   useEffect(() => {
     if (task && !isUploading && !selectedRevision && !selectedRawVideo) {
       // First try to select latest revision if available
@@ -206,10 +229,15 @@ const TaskDetails = () => {
       else if (task.rawVideos && task.rawVideos.length > 0) {
         handleRawVideoSelect(task.rawVideos[0]);
       }
+      // Legacy support for single raw video
+      else if (task.rawVideoUrl) {
+        // For legacy single raw video, we can't "select" it but we can fetch its URL
+        fetchAndSetVideoUrl(`/tasks/${task.id}/video-url`);
+      }
     }
   }, [task, revisions, isUploading, selectedRawVideo, selectedRevision]);
 
-  // Check for ongoing uploads when component mounts
+  // Check for ongoing uploads and scheduled tasks when component mounts
   useEffect(() => {
     const checkUploadStatus = () => {
       const uploadKey = `upload_${id}`;
@@ -235,8 +263,29 @@ const TaskDetails = () => {
       }
     };
 
+    const checkScheduledUpload = () => {
+      if (task?.status === 'SCHEDULED' && task?.scheduledUploadTime) {
+        const scheduledTime = new Date(task.scheduledUploadTime).getTime();
+        const currentTime = Date.now();
+        
+        if (currentTime >= scheduledTime) {
+          // Time has passed, start checking for upload status
+          startUploadPolling();
+        } else {
+          // Set a timeout to start checking when the time comes
+          const timeUntilUpload = scheduledTime - currentTime;
+          setTimeout(() => {
+            startUploadPolling();
+          }, timeUntilUpload);
+        }
+      }
+    };
+
     checkUploadStatus();
-  }, [id]);
+    if (task) {
+      checkScheduledUpload();
+    }
+  }, [id, task]);
 
   // Optimized polling function
   const startUploadPolling = useCallback(() => {
@@ -254,8 +303,8 @@ const TaskDetails = () => {
 
         console.log("Current task status:", updatedTask.status);
 
-        if (updatedTask.status !== "UPLOADING") {
-          console.log("Status is no longer UPLOADING, stopping polling...");
+        if (updatedTask.status !== "UPLOADING" && updatedTask.status !== "SCHEDULED") {
+          console.log("Status is no longer UPLOADING/SCHEDULED, stopping polling...");
 
           if (uploadPollingRef.current) {
             clearInterval(uploadPollingRef.current);
@@ -296,6 +345,12 @@ const TaskDetails = () => {
           return;
         }
 
+        // If status changed to UPLOADING from SCHEDULED, update our upload state
+        if (updatedTask.status === "UPLOADING" && !isUploading) {
+          setIsUploading(true);
+          setUploadStartTime(Date.now());
+        }
+
         if (task?.status !== updatedTask.status) {
           setTask(updatedTask);
         }
@@ -303,9 +358,9 @@ const TaskDetails = () => {
         console.warn("Error polling task status:", error);
       }
     }, 5000);
-  }, [id, task?.status]);
+  }, [id, task?.status, isUploading]);
 
-  // UPDATED: Initial data fetch function
+  // Initial data fetch function
   const fetchTaskAndChannelDetails = async () => {
     try {
       setLoading(true);
@@ -314,17 +369,12 @@ const TaskDetails = () => {
         revisionsResponse,
         commentsResponse,
         audioResponse,
-        metadataResponse,
         channelsResponse,
       ] = await Promise.all([
         tasksAPI.getTaskById(id),
         revisionsAPI.getRevisionsByTask(id),
         commentsAPI.getTaskComments(id),
         tasksAPI.getAudioInstructions(id),
-        metadataAPI.getMetadata(id).catch((error) => {
-          console.warn("Metadata fetch failed but was handled:", error);
-          return { data: null };
-        }),
         youtubeChannelAPI.getAllChannels(),
       ]);
 
@@ -332,10 +382,9 @@ const TaskDetails = () => {
       setRevisions(revisionsResponse.data);
       setComments(commentsResponse.data);
       setAudioInstructions(audioResponse.data);
-      setMetadata(metadataResponse.data);
       setChannels(channelsResponse.data);
 
-      // NEW: Fetch revision metadata after getting task details
+      // Fetch revision metadata after getting task details
       await fetchRevisionMetadata(id);
     } catch (error) {
       console.error("Failed to fetch page details:", error);
@@ -471,13 +520,13 @@ const TaskDetails = () => {
     }
   };
 
-  // NEW: Handle single revision metadata modal
+  // Handle single revision metadata modal
   const handleShowRevisionMetadataModal = (revision) => {
     setSelectedRevisionForMetadata(revision);
     setShowSingleRevisionMetadataModal(true);
   };
 
-  // NEW: Handle single revision metadata submit
+  // Handle single revision metadata submit
   const handleSingleRevisionMetadataSubmit = async (metadataData) => {
     try {
       const revisionId = selectedRevisionForMetadata.id;
@@ -498,7 +547,7 @@ const TaskDetails = () => {
     }
   };
 
-  // UPDATED: Multi-video upload validation
+  // Multi-video upload validation
   const handleShowUploadSelection = () => {
     if (selectedRevisionsForUpload.length === 0) {
       toast.error("Please select at least one revision to upload.");
@@ -525,7 +574,7 @@ const TaskDetails = () => {
     }));
   };
 
-  // UPDATED: Multi-video upload using revision metadata
+  // Multi-video upload using revision metadata
   const handleMultiVideoUpload = async () => {
     // Validate all selections have channels
     const missingChannels = selectedRevisionsForUpload.filter(
@@ -568,7 +617,7 @@ const TaskDetails = () => {
         uploads: uploadData,
       });
 
-      if (response.status != 200) {
+      if (response.status !== 200) {
         throw new Error(
           response?.data?.message ||
             "Unknown error occurred when uploading videos to YouTube"
@@ -604,84 +653,6 @@ const TaskDetails = () => {
         navigate("/settings");
       }
       console.error("Failed to initiate YouTube uploads:", error);
-    }
-  };
-
-  // Single video upload (legacy support)
-  const handleSingleVideoUpload = async (channelId) => {
-    if (!channelId) {
-      toast.error("Please select a YouTube channel first.");
-      return;
-    }
-
-    const selectedChannel = channels.find((c) => c.id == channelId);
-    if (!selectedChannel || !selectedChannel.youtubeChannelOwnerEmail) {
-      toast.error("Selected channel is invalid or missing an owner email.");
-      return;
-    }
-
-    if (isUploading || uploadPollingRef.current) {
-      console.log("Upload already in progress, ignoring request");
-      return;
-    }
-
-    setIsUploading(true);
-    const startTime = Date.now();
-    setUploadStartTime(startTime);
-
-    const uploadKey = `upload_${id}`;
-    localStorage.setItem(
-      uploadKey,
-      JSON.stringify({
-        startTime,
-        channelId: channelId,
-        status: "UPLOADING",
-      })
-    );
-
-    try {
-      await tasksAPI.updateTask(id, {
-        youtubeChannelOwnerEmail: selectedChannel.youtubeChannelOwnerEmail,
-      });
-
-      const response = await tasksAPI.doYoutubeUpload({
-        videoId: id,
-        channelId: selectedChannel.id,
-      });
-
-      if (response.status != 200) {
-        throw new Error(
-          response?.data?.message ||
-            "Unknown error occurred when uploading video to YouTube"
-        );
-      }
-
-      setTask((prev) => ({ ...prev, status: "UPLOADING" }));
-      toast.success(response?.data?.message || "Upload started successfully!");
-
-      startUploadPolling();
-    } catch (error) {
-      localStorage.removeItem(uploadKey);
-      setIsUploading(false);
-      setUploadStartTime(null);
-      setCurrentUploadDuration("");
-
-      if (uploadPollingRef.current) {
-        clearInterval(uploadPollingRef.current);
-        uploadPollingRef.current = null;
-      }
-
-      toast.error(
-        error.response?.data?.message || "Failed to start YouTube upload."
-      );
-
-      if (
-        error.response?.data?.message ===
-        "YouTube account not connected. Please connect the account first."
-      ) {
-        navigate("/settings");
-      }
-      console.error("Failed to initiate YouTube upload:", error);
     }
   };
 
@@ -1205,34 +1176,6 @@ const TaskDetails = () => {
     }
   };
 
-  // Video metadata handlers
-  const handleVideoMetadataSubmit = async (metadataData) => {
-    try {
-      await metadataAPI.createMetadata(id, metadataData);
-      fetchTaskAndChannelDetails();
-    } catch (error) {
-      console.error("Failed to save video metadata:", error);
-      toast.error("Failed to save video metadata");
-    }
-  };
-
-  const handleMultiVideoMetadataSubmit = async (metadataMap) => {
-    try {
-      // Save metadata for each revision
-      for (const [revisionId, metadataData] of Object.entries(metadataMap)) {
-        await metadataAPI.createRevisionMetadata(revisionId, metadataData);
-      }
-
-      setMultiVideoMetadata(metadataMap);
-      setRevisionMetadata(prev => ({ ...prev, ...metadataMap }));
-      toast.success("Metadata saved for all videos");
-      fetchTaskAndChannelDetails();
-    } catch (error) {
-      console.error("Failed to save multi-video metadata:", error);
-      toast.error("Failed to save video metadata");
-    }
-  };
-
   // Permission helpers
   const canUploadRevision = () => {
     return user.role === "ADMIN" || task?.assignedEditor?.id === user.id;
@@ -1278,7 +1221,7 @@ const TaskDetails = () => {
 
   // Memoized values for performance
   const isUploadInProgress = useMemo(() => {
-    return isUploading || task?.status === "UPLOADING";
+    return isUploading || task?.status === "UPLOADING" || task?.status === "SCHEDULED";
   }, [isUploading, task?.status]);
 
   // Loading state
@@ -1374,18 +1317,23 @@ const TaskDetails = () => {
                       {selectedRevisionsForUpload.map((revision) => (
                         <div
                           key={revision.id}
-                          className="text-xs text-blue-700"
+                          className="flex items-center justify-between text-xs text-blue-700"
                         >
-                          • Revision #{revision.revisionNumber}
-                          {revisionMetadata[revision.id] && Object.keys(revisionMetadata[revision.id]).length > 0 ? (
-                            <span className="text-green-600 ml-2">
-                              ✓ Metadata ready
-                            </span>
-                          ) : (
-                            <span className="text-orange-600 ml-2">
-                              ⚠ Needs metadata
-                            </span>
-                          )}
+                          <span>• Revision #{revision.revisionNumber}</span>
+                          <div className="flex items-center space-x-2">
+                            {revisionMetadata[revision.id] && Object.keys(revisionMetadata[revision.id]).length > 0 ? (
+                              <span className="text-green-600">
+                                ✓ Metadata ready
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleShowRevisionMetadataModal(revision)}
+                                className="text-orange-600 hover:text-orange-800 underline"
+                              >
+                                + Add metadata
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1395,17 +1343,13 @@ const TaskDetails = () => {
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
-                    onClick={() => setShowMultiVideoMetadataModal(true)}
-                    disabled={selectedRevisionsForUpload.length === 0}
-                    className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors flex items-center justify-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    <Settings className="h-4 w-4" />
-                    <span>Configure Metadata</span>
-                  </button>
-
-                  <button
                     onClick={handleShowUploadSelection}
-                    disabled={selectedRevisionsForUpload.length === 0}
+                    disabled={
+                      selectedRevisionsForUpload.length === 0 ||
+                      selectedRevisionsForUpload.some(
+                        revision => !revisionMetadata[revision.id] || Object.keys(revisionMetadata[revision.id]).length === 0
+                      )
+                    }
                     className="flex-1 bg-green-600 text-white px-4 py-3 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors flex items-center justify-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     <Youtube className="h-4 w-4" />
@@ -1414,68 +1358,112 @@ const TaskDetails = () => {
                 </div>
 
                 <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
-                  <strong>💡 How it works:</strong> Select multiple revisions
-                  from the sidebar to upload different videos (e.g., main video
-                  + YouTube short) to different channels simultaneously.
+                  <strong>💡 How it works:</strong> Select revisions from the sidebar, add metadata for each, then upload them to different channels simultaneously.
                 </div>
               </div>
             )}
 
-          {/* Upload in Progress Section */}
+          {/* Upload in Progress or Scheduled Section */}
           {isUploadInProgress && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6 space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Upload in Progress
-              </h3>
-
-              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg
-                      className="animate-spin h-6 w-6 text-yellow-400"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                  </div>
-                  <div className="ml-3 flex-1">
-                    <h4 className="text-sm font-medium text-yellow-800">
-                      YouTube Upload in Progress
-                    </h4>
-                    <p className="text-sm text-yellow-700 mt-1">
-                      Your video(s) are being uploaded to YouTube. This process
-                      may take several minutes depending on video size and
-                      quality.
-                    </p>
-                    {currentUploadDuration && (
-                      <div className="mt-2 text-xs text-yellow-600 bg-yellow-100 px-2 py-1 rounded inline-block">
-                        Upload started {currentUploadDuration} ago
+              {task.status === "SCHEDULED" ? (
+                <>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Upload Scheduled
+                  </h3>
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-md p-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg
+                          className="h-6 w-6 text-indigo-400"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
                       </div>
-                    )}
+                      <div className="ml-3 flex-1">
+                        <h4 className="text-sm font-medium text-indigo-800">
+                          Scheduled for Upload
+                        </h4>
+                        <p className="text-sm text-indigo-700 mt-1">
+                          Your video(s) are scheduled to be uploaded at the specified time. The system will automatically start the upload process.
+                        </p>
+                        {task.scheduledUploadTime && (
+                          <div className="mt-2 space-y-1">
+                            <div className="text-xs text-indigo-600 bg-indigo-100 px-2 py-1 rounded inline-block">
+                              Scheduled for: {new Date(task.scheduledUploadTime).toLocaleString()}
+                            </div>
+                            <div className="text-xs text-indigo-600 bg-indigo-100 px-2 py-1 rounded inline-block ml-2">
+                              Time remaining: <CountdownTimer targetTime={task.scheduledUploadTime} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-yellow-400 h-2 rounded-full animate-pulse"
-                  style={{ width: "100%" }}
-                ></div>
-              </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Upload in Progress
+                  </h3>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg
+                          className="animate-spin h-6 w-6 text-yellow-400"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                      </div>
+                      <div className="ml-3 flex-1">
+                        <h4 className="text-sm font-medium text-yellow-800">
+                          YouTube Upload in Progress
+                        </h4>
+                        <p className="text-sm text-yellow-700 mt-1">
+                          Your video(s) are being uploaded to YouTube. This process
+                          may take several minutes depending on video size and
+                          quality.
+                        </p>
+                        {currentUploadDuration && (
+                          <div className="mt-2 text-xs text-yellow-600 bg-yellow-100 px-2 py-1 rounded inline-block">
+                            Upload started {currentUploadDuration} ago
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-yellow-400 h-2 rounded-full animate-pulse"
+                      style={{ width: "100%" }}
+                    ></div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -1484,20 +1472,17 @@ const TaskDetails = () => {
             <MobileCollapsibleSidebar
               task={task}
               user={user}
-              metadata={metadata}
               revisions={revisions}
               audioInstructions={audioInstructions}
             >
               <TaskInfoSidebar
                 task={task}
                 user={user}
-                metadata={metadata}
                 revisions={revisions}
                 selectedRawVideo={selectedRawVideo}
                 onTaskUpdate={handleTaskUpdate}
                 onShowEditModal={() => setShowEditModal(true)}
                 onShowDeleteModal={() => setShowDeleteModal(true)}
-                onShowVideoMetadataModal={() => setShowVideoMetadataModal(true)}
                 onRawVideoSelect={handleRawVideoSelect}
                 canDeleteTask={canDeleteTask}
                 canEditTask={canEditTask}
@@ -1578,13 +1563,11 @@ const TaskDetails = () => {
           <TaskInfoSidebar
             task={task}
             user={user}
-            metadata={metadata}
             revisions={revisions}
             selectedRawVideo={selectedRawVideo}
             onTaskUpdate={handleTaskUpdate}
             onShowEditModal={() => setShowEditModal(true)}
             onShowDeleteModal={() => setShowDeleteModal(true)}
-            onShowVideoMetadataModal={() => setShowVideoMetadataModal(true)}
             onRawVideoSelect={handleRawVideoSelect}
             canDeleteTask={canDeleteTask}
             canEditTask={canEditTask}
@@ -1660,27 +1643,7 @@ const TaskDetails = () => {
         />
       )}
 
-      <VideoMetadataModal
-        isOpen={showVideoMetadataModal}
-        onClose={() => {
-          setShowVideoMetadataModal(false);
-          setPendingStatus(null);
-        }}
-        onSubmit={handleVideoMetadataSubmit}
-        initialData={metadata}
-        isRequired={!!pendingStatus}
-        pendingStatus={pendingStatus}
-      />
-
-      <MultiVideoMetadataModal
-        isOpen={showMultiVideoMetadataModal}
-        onClose={() => setShowMultiVideoMetadataModal(false)}
-        onSubmit={handleMultiVideoMetadataSubmit}
-        selectedRevisions={selectedRevisionsForUpload}
-        existingMetadata={revisionMetadata}
-      />
-
-      {/* NEW: Single Revision Metadata Modal */}
+      {/* Single Revision Metadata Modal */}
       {selectedRevisionForMetadata && (
         <SingleRevisionMetadataModal
           isOpen={showSingleRevisionMetadataModal}

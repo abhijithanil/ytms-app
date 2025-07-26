@@ -147,12 +147,10 @@ public class YouTubeService {
                 if (uploadItem.getMetadata() != null) {
                     metadata = uploadItem.getMetadata();
                 } else {
-                    // Try to get revision-specific metadata, fallback to task metadata
                     try {
                         metadata = videoMetadataService.getRevisionMetadata(uploadItem.getRevisionId());
                     } catch (Exception e) {
-                        log.warn("No revision-specific metadata found, using task metadata");
-                        metadata = videoMetadataService.getVideoMetadata(task.getId());
+                        metadata = null;
                     }
                 }
 
@@ -272,39 +270,6 @@ public class YouTubeService {
         }
     }
 
-    /**
-     * Upload video to specific channel (Legacy single video upload)
-     */
-    public void uploadVideo(VideoTask task, YouTubeChannel channel, UploadVideoRequest uploadVideoRequest, User user) throws IOException, GeneralSecurityException {
-        log.info("Starting video upload for task: {} to channel: {} (owner: {})",
-                task.getId(), channel.getChannelName(), channel.getYoutubeChannelOwnerEmail());
-
-        // Validation
-        if (channel.getYoutubeChannelOwnerEmail() == null) {
-            throw new IOException("YouTube channel owner email is not set");
-        }
-
-        // Check if the account is connected
-        if (!youTubeAccountService.isAccountConnected(channel.getYoutubeChannelOwnerEmail())) {
-            throw new IOException("YouTube account " + channel.getYoutubeChannelOwnerEmail() +
-                    " is not connected. Please connect the account first.");
-        }
-
-        // Get latest revision
-        Revision latestRevision = task.getRevisions().stream()
-                .max((r1, r2) -> r1.getRevisionNumber().compareTo(r2.getRevisionNumber()))
-                .orElseThrow(() -> new IOException("No revisions found for this task"));
-
-        // Get and validate metadata
-        VideoMetadataDTO metadata = videoMetadataService.getVideoMetadata(task.getId());
-        if (metadata == null) {
-            throw new IOException("Video metadata is required for YouTube upload");
-        }
-        validateMetadata(metadata);
-
-        // Upload the video
-        self.uploadVideoOperations(latestRevision, metadata, channel, task, uploadVideoRequest, user);
-    }
 
     @Async("youtubeUploadExecutor")
     public void uploadVideoOperations(Revision latestRevision, VideoMetadataDTO metadata, YouTubeChannel channel, VideoTask task, UploadVideoRequest uploadVideoRequest, User user) throws IOException {

@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="YtmsApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
+    <envs>
+      <env name="GOOGLE_APPLICATION_CREDENTIALS" value="C:\servicekey\servicekey\inspire26-d6968a54a807.json" />
+    </envs>
+    <option name="FRAME_DEACTIVATION_UPDATE_POLICY" value="UpdateClassesAndResources" />
+    <module name="ytms" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.insp17.ytms.YtmsApplication" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

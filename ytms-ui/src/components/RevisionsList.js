@@ -100,10 +100,10 @@ const RevisionsList = ({
                 e.stopPropagation();
                 setShowUploadRevision(!showUploadRevision);
               }}
-              className="btn-primary text-sm flex items-center space-x-2"
+              className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition-colors flex items-center space-x-1"
             >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Upload Revision</span>
+              <Plus className="h-3 w-3" />
+              <span>Add Revision</span>
             </button>
           )}
           {isExpanded ? (
@@ -320,53 +320,51 @@ const RevisionsList = ({
                         </div>
                       )}
 
-                      {/* Actions */}
-                      <div className="flex items-center space-x-2 mt-3">
-                        <button
-                          onClick={() => onRevisionSelect(revision)}
-                          className="text-xs text-primary-600 hover:text-primary-700 font-medium"
-                          disabled={isVideoPlaying && selectedRevision?.id === revision.id}
-                        >
-                          {selectedRevision?.id === revision.id && isVideoPlaying ? 'Playing' : 'Play'}
-                        </button>
-                        
-                        <span className="text-gray-300">•</span>
-                        
-                        <button
-                          onClick={() => onDownload(`/files/download/revision/${revision.id}`)}
-                          className="text-xs text-gray-600 hover:text-gray-700 flex items-center space-x-1"
-                        >
-                          <Download className="h-3 w-3" />
-                          <span>Download</span>
-                        </button>
-
-                        {/* Metadata Settings Button for selected revisions */}
-                        {isRevisionSelected(revision.id) && (
-                          <>
-                            <span className="text-gray-300">•</span>
-                            <button
-                              onClick={() => onShowRevisionMetadataModal && onShowRevisionMetadataModal(revision)}
-                              className="text-xs text-blue-600 hover:text-blue-700 flex items-center space-x-1"
-                              title="Configure metadata for this revision"
-                            >
+                      {/* Actions - Breadcrumb Style */}
+                      <div className="flex items-center justify-between mt-3">
+                        <div className="flex items-center flex-wrap gap-1">
+                          <button
+                            onClick={() => onRevisionSelect(revision)}
+                            className="px-2 py-1 text-xs bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-md transition-colors font-medium border border-primary-200"
+                            disabled={isVideoPlaying && selectedRevision?.id === revision.id}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <Play className="h-3 w-3" />
+                              <span>{selectedRevision?.id === revision.id && isVideoPlaying ? 'Playing' : 'Play'}</span>
+                            </div>
+                          </button>
+                          
+                          <button
+                            onClick={() => onDownload(`/files/download/revision/${revision.id}`)}
+                            className="px-2 py-1 text-xs bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-md transition-colors border border-gray-200"
+                          >
+                            <div className="flex items-center space-x-1">
+                              <Download className="h-3 w-3" />
+                              <span>Download</span>
+                            </div>
+                          </button>
+                          
+                          <button
+                            onClick={() => onShowRevisionMetadataModal && onShowRevisionMetadataModal(revision)}
+                            className="px-2 py-1 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-md transition-colors border border-blue-200"
+                            title="Configure metadata for this revision"
+                          >
+                            <div className="flex items-center space-x-1">
                               <Settings className="h-3 w-3" />
                               <span>Metadata</span>
-                            </button>
-                          </>
-                        )}
+                            </div>
+                          </button>
+                        </div>
 
                         {/* Delete button - only show for revision owner or admin */}
                         {(user.id === revision.uploadedBy?.id || user.role === 'ADMIN') && (
-                          <>
-                            <span className="text-gray-300">•</span>
-                            <button
-                              onClick={() => onRevisionDelete(revision.id)}
-                              className="text-xs text-red-600 hover:text-red-700 flex items-center space-x-1"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                              <span>Delete</span>
-                            </button>
-                          </>
+                          <button
+                            onClick={() => onRevisionDelete(revision.id)}
+                            className="p-1 text-red-600 hover:bg-red-50 hover:text-red-700 rounded-md transition-colors"
+                            title="Delete revision"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         )}
                       </div>
                     </div>
@@ -380,9 +378,10 @@ const RevisionsList = ({
                 {canUploadRevision() && (
                   <button
                     onClick={() => setShowUploadRevision(true)}
-                    className="btn-primary mt-4 text-sm"
+                    className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition-colors flex items-center space-x-1 mt-4"
                   >
-                    Upload First Revision
+                    <Plus className="h-3 w-3" />
+                    <span>Add First Revision</span>
                   </button>
                 )}
               </div>
@@ -393,7 +392,7 @@ const RevisionsList = ({
           {task.status === 'READY' && revisions && revisions.length > 0 && (
             <div className="mt-4 p-3 bg-gray-50 rounded-lg">
               <p className="text-xs text-gray-600">
-                💡 <strong>Tip:</strong> Select multiple revisions to upload different videos (e.g., main video + YouTube short) to different channels.
+                💡 <strong>Tip:</strong> Select multiple revisions to upload different videos (e.g., main video + YouTube short) to different channels. Each revision will need its own metadata configuration.
               </p>
             </div>
           )}

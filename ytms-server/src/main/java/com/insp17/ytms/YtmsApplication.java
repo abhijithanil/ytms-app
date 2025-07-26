@@ -11,7 +11,6 @@ import org.springframework.web.filter.CorsFilter;
 
 @SpringBootApplication
 @EnableAspectJAutoProxy
-@ComponentScan(basePackages = {"com.insp17.ytms"})
 public class YtmsApplication {
     public static void main(String[] args) {
         SpringApplication.run(YtmsApplication.class, args);

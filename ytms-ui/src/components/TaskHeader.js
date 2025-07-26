@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Shield, ChevronDown, Info, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Shield, ChevronDown, Info, AlertCircle, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { tasksAPI } from '../services/api';
 import toast from 'react-hot-toast';
@@ -9,6 +9,8 @@ const TaskHeader = ({ task, user, onTaskUpdate }) => {
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showWorkflowInfo, setShowWorkflowInfo] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleDateTime, setScheduleDateTime] = useState('');
   const priorityRef = useRef(null);
   const statusRef = useRef(null);
   const workflowRef = useRef(null);
@@ -26,17 +28,21 @@ const TaskHeader = ({ task, user, onTaskUpdate }) => {
     { value: 'REVIEW', label: 'Review', color: 'bg-purple-100 text-purple-800' },
     { value: 'READY', label: 'Ready', color: 'bg-green-100 text-green-800' },
     { value: 'SCHEDULED', label: 'Scheduled', color: 'bg-indigo-100 text-indigo-800' },
-    { value: 'UPLOADED', label: 'Uploaded', color: 'bg-emerald-100 text-emerald-800' }
+    { value: 'UPLOADING', label: 'Uploading', color: 'bg-yellow-100 text-yellow-800' },
+    { value: 'UPLOADED', label: 'Uploaded', color: 'bg-emerald-100 text-emerald-800' },
+    { value: 'COMPLETED', label: 'Completed', color: 'bg-emerald-100 text-emerald-800' },
+    { value: 'FAILED', label: 'Failed', color: 'bg-red-100 text-red-800' }
   ];
 
   const workflowSteps = [
-    // { from: 'DRAFT', to: ['ASSIGNED'], roles: ['ADMIN'] },
     { from: 'ASSIGNED', to: ['IN_PROGRESS'], roles: ['ADMIN', 'EDITOR'] },
     { from: 'IN_PROGRESS', to: ['ASSIGNED', 'REVIEW'], roles: ['ADMIN', 'EDITOR'] },
     { from: 'REVIEW', to: ['IN_PROGRESS', 'READY'], roles: ['ADMIN', 'EDITOR'] },
     { from: 'READY', to: ['SCHEDULED', 'UPLOADED', 'REVIEW'], roles: ['ADMIN'] },
-    // { from: 'UPLOADED', to: ['REVIEW'], roles: ['ADMIN'] },
   ];
+
+  // States that should not show dropdown (final states or states without transitions)
+  const nonInteractiveStatuses = ['DRAFT', 'UPLOADED', 'COMPLETED', 'FAILED', 'UPLOADING', 'SCHEDULED'];
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -60,6 +66,10 @@ const TaskHeader = ({ task, user, onTaskUpdate }) => {
   };
 
   const canUpdateStatus = () => {
+    // Don't allow status updates for non-interactive statuses
+    if (nonInteractiveStatuses.includes(task?.status)) {
+      return false;
+    }
     return user.role === 'ADMIN' || task?.assignedEditor?.id === user.id;
   };
 
@@ -104,6 +114,27 @@ const TaskHeader = ({ task, user, onTaskUpdate }) => {
     } catch (error) {
       console.error('Failed to update status:', error);
       toast.error('Failed to update status');
+    }
+  };
+
+  const handleScheduleUpload = async () => {
+    if (!scheduleDateTime) {
+      toast.error('Please select a date and time for scheduling.');
+      return;
+    }
+
+    try {
+      await tasksAPI.scheduleYouTubeUpload(task.id, {
+        uploadTime: scheduleDateTime,
+      });
+
+      onTaskUpdate({ ...task, status: 'SCHEDULED', scheduledUploadTime: scheduleDateTime });
+      toast.success('Video upload scheduled successfully');
+      setShowScheduleModal(false);
+      setScheduleDateTime('');
+    } catch (error) {
+      console.error('Failed to schedule upload:', error);
+      toast.error('Failed to schedule upload.');
     }
   };
 
@@ -242,6 +273,17 @@ const TaskHeader = ({ task, user, onTaskUpdate }) => {
                 )}
               </div>
 
+              {/* Schedule Upload Button */}
+              {task.status === 'READY' && user.role === 'ADMIN' && (
+                <button
+                  onClick={() => setShowScheduleModal(true)}
+                  className="flex items-center space-x-1 px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium hover:bg-indigo-200 transition-colors"
+                >
+                  <Clock className="h-3 w-3" />
+                  <span>Schedule Upload</span>
+                </button>
+              )}
+
               {task.privacyLevel === 'SELECTED' && (
                 <span className="flex items-center text-sm text-gray-500">
                   <Shield className="h-4 w-4 mr-1" />
@@ -252,6 +294,49 @@ const TaskHeader = ({ task, user, onTaskUpdate }) => {
           </div>
         </div>
       </div>
+
+      {/* Schedule Upload Modal */}
+      {showScheduleModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Schedule Upload
+            </h3>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Upload Date & Time
+              </label>
+              <input
+                type="datetime-local"
+                value={scheduleDateTime}
+                onChange={(e) => setScheduleDateTime(e.target.value)}
+                min={new Date().toISOString().slice(0, 16)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowScheduleModal(false);
+                  setScheduleDateTime('');
+                }}
+                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleScheduleUpload}
+                disabled={!scheduleDateTime}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

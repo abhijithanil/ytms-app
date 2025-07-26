@@ -320,40 +320,6 @@ public class VideoTaskController {
         return ResponseEntity.ok(response);
     }
 
-    // Legacy single video upload (kept for backward compatibility)
-    @PostMapping("/upload-to-youtube")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> uploadToYouTube(@RequestBody UploadVideoRequest uploadVideoRequest, @CurrentUser UserPrincipal userPrincipal) {
-        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
-        if (!videoTaskService.canUserAccessTask(uploadVideoRequest.getVideoId(), user)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
-        try {
-            VideoTask task = videoTaskService.getTaskByIdWithDetails(uploadVideoRequest.getVideoId()).orElseThrow(() -> new RuntimeException("Task not found."));
-            if (task.getTaskStatus() != TaskStatus.READY) {
-                return ResponseEntity.badRequest().body(Map.of("message", "Task is not in READY status."));
-            }
-
-            YouTubeChannel channel = youTubeChannelService.getChannelById(uploadVideoRequest.getChannelId()).orElseThrow(() -> new RuntimeException("Channel doesn't exist"));
-
-            if (!youTubeChannelService.canUserAccessChannel(uploadVideoRequest.getChannelId(), user)) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "You don't have access to this channel"));
-            }
-
-            if (!youTubeAccountService.isAccountConnected(channel.getYoutubeChannelOwnerEmail())) {
-                return ResponseEntity.badRequest().body(Map.of("message", "YouTube account not connected. Please connect the account first.", "accountEmail", channel.getYoutubeChannelOwnerEmail()));
-            }
-
-            youTubeService.uploadVideo(task, channel, uploadVideoRequest, user);
-            videoTaskService.updateTaskStatus(task.getId(), TaskStatus.UPLOADING, user);
-            return ResponseEntity.ok(Map.of("message", "Uploading to YouTube initiated!"));
-
-        } catch (Exception e) {
-            log.error("YouTube upload failed for task {}: {}", uploadVideoRequest.getVideoId(), e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", e.getMessage()));
-        }
-    }
 
     // NEW: Multiple video upload support
     @PostMapping("/upload-multiple-to-youtube")
