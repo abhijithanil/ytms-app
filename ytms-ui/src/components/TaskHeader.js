@@ -31,7 +31,7 @@ const TaskHeader = ({ task, user, onTaskUpdate }) => {
     { value: 'UPLOADING', label: 'Uploading', color: 'bg-yellow-100 text-yellow-800' },
     { value: 'UPLOADED', label: 'Uploaded', color: 'bg-emerald-100 text-emerald-800' },
     { value: 'COMPLETED', label: 'Completed', color: 'bg-emerald-100 text-emerald-800' },
-    { value: 'FAILED', label: 'Failed', color: 'bg-red-100 text-red-800' }
+    { value: 'FAILED_UPLOAD', label: 'Failed', color: 'bg-red-100 text-red-800' },
   ];
 
   const workflowSteps = [
@@ -39,10 +39,11 @@ const TaskHeader = ({ task, user, onTaskUpdate }) => {
     { from: 'IN_PROGRESS', to: ['ASSIGNED', 'REVIEW'], roles: ['ADMIN', 'EDITOR'] },
     { from: 'REVIEW', to: ['IN_PROGRESS', 'READY'], roles: ['ADMIN', 'EDITOR'] },
     { from: 'READY', to: ['SCHEDULED', 'UPLOADED', 'REVIEW'], roles: ['ADMIN'] },
+     { from: 'FAILED_UPLOAD', to: ['READY', 'REVIEW'], roles: ['ADMIN'] },
   ];
 
   // States that should not show dropdown (final states or states without transitions)
-  const nonInteractiveStatuses = ['DRAFT', 'UPLOADED', 'COMPLETED', 'FAILED', 'UPLOADING', 'SCHEDULED'];
+  const nonInteractiveStatuses = ['DRAFT', 'UPLOADED', 'COMPLETED', 'UPLOADING', 'SCHEDULED'];
 
   useEffect(() => {
     const handleClickOutside = (event) => {

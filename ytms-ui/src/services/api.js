@@ -154,7 +154,7 @@ export const authAPI = {
 export const teamAPI = {
   getAllUsers: async () => {
     try {
-      const response = await api.get("/team/users");
+      const response = await api.get("/team");
       return response.data;
     } catch (error) {
       console.error("Get all team users error:", error);
@@ -289,6 +289,7 @@ export const tasksAPI = {
       headers: { "Content-Type": "application/json" },
     });
   },
+
   generateUploadUrl: (filename, type, folder) => {
     console.log(`Generating upload URL for ${filename} in folder ${folder}`);
 
@@ -448,8 +449,10 @@ export const commentsAPI = {
 // Metadata API - Updated for multiple videos support
 export const metadataAPI = {
   // Task-level metadata endpoints
-  createMetadata: (taskId, metadataData) =>
-    api.post(`/metadata/${taskId}`, metadataData),
+  createMetadata: (taskId, metadataData) =>{
+    debugger
+    api.post(`/metadata/${taskId}`, metadataData)
+  },
 
   getMetadata: (taskId) => api.get(`/metadata/task/${taskId}`),
 

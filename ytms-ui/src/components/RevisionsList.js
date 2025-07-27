@@ -100,7 +100,7 @@ const RevisionsList = ({
                 e.stopPropagation();
                 setShowUploadRevision(!showUploadRevision);
               }}
-              className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition-colors flex items-center space-x-1"
+               className="btn-primary text-sm flex items-center justify-center space-x-2 w-full sm:w-auto"
             >
               <Plus className="h-3 w-3" />
               <span>Add Revision</span>

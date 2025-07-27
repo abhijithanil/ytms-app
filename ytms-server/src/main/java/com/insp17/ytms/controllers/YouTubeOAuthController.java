@@ -81,7 +81,7 @@ public class YouTubeOAuthController {
 
         if (error != null) {
             log.error("OAuth error: {}", error);
-            return ResponseEntity.status(400).body(
+            return ResponseEntity.status(400).header("X-Action", "CLOSE_WINDOW").body(
                     Collections.singletonMap("error", "Authorization failed: " + error)
             );
         }
@@ -90,7 +90,7 @@ public class YouTubeOAuthController {
             // Validate state and get user
             Long userId = youTubeAccountService.validateOAuthState(state);
             if (userId == null) {
-                return ResponseEntity.status(400).body(
+                return ResponseEntity.status(400).header("X-Action", "CLOSE_WINDOW").body(
                         Collections.singletonMap("error", "Invalid or expired state")
                 );
             }
@@ -150,7 +150,7 @@ public class YouTubeOAuthController {
             response.put("channelsConnected", savedChannels.size());
             response.put("channels", savedChannels);
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.status(200).header("X-Action", "CLOSE_WINDOW").body(response);
 
         } catch (Exception e) {
             log.error("Error in OAuth callback", e);

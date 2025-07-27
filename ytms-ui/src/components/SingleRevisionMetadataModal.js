@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { X, Youtube, AlertCircle, Settings, Search, Film, Globe, MessageSquare, Share2, PlusCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Youtube, AlertCircle, Settings, Search, Film, Globe, MessageSquare, Share2, PlusCircle, Upload, Image } from 'lucide-react';
+import { storageAPI } from "../services/api";
 
 const SingleRevisionMetadataModal = ({
   isOpen,
@@ -68,6 +69,12 @@ const SingleRevisionMetadataModal = ({
 
   const [formData, setFormData] = useState(getInitialFormData());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Thumbnail upload states
+  const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState(null);
+  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
+  const fileInputRef = useRef(null);
 
   // --- DATA POPULATION ---
   useEffect(() => {
@@ -90,7 +97,7 @@ const SingleRevisionMetadataModal = ({
             // If no chapters, not an array, or empty, start with one empty chapter at 00:00.
             initialChapters = [{ title: '', startTime: '00:00' }];
         }
-
+        
         // Populate form with existing data
         setFormData({
           title: initialData.title || '',
@@ -131,12 +138,117 @@ const SingleRevisionMetadataModal = ({
           videoLongitude: initialData.videoLongitude || '',
           videoChapters: initialChapters,
         });
+
+        // Set thumbnail preview if exists
+        if (initialData.thumbnailUrl || initialData.customThumbnailUrl) {
+          setThumbnailPreview(initialData.thumbnailUrl || initialData.customThumbnailUrl);
+        }
       } else {
         // Reset form for new metadata entry
         setFormData(getInitialFormData());
+        setThumbnailFile(null);
+        setThumbnailPreview(null);
       }
     }
   }, [isOpen, initialData]);
+
+  // --- THUMBNAIL UPLOAD LOGIC ---
+  const handleThumbnailUpload = async (file) => {
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      alert("Please upload a valid image file (JPEG, PNG, or WebP)");
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert("File size must be less than 5MB");
+      return;
+    }
+
+    setIsUploadingThumbnail(true);
+    const previewUrl = URL.createObjectURL(file);
+    setThumbnailPreview(previewUrl);
+    setThumbnailFile(file);
+
+    try {
+      const timestamp = Date.now();
+      const extension = file.name.split(".").pop();
+      const uniqueFileName = `thumbnail_${timestamp}.${extension}`;
+      const response = await storageAPI.generateSignedUrl(
+        uniqueFileName,
+        "thumbnails",
+        file.type
+      );
+      const { signedUrl, objectName, uniqueFilename } = response.data;
+
+      const init = await fetch(signedUrl, {
+        method: "POST",
+        headers: {
+          "x-goog-resumable": "start",
+          "Content-Type": file.type,
+        },
+      });
+      if (!init.ok) {
+        const text = await init.text();
+        throw new Error(
+          `Failed to start resumable upload: ${init.status} ${init.statusText}\n${text}`
+        );
+      }
+
+      const sessionUri = init.headers.get("Location");
+      if (!sessionUri) throw new Error("Missing resumable session URI");
+
+      const xhr = new XMLHttpRequest();
+      xhr.timeout = 30 * 60 * 1000;
+      xhr.open("PUT", sessionUri);
+      xhr.setRequestHeader("Content-Type", file.type);
+
+      xhr.send(file);
+
+      const publicUrl = `https://storage.googleapis.com/${
+        process.env.REACT_APP_GCP_BUCKET_NAME || "ytmthelper-inspire26-pub"
+      }/${objectName}`;
+
+      setFormData((prev) => ({ 
+        ...prev, 
+        thumbnailUrl: publicUrl,
+        customThumbnailUrl: publicUrl 
+      }));
+      console.log("Thumbnail uploaded successfully:", publicUrl);
+    } catch (error) {
+      console.error("Error uploading thumbnail:", error);
+      removeThumbnail(); // Revert preview on failure
+    } finally {
+      setIsUploadingThumbnail(false);
+    }
+  };
+
+  const handleThumbnailChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      handleThumbnailUpload(file);
+    }
+  };
+
+  const removeThumbnail = () => {
+    setThumbnailFile(null);
+    setThumbnailPreview(null);
+    setFormData((prev) => ({ 
+      ...prev, 
+      thumbnailUrl: "",
+      customThumbnailUrl: ""
+    }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  };
 
   // --- EVENT HANDLERS ---
   const handleInputChange = (e) => {
@@ -198,6 +310,7 @@ const SingleRevisionMetadataModal = ({
         videoChapters: chaptersToSubmit,
         videoLatitude: formData.videoLatitude === '' ? null : parseFloat(formData.videoLatitude),
         videoLongitude: formData.videoLongitude === '' ? null : parseFloat(formData.videoLongitude),
+        videoType: formData.videoType,
       };
       
       await onSubmit(metadataToSubmit);
@@ -254,7 +367,65 @@ const SingleRevisionMetadataModal = ({
                 <textarea name="description" value={formData.description} onChange={handleInputChange} rows={5} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Tell viewers about your video..." maxLength={5000} />
                 <p className="text-xs text-gray-500 mt-1 text-right">{formData.description.length}/5000</p>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Video Type</label>
+                <select name="videoType" value={formData.videoType} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" onChange={handleInputChange}>
+                  <option value="MAIN">Main</option>
+                  <option value="SHORT">Short</option>
+                </select>
+              </div>  
             </>
+          )}
+
+          {/* --- THUMBNAIL UPLOAD --- */}
+          {renderSection("Thumbnail", <Image className="h-5 w-5 text-indigo-600" />,
+            <div className="space-y-3">
+              {thumbnailPreview ? (
+                <div className="relative group">
+                  <img
+                    src={thumbnailPreview}
+                    alt="Thumbnail preview"
+                    className="w-full max-w-xs h-32 object-cover rounded-lg border border-gray-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={removeThumbnail}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <Image className="mx-auto h-12 w-12 text-gray-400" />
+                  <p className="mt-2 text-sm text-gray-600">
+                    Upload a thumbnail
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    JPEG, PNG, or WebP (max 5MB)
+                  </p>
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={triggerFileInput}
+                  disabled={isUploadingThumbnail}
+                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {isUploadingThumbnail ? "Uploading..." : "Upload Image"}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  onChange={handleThumbnailChange}
+                  disabled={isUploadingThumbnail}
+                  className="hidden"
+                />
+              </div>
+            </div>
           )}
 
           {/* --- VIDEO DETAILS --- */}
@@ -297,11 +468,6 @@ const SingleRevisionMetadataModal = ({
                 <input type="text" name="tags" value={formData.tags} onChange={handleInputChange} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="tag1, tag2, tag3..." />
                 <p className="text-xs text-gray-500 mt-1">Separate with commas. Max 500 characters total.</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Keywords</label>
-                <input type="text" name="keywords" value={formData.keywords} onChange={handleInputChange} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="keyword1, keyword2..." />
-                <p className="text-xs text-gray-500 mt-1">Separate with commas. For search optimization.</p>
-              </div>
             </>
           )}
 
@@ -312,11 +478,6 @@ const SingleRevisionMetadataModal = ({
                     <label className="block text-sm font-medium text-gray-700 mb-1">Scheduled Publish Time</label>
                     <input type="datetime-local" name="scheduledPublishTime" value={formData.scheduledPublishTime} onChange={handleInputChange} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-                 {/* <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Playlist IDs</label>
-                    <input type="text" name="playlistIds" value={formData.playlistIds} onChange={handleInputChange} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="PL..., PL..."/>
-                    <p className="text-xs text-gray-500 mt-1">Separate with commas.</p>
-                </div> */}
                 <div className="col-span-1 md:col-span-2 flex items-center space-x-4 pt-2">
                     <label className="flex items-center space-x-2 cursor-pointer"><input type="checkbox" name="notifySubscribers" checked={formData.notifySubscribers} onChange={handleInputChange} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" /><span className="text-sm text-gray-700">Notify Subscribers</span></label>
                     <label className="flex items-center space-x-2 cursor-pointer"><input type="checkbox" name="publishToFeed" checked={formData.publishToFeed} onChange={handleInputChange} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" /><span className="text-sm text-gray-700">Publish to Feed</span></label>
@@ -402,10 +563,6 @@ const SingleRevisionMetadataModal = ({
                       <span>Add Chapter</span>
                   </button>
               </div>
-              <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Custom Thumbnail</label>
-                  <input type="file" name="customThumbnail" onChange={handleFileChange} accept="image/jpeg,image/png" className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
-              </div>
             </>
           )}
 
@@ -419,13 +576,18 @@ const SingleRevisionMetadataModal = ({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSubmitting || !formData.title.trim()}
+            disabled={isSubmitting || !formData.title.trim() || isUploadingThumbnail}
             className="px-5 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
           >
             {isSubmitting ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                 <span>Saving...</span>
+              </>
+            ) : isUploadingThumbnail ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                <span>Uploading...</span>
               </>
             ) : (
               <>

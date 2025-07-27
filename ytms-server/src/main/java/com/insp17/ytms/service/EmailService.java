@@ -4,12 +4,15 @@ import com.insp17.ytms.dtos.InviteRequest;
 import com.insp17.ytms.dtos.SignUpRequest;
 import com.insp17.ytms.entity.*;
 import com.insp17.ytms.repository.UserRepository;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -34,10 +37,10 @@ public class EmailService {
     @Value("${company.logo:https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.pngegg.com%2Fen%2Fpng-konuz&psig=AOvVaw2sLrqBYzY330mc3iK_swYU&ust=1752578649513000&source=images&cd=vfe&opi=89978449&ved=0CBQQjRxqFwoTCPCi4rOevI4DFQAAAAAdAAAAABAE}")
     private String companyLogo;
 
-    @Value("${HOST_URL:http://localhost:8080}") // Default to localhost for local dev
+    @Value("${HOST_URL:http://localhost:8080}")
     private String hostUrl;
 
-    @Value("${UI_HOST_URL:http://localhost:3000/admin}") // Default to localhost for local dev
+    @Value("${UI_HOST_URL:http://localhost:3000/admin}")
     private String consoleUrl;
 
     @Async("verificationEmailTaskExecutor")
@@ -60,7 +63,7 @@ public class EmailService {
                 task.getDeadline() != null ? task.getDeadline().toString() : "Not set"
         );
 
-        sendEmail(editor.getEmail(), subject, body);
+        sendSimpleEmail(editor.getEmail(), subject, body);
     }
 
     @Async("verificationEmailTaskExecutor")
@@ -83,12 +86,12 @@ public class EmailService {
 
         // Send to assigned editor
         if (task.getAssignedEditor() != null) {
-            sendEmail(task.getAssignedEditor().getEmail(), subject, body);
+            sendSimpleEmail(task.getAssignedEditor().getEmail(), subject, body);
         }
 
         // Send to task creator
         if (task.getCreatedBy() != null && !task.getCreatedBy().equals(changedBy)) {
-            sendEmail(task.getCreatedBy().getEmail(), subject, body);
+            sendSimpleEmail(task.getCreatedBy().getEmail(), subject, body);
         }
     }
 
@@ -110,12 +113,12 @@ public class EmailService {
 
         // Send to task creator if different from uploader
         if (task.getCreatedBy() != null && !task.getCreatedBy().equals(uploadedBy)) {
-            sendEmail(task.getCreatedBy().getEmail(), subject, body);
+            sendSimpleEmail(task.getCreatedBy().getEmail(), subject, body);
         }
 
         // Send to assigned editor if different from uploader
         if (task.getAssignedEditor() != null && !task.getAssignedEditor().equals(uploadedBy)) {
-            sendEmail(task.getAssignedEditor().getEmail(), subject, body);
+            sendSimpleEmail(task.getAssignedEditor().getEmail(), subject, body);
         }
     }
 
@@ -136,7 +139,7 @@ public class EmailService {
 
         // Send to task creator (admin)
         if (task.getCreatedBy() != null) {
-            sendEmail(task.getCreatedBy().getEmail(), subject, body);
+            sendSimpleEmail(task.getCreatedBy().getEmail(), subject, body);
         }
     }
 
@@ -158,11 +161,11 @@ public class EmailService {
 
         // Send to all stakeholders
         if (task.getCreatedBy() != null) {
-            sendEmail(task.getCreatedBy().getEmail(), subject, body);
+            sendSimpleEmail(task.getCreatedBy().getEmail(), subject, body);
         }
 
         if (task.getAssignedEditor() != null) {
-            sendEmail(task.getAssignedEditor().getEmail(), subject, body);
+            sendSimpleEmail(task.getAssignedEditor().getEmail(), subject, body);
         }
     }
 
@@ -182,7 +185,7 @@ public class EmailService {
                     task.getTitle(),
                     changedBy.getUsername()
             );
-            sendEmail(oldEditor.getEmail(), subject, bodyOld);
+            sendSimpleEmail(oldEditor.getEmail(), subject, bodyOld);
         }
 
         // Email to new editor
@@ -203,33 +206,17 @@ public class EmailService {
                     task.getTaskStatus(),
                     changedBy.getUsername()
             );
-            sendEmail(newEditor.getEmail(), subject, bodyNew);
-        }
-    }
-
-    private void sendEmail(String to, String subject, String body) {
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromEmail);
-            message.setTo(to);
-            message.setSubject(subject);
-            message.setText(body);
-
-            mailSender.send(message);
-        } catch (Exception e) {
-            // Log the error but don't fail the main operation
-            System.err.println("Failed to send email to: " + to + ", Error: " + e.getMessage());
+            sendSimpleEmail(newEditor.getEmail(), subject, bodyNew);
         }
     }
 
     public void sendUserVerificationEmail(String email, String token) {
+        // Implementation needed
     }
 
     @Async("verificationEmailTaskExecutor")
     public void notifyAdminsForApproval(@Valid SignUpRequest signupRequest) {
         try {
-
-
             List<User> activeAdmins = userRepository.findByRoleAndUserStatus(UserRole.ADMIN, UserStatus.ACTIVE);
 
             if (activeAdmins.isEmpty()) {
@@ -240,20 +227,15 @@ public class EmailService {
             for (User admin : activeAdmins) {
                 String subject = "🔔 New User Signup Request - Admin Approval Needed";
 
-                String content = "<html><body style='font-family:Arial, sans-serif; text-align:center;'>"
-                        + "<div style='max-width: 600px; margin: auto; padding: 20px; border-radius: 10px; background-color: #f9f9f9;'>"
-                        + "<img src='" + companyLogo + "' alt='Logo' style='width:120px; margin-bottom:20px;' />"
-                        + "<h2 style='color: #333;'>New User Signup Request</h2>"
-                        + "<p style='color: #555; font-size:16px;'>A new user: <b style='color:#007BFF;'>" + signupRequest.getEmail() + "</p>"
-                        + "<p style='color: #555; font-size:14px;'>Please log in to your admin panel to approve or reject this request.</p>"
-                        + "<a href='" + consoleUrl + "' style='display:inline-block; padding: 12px 24px; font-size: 16px; "
-                        + "color: #fff; background-color: #007BFF; text-decoration: none; border-radius: 5px; margin:20px 0;'>"
-                        + "🔑 Login to Admin Panel</a>"
-                        + "<hr style='margin: 20px 0;'>"
-                        + "<p style='color: #aaa; font-size:12px;'>© 2025 " + companyName + ". All rights reserved.</p>"
-                        + "</div>"
-                        + "</body></html>";
-                sendEmail(admin.getEmail(), subject, content);
+                String content = buildHtmlEmailTemplate(
+                        "New User Signup Request",
+                        "<p style='color: #555; font-size:16px;'>A new user: <b style='color:#007BFF;'>" + signupRequest.getEmail() + "</b> has requested access to the platform.</p>" +
+                                "<p style='color: #555; font-size:14px;'>Please log in to your admin panel to approve or reject this request.</p>",
+                        consoleUrl,
+                        "🔑 Login to Admin Panel"
+                );
+
+                sendHtmlEmail(admin.getEmail(), subject, content);
                 log.info("Approval email sent to admin: {}", admin.getEmail());
             }
         } catch (Exception e) {
@@ -266,43 +248,25 @@ public class EmailService {
         try {
             String subject = "🎉 You're Invited to Join " + companyName;
 
-            // Using a more robust HTML structure for email compatibility
-            String content = "<!DOCTYPE html>" // 1. Added DOCTYPE for better rendering consistency
-                    + "<html lang='en'>"
-                    + "<head>"
-                    + "<meta charset='UTF-8'>"
-                    + "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
-                    + "<title>" + subject + "</title>"
-                    + "</head>"
-                    + "<body style='font-family:Arial, sans-serif; margin:0; padding:0; background-color:#f4f4f4;'>" // 2. Reset body margin/padding
-                    + "<div style='max-width: 600px; margin: 20px auto; padding: 20px; border-radius: 10px; background-color: #ffffff; border: 1px solid #ddd;'>"
-                    + "<div style='text-align:center;'>" // Centering the logo
-                    + "<img src='" + companyLogo + "' alt='Logo' style='width:120px; margin-bottom:20px;' />"
-                    + "</div>"
-                    + "<h2 style='color: #333; text-align:center;'>Welcome to " + companyName + "!</h2>"
-                    + "<p style='color: #555; font-size:16px;'>Hi there,</p>"
-                    + "<p style='color: #555; font-size:16px;'>You've been invited to join <b style='color:#007BFF;'>" + companyName + "</b> platform.</p>"
-                    + "<p style='color: #555; font-size:14px;'>Click the button below to create your account and get started:</p>"
-                    + "<div style='text-align:center;'>" // 3. Centering the button
-                    + "<a href='" + url + "' style='display:inline-block; padding: 12px 24px; font-size: 16px; "
-                    + "color: #fff; background-color: #28a745; text-decoration: none; border-radius: 5px; margin:20px 0;'>"
-                    + "🚀 Create My Account</a>"
-                    + "</div>"
-                    + "<div style='margin: 20px 0; padding: 15px; background-color: #f9f9f9; border-radius: 5px; border: 1px solid #eee;'>"
-                    + "<p style='color: #666; font-size:14px; margin:0;'><b>Invitation Details:</b></p>"
-                    + "<p style='color: #666; font-size:14px; margin:10px 0 5px;'>Email: <b>" + inviteRequest.getEmail() + "</b></p>"
-                    + "<p style='color: #666; font-size:14px; margin:5px 0;'>Role: <b>" + inviteRequest.getUserRole() + "</b></p>"
-                    + "</div>"
-                    + "<p style='color: #dc3545; font-size:12px; text-align:center;'>⚠️ This invitation link will expire in 24 hours.</p>"
-                    + "<hr style='margin: 20px 0; border:none; border-top: 1px solid #eee;'>"
-                    + "<div style='text-align:center; color: #aaa; font-size:12px;'>"
-                    + "<p style='margin:5px 0;'>If you didn't expect this invitation, please ignore this email.</p>"
-                    + "<p style='margin:5px 0;'>© " + java.time.Year.now().getValue() + " " + companyName + ". All rights reserved.</p>" // 4. Dynamically set the year
-                    + "</div>"
-                    + "</div>"
-                    + "</body></html>";
+            String mainContent =
+                    "<p style='color: #555; font-size:16px;'>Hi there,</p>" +
+                            "<p style='color: #555; font-size:16px;'>You've been invited to join <b style='color:#007BFF;'>" + companyName + "</b> platform.</p>" +
+                            "<p style='color: #555; font-size:14px;'>Click the button below to create your account and get started:</p>" +
+                            "<div style='margin: 20px 0; padding: 15px; background-color: #f9f9f9; border-radius: 5px; border: 1px solid #eee;'>" +
+                            "<p style='color: #666; font-size:14px; margin:0;'><b>Invitation Details:</b></p>" +
+                            "<p style='color: #666; font-size:14px; margin:10px 0 5px;'>Email: <b>" + inviteRequest.getEmail() + "</b></p>" +
+                            "<p style='color: #666; font-size:14px; margin:5px 0;'>Role: <b>" + inviteRequest.getUserRole() + "</b></p>" +
+                            "</div>" +
+                            "<p style='color: #dc3545; font-size:12px; text-align:center;'>⚠️ This invitation link will expire in 24 hours.</p>";
 
-            sendEmail(inviteRequest.getEmail(), subject, content);
+            String content = buildHtmlEmailTemplate(
+                    "Welcome to " + companyName + "!",
+                    mainContent,
+                    url,
+                    "🚀 Create My Account"
+            );
+
+            sendHtmlEmail(inviteRequest.getEmail(), subject, content);
             log.info("Invitation email sent to: {}", inviteRequest.getEmail());
 
         } catch (Exception e) {
@@ -312,5 +276,126 @@ public class EmailService {
 
     @Async("verificationEmailTaskExecutor")
     public void sendUserInvitationDeclineEmail(String invitor, InviteRequest inviteRequestOp) {
+        // Implementation needed
+    }
+
+    // ==================== HELPER METHODS ====================
+
+    /**
+     * Sends a plain text email using SimpleMailMessage
+     */
+    private void sendSimpleEmail(String to, String subject, String body) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromEmail);
+            message.setTo(to);
+            message.setSubject(subject);
+            message.setText(body);
+
+            mailSender.send(message);
+            log.debug("Plain text email sent successfully to: {}", to);
+        } catch (Exception e) {
+            log.error("Failed to send plain text email to: {}, Error: {}", to, e.getMessage());
+        }
+    }
+
+    /**
+     * Sends an HTML email using MimeMessage
+     */
+    private void sendHtmlEmail(String to, String subject, String htmlBody) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(htmlBody, true); // true indicates HTML content
+
+            mailSender.send(message);
+            log.debug("HTML email sent successfully to: {}", to);
+        } catch (MessagingException e) {
+            log.error("Failed to send HTML email to: {}, Error: {}", to, e.getMessage());
+        }
+    }
+
+    /**
+     * Builds a consistent HTML email template
+     */
+    private String buildHtmlEmailTemplate(String title, String mainContent, String actionUrl, String actionButtonText) {
+        return "<!DOCTYPE html>" +
+                "<html lang='en'>" +
+                "<head>" +
+                "<meta charset='UTF-8'>" +
+                "<meta name='viewport' content='width=device-width, initial-scale=1.0'>" +
+                "<title>" + title + "</title>" +
+                "</head>" +
+                "<body style='font-family:Arial, sans-serif; margin:0; padding:0; background-color:#f4f4f4;'>" +
+                "<div style='max-width: 600px; margin: 20px auto; padding: 20px; border-radius: 10px; background-color: #ffffff; border: 1px solid #ddd;'>" +
+
+                // Header with logo
+                "<div style='text-align:center;'>" +
+                "<img src='" + companyLogo + "' alt='Logo' style='width:120px; margin-bottom:20px;' />" +
+                "</div>" +
+
+                // Title
+                "<h2 style='color: #333; text-align:center;'>" + title + "</h2>" +
+
+                // Main content
+                mainContent +
+
+                // Action button (if provided)
+                (actionUrl != null && actionButtonText != null ?
+                        "<div style='text-align:center;'>" +
+                                "<a href='" + actionUrl + "' style='display:inline-block; padding: 12px 24px; font-size: 16px; " +
+                                "color: #fff; background-color: #28a745; text-decoration: none; border-radius: 5px; margin:20px 0;'>" +
+                                actionButtonText + "</a>" +
+                                "</div>" : "") +
+
+                // Footer
+                "<hr style='margin: 20px 0; border:none; border-top: 1px solid #eee;'>" +
+                "<div style='text-align:center; color: #aaa; font-size:12px;'>" +
+                "<p style='margin:5px 0;'>If you didn't expect this email, please ignore it.</p>" +
+                "<p style='margin:5px 0;'>© " + java.time.Year.now().getValue() + " " + companyName + ". All rights reserved.</p>" +
+                "</div>" +
+                "</div>" +
+                "</body></html>";
+    }
+
+    /**
+     * Legacy method for backward compatibility - now routes to appropriate method
+     */
+    @Deprecated
+    private void sendEmail(String to, String subject, String body) {
+        // Auto-detect if content is HTML or plain text
+        if (body.trim().startsWith("<") && body.contains("</")) {
+            sendHtmlEmail(to, subject, body);
+        } else {
+            sendSimpleEmail(to, subject, body);
+        }
+    }
+
+
+    /**
+     * Public method to send simple text emails
+     */
+    public void sendTextEmail(String to, String subject, String textBody) {
+        sendSimpleEmail(to, subject, textBody);
+    }
+
+    /**
+     * Public method to send HTML emails
+     */
+    public void sendFormattedEmail(String to, String subject, String htmlBody) {
+        sendHtmlEmail(to, subject, htmlBody);
+    }
+
+    /**
+     * Public method to send notification with template
+     */
+    public void sendNotificationEmail(String to, String title, String message, String actionUrl, String actionText) {
+        String subject = title + " - " + companyName;
+        String content = buildHtmlEmailTemplate(title, message, actionUrl, actionText);
+        sendHtmlEmail(to, subject, content);
     }
 }

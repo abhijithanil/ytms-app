@@ -31,7 +31,7 @@ DROP TYPE IF EXISTS user_status CASCADE;
 
 -- Create custom enum types
 CREATE TYPE user_role AS ENUM ('ADMIN', 'EDITOR', 'USER');
-CREATE TYPE task_status AS ENUM ('DRAFT', 'ASSIGNED', 'IN_PROGRESS', 'REVIEW', 'READY', 'SCHEDULED', 'UPLOADED', 'UPLOADING', 'COMPLETED');
+CREATE TYPE task_status AS ENUM ('DRAFT', 'ASSIGNED', 'IN_PROGRESS', 'REVIEW', 'READY', 'SCHEDULED', 'UPLOADED', 'UPLOADING', 'COMPLETED', 'FAILED_UPLOAD');
 CREATE TYPE privacy_level AS ENUM ('ALL', 'SELECTED');
 CREATE TYPE task_priority AS ENUM ('LOW', 'MEDIUM', 'HIGH');
 CREATE TYPE user_status AS ENUM ('ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING', 'DELETED');
@@ -49,7 +49,8 @@ ALTER TABLE video_tasks
                                'SCHEDULED',
                                'UPLOADED',
                                'UPLOADING',
-                               'COMPLETED'
+                               'COMPLETED',
+                               'FAILED_UPLOAD'
             ));
 
 
