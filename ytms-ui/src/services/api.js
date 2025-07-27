@@ -644,6 +644,9 @@ export const fileUtils = {
 
 // YouTube Channel API
 export const youtubeChannelAPI = {
+  getPlayLists:(id) =>{
+    return api.get(`/youtube-channels/${id}/playlists`);
+  },
   getAllChannels: () => {
     console.log("Fetching all YouTube channels...");
     return api.get("/youtube-channels");

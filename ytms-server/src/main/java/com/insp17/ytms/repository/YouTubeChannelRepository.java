@@ -20,6 +20,9 @@ public interface YouTubeChannelRepository extends JpaRepository<YouTubeChannel, 
 
     Optional<YouTubeChannel> findByChannelNameAndIsActiveTrue(String channelName);
 
+//    @Query("SELECT yc FROM YouTubeChannel yc WHERE yc.channelId == :channelId")
+//    YouTubeChannel getChannelById(@Param("channel_id") String channelId);
+
     boolean existsByChannelId(String channelId);
 
     boolean existsByChannelName(String channelName);

@@ -1,5 +1,6 @@
 package com.insp17.ytms.entity;
 
+import com.insp17.ytms.gson.ToJsonString;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -14,6 +15,7 @@ import java.util.Set;
 @Getter
 @Setter
 @NoArgsConstructor
+@ToJsonString
 public class YouTubeChannel {
 
     @Id

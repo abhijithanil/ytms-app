@@ -5,6 +5,9 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.youtube.YouTube;
 import com.google.api.services.youtube.model.Channel;
 import com.google.api.services.youtube.model.ChannelListResponse;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.insp17.ytms.adapters.LocalDateTimeAdapter;
 import com.insp17.ytms.components.YouTubeRefreshTokenSetup;
 import com.insp17.ytms.dtos.CurrentUser;
 import com.insp17.ytms.dtos.RefreshTokenResult;
@@ -20,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -183,6 +187,12 @@ public class YouTubeOAuthController {
                     })
                     .collect(Collectors.toList());
 
+
+            Gson gson = new GsonBuilder()
+                    .registerTypeAdapter(LocalDateTime.class, new LocalDateTimeAdapter())
+                    .create();
+            String json = gson.toJson(accounts);
+            System.out.println(json);
             return ResponseEntity.ok(accounts);
         } catch (Exception e) {
             log.error("Error fetching connected accounts", e);

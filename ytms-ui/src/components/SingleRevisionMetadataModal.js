@@ -312,11 +312,11 @@ const SingleRevisionMetadataModal = ({
                     <label className="block text-sm font-medium text-gray-700 mb-1">Scheduled Publish Time</label>
                     <input type="datetime-local" name="scheduledPublishTime" value={formData.scheduledPublishTime} onChange={handleInputChange} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-                 <div>
+                 {/* <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Playlist IDs</label>
                     <input type="text" name="playlistIds" value={formData.playlistIds} onChange={handleInputChange} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="PL..., PL..."/>
                     <p className="text-xs text-gray-500 mt-1">Separate with commas.</p>
-                </div>
+                </div> */}
                 <div className="col-span-1 md:col-span-2 flex items-center space-x-4 pt-2">
                     <label className="flex items-center space-x-2 cursor-pointer"><input type="checkbox" name="notifySubscribers" checked={formData.notifySubscribers} onChange={handleInputChange} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" /><span className="text-sm text-gray-700">Notify Subscribers</span></label>
                     <label className="flex items-center space-x-2 cursor-pointer"><input type="checkbox" name="publishToFeed" checked={formData.publishToFeed} onChange={handleInputChange} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" /><span className="text-sm text-gray-700">Publish to Feed</span></label>

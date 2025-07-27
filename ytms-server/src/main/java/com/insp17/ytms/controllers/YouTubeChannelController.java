@@ -1,10 +1,12 @@
 package com.insp17.ytms.controllers;
 
+import com.google.api.services.youtube.model.Playlist;
 import com.insp17.ytms.dtos.*;
 import com.insp17.ytms.entity.User;
 import com.insp17.ytms.entity.YouTubeChannel;
 import com.insp17.ytms.service.UserService;
 import com.insp17.ytms.service.YouTubeChannelService;
+import com.insp17.ytms.service.YouTubeService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,9 +15,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RestController
@@ -25,6 +30,9 @@ public class YouTubeChannelController {
 
     @Autowired
     private YouTubeChannelService youTubeChannelService;
+
+    @Autowired
+    private YouTubeService youTubeService;
 
     @Autowired
     private UserService userService;
@@ -210,6 +218,18 @@ public class YouTubeChannelController {
                     new YouTubeChannelResponse(false, "Failed to delete YouTube channel")
             );
         }
+    }
+
+    @GetMapping("/{id}/playlists")
+    public ResponseEntity<List<Playlist>> getPlaylists(@PathVariable Long id, @CurrentUser UserPrincipal userPrincipal) {
+        YouTubeChannel channel = youTubeChannelService.getChannelById(id).orElseThrow(() -> new RuntimeException("Channel with id " + id + " not found"));
+        try {
+            List<Playlist> playlistsWithOptions = youTubeService.getPlaylistsWithOptions(channel, false);
+            return ResponseEntity.ok(playlistsWithOptions);
+        } catch (IOException | GeneralSecurityException e) {
+            log.error("Error getting playlists for YouTube channel {}: {}", id, e.getMessage());
+        }
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ArrayList<>());
     }
 
     /**

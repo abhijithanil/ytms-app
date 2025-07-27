@@ -17,6 +17,7 @@ import api, {
   commentsAPI,
   metadataAPI,
   youtubeChannelAPI,
+  youtubeOAuthAPI
 } from "../services/api";
 
 // Context
@@ -36,7 +37,7 @@ import EditTaskModal from "../components/EditTaskModal";
 import SingleRevisionMetadataModal from "../components/SingleRevisionMetadataModal";
 
 // Icons for loading state
-import { AlertCircle, Youtube, Settings, X, Check } from "lucide-react";
+import { AlertCircle, Youtube, Settings, X, Check, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 
 const { isCancel, CancelToken } = axios;
 
@@ -126,9 +127,15 @@ const TaskDetails = () => {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleDateTime, setScheduleDateTime] = useState("");
 
-  // Channel state
+  // Channel state - will hold processed channels with connection status
   const [channels, setChannels] = useState([]);
   const [uploadChannelSelections, setUploadChannelSelections] = useState({});
+
+  // NEW: Playlist-related state
+  const [channelPlaylists, setChannelPlaylists] = useState({}); // Store playlists for each channel
+  const [loadingPlaylists, setLoadingPlaylists] = useState({}); // Track loading state per channel
+  const [expandedChannels, setExpandedChannels] = useState({}); // Track which channels are expanded
+  const [selectedPlaylists, setSelectedPlaylists] = useState({}); // Store selected playlists per revision
 
   // Upload state - optimized with better tracking
   const [isUploading, setIsUploading] = useState(false);
@@ -209,6 +216,32 @@ const TaskDetails = () => {
     } catch (error) {
       console.warn("Failed to fetch revision metadata:", error);
       // Don't show error toast as this might be expected (no metadata exists yet)
+    }
+  };
+
+  // NEW: Fetch playlists for a specific channel
+  const fetchChannelPlaylists = async (channelId) => {
+    if (channelPlaylists[channelId] || loadingPlaylists[channelId]) {
+      return; // Already loaded or loading
+    }
+
+    setLoadingPlaylists(prev => ({ ...prev, [channelId]: true }));
+    
+    try {
+      const response = await youtubeChannelAPI.getPlayLists(channelId);
+      setChannelPlaylists(prev => ({
+        ...prev,
+        [channelId]: response.data || []
+      }));
+    } catch (error) {
+      console.error(`Failed to fetch playlists for channel ${channelId}:`, error);
+      toast.error("Failed to load playlists");
+      setChannelPlaylists(prev => ({
+        ...prev,
+        [channelId]: []
+      }));
+    } finally {
+      setLoadingPlaylists(prev => ({ ...prev, [channelId]: false }));
     }
   };
 
@@ -360,7 +393,7 @@ const TaskDetails = () => {
     }, 5000);
   }, [id, task?.status, isUploading]);
 
-  // Initial data fetch function
+  // Initial data fetch function - ENHANCED
   const fetchTaskAndChannelDetails = async () => {
     try {
       setLoading(true);
@@ -369,20 +402,35 @@ const TaskDetails = () => {
         revisionsResponse,
         commentsResponse,
         audioResponse,
-        channelsResponse,
+        allChannelsResponse, // Get all possible channels configured in the system
+        connectedAccountsResponse, // Get accounts connected by the current user
       ] = await Promise.all([
         tasksAPI.getTaskById(id),
         revisionsAPI.getRevisionsByTask(id),
         commentsAPI.getTaskComments(id),
         tasksAPI.getAudioInstructions(id),
-        youtubeChannelAPI.getAllChannels(),
+        youtubeChannelAPI.getAllChannels(), // Assumes this API endpoint exists
+        youtubeOAuthAPI.getConnectedAccounts(),
       ]);
 
       setTask(taskResponse.data);
       setRevisions(revisionsResponse.data);
       setComments(commentsResponse.data);
       setAudioInstructions(audioResponse.data);
-      setChannels(channelsResponse.data);
+
+      // Process channel data to determine connection status
+      const allSystemChannels = allChannelsResponse.data || [];
+      const connectedAccounts = connectedAccountsResponse.data || [];
+      
+      const connectedChannelIds = new Set(
+        connectedAccounts.flatMap(account => account.channels.map(channel => channel.id))
+      );
+      
+      const processedChannels = allSystemChannels.map(channel => ({
+        ...channel, // Expects { id: number, channelName: string }
+        isConnected: connectedChannelIds.has(channel.id),
+      }));
+      setChannels(processedChannels);
 
       // Fetch revision metadata after getting task details
       await fetchRevisionMetadata(id);
@@ -447,11 +495,16 @@ const TaskDetails = () => {
       if (exists) {
         // Remove from selection
         const updated = prev.filter((r) => r.id !== revision.id);
-        // Also remove from channel selections
+        // Also remove from channel selections and playlist selections
         setUploadChannelSelections((prevSelections) => {
           const newSelections = { ...prevSelections };
           delete newSelections[revision.id];
           return newSelections;
+        });
+        setSelectedPlaylists((prevPlaylists) => {
+          const newPlaylists = { ...prevPlaylists };
+          delete newPlaylists[revision.id];
+          return newPlaylists;
         });
         return updated;
       } else {
@@ -567,14 +620,72 @@ const TaskDetails = () => {
     setShowUploadSelectionModal(true);
   };
 
-  const handleChannelSelection = (revisionId, channelId) => {
+  // NEW: Handle channel selection and fetch playlists
+  const handleChannelSelection = async (revisionId, channelId) => {
     setUploadChannelSelections((prev) => ({
       ...prev,
       [revisionId]: channelId,
     }));
+
+    // Clear previously selected playlists for this revision
+    setSelectedPlaylists((prev) => ({
+      ...prev,
+      [revisionId]: []
+    }));
+
+    // Fetch playlists for the selected channel
+    if (channelId) {
+      await fetchChannelPlaylists(channelId);
+      // Expand the channel to show playlists
+      setExpandedChannels(prev => ({
+        ...prev,
+        [`${revisionId}-${channelId}`]: true
+      }));
+    }
   };
 
-  // Multi-video upload using revision metadata
+  // NEW: Handle playlist selection
+  const handlePlaylistSelection = (revisionId, playlistId, isSelected) => {
+    setSelectedPlaylists(prev => {
+      const currentPlaylists = prev[revisionId] || [];
+      
+      if (isSelected) {
+        // Add playlist if not already selected
+        if (!currentPlaylists.includes(playlistId)) {
+          return {
+            ...prev,
+            [revisionId]: [...currentPlaylists, playlistId]
+          };
+        }
+      } else {
+        // Remove playlist
+        return {
+          ...prev,
+          [revisionId]: currentPlaylists.filter(id => id !== playlistId)
+        };
+      }
+      
+      return prev;
+    });
+  };
+
+  // NEW: Toggle channel expansion
+  const toggleChannelExpansion = async (revisionId, channelId) => {
+    const key = `${revisionId}-${channelId}`;
+    const isExpanded = expandedChannels[key];
+    
+    setExpandedChannels(prev => ({
+      ...prev,
+      [key]: !isExpanded
+    }));
+
+    // Fetch playlists if expanding and not already loaded
+    if (!isExpanded && channelId) {
+      await fetchChannelPlaylists(channelId);
+    }
+  };
+
+  // Multi-video upload using revision metadata with playlists
   const handleMultiVideoUpload = async () => {
     // Validate all selections have channels
     const missingChannels = selectedRevisionsForUpload.filter(
@@ -590,6 +701,7 @@ const TaskDetails = () => {
       console.log("Upload already in progress, ignoring request");
       return;
     }
+  
 
     setIsUploading(true);
     const startTime = Date.now();
@@ -605,12 +717,23 @@ const TaskDetails = () => {
     );
 
     try {
-      // Prepare upload data for multiple videos using revision metadata
-      const uploadData = selectedRevisionsForUpload.map((revision) => ({
-        revisionId: revision.id,
-        channelId: uploadChannelSelections[revision.id],
-        metadata: revisionMetadata[revision.id], // Use revision-specific metadata
-      }));
+      // Prepare upload data for multiple videos using revision metadata and playlists
+      const uploadData = selectedRevisionsForUpload.map((revision) => {
+        const metadata = { ...revisionMetadata[revision.id] };
+        debugger
+        const revisionPlaylists = selectedPlaylists[revision.id] || [];
+        
+        // Append selected playlists to metadata if any are selected
+        if (revisionPlaylists.length > 0) {
+          metadata.playlist_ids = revisionPlaylists;
+        }
+
+        return {
+          revisionId: revision.id,
+          channelId: uploadChannelSelections[revision.id],
+          metadata: metadata,
+        };
+      });
 
       const response = await tasksAPI.doMultiVideoYoutubeUpload({
         taskId: id,
@@ -629,6 +752,8 @@ const TaskDetails = () => {
       setShowUploadSelectionModal(false);
       setSelectedRevisionsForUpload([]);
       setUploadChannelSelections({});
+      setSelectedPlaylists({});
+      setExpandedChannels({});
 
       startUploadPolling();
     } catch (error) {
@@ -647,9 +772,9 @@ const TaskDetails = () => {
       );
 
       if (
-        error.response?.data?.message ===
-        "YouTube account not connected. Please connect the account first."
+         error.response?.data?.message.includes("YouTube account not connected")
       ) {
+        toast.error(error.response?.data?.message);
         navigate("/settings");
       }
       console.error("Failed to initiate YouTube uploads:", error);
@@ -1657,58 +1782,202 @@ const TaskDetails = () => {
         />
       )}
 
-      {/* Upload Selection Modal */}
+      {/* ENHANCED Upload Selection Modal with Playlist Support */}
       {showUploadSelectionModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">
-                Select Channels for Upload
+              <h3 className="text-xl font-semibold text-gray-900">
+                Select Channels & Playlists for Upload
               </h3>
               <button
                 onClick={() => setShowUploadSelectionModal(false)}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <X className="h-5 w-5" />
+                <X className="h-6 w-6" />
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-6">
               {selectedRevisionsForUpload.map((revision) => (
                 <div
                   key={revision.id}
                   className="border border-gray-200 rounded-lg p-4"
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-medium text-gray-900">
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-gray-800">
                       Revision #{revision.revisionNumber}
                     </h4>
                     {revisionMetadata[revision.id]?.title && (
-                      <span className="text-sm text-gray-500">
-                        "{revisionMetadata[revision.id].title}"
-                      </span>
+                      <p className="text-sm text-gray-500 truncate">
+                        Title: "{revisionMetadata[revision.id].title}"
+                      </p>
                     )}
                   </div>
-
-                  <div>
+                  
+                  {/* Channel Selection UI */}
+                  <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       YouTube Channel
                     </label>
-                    <select
-                      value={uploadChannelSelections[revision.id] || ""}
-                      onChange={(e) =>
-                        handleChannelSelection(revision.id, e.target.value)
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select a channel...</option>
-                      {channels.map((channel) => (
-                        <option key={channel.id} value={channel.id}>
-                          {channel.channelName}
-                        </option>
-                      ))}
-                    </select>
+                    {channels.length > 0 ? (
+                      <div className="space-y-2 border border-gray-200 rounded-md p-2 max-h-52 overflow-y-auto">
+                        {channels.map((channel) => (
+                          <div
+                            key={channel.id}
+                            className={`flex items-center justify-between p-2 rounded-md transition-colors ${
+                              !channel.isConnected ? "bg-gray-100" : "hover:bg-gray-50"
+                            }`}
+                          >
+                            <div className="flex items-center">
+                              <input
+                                id={`channel-${revision.id}-${channel.id}`}
+                                name={`channel-selection-${revision.id}`}
+                                type="radio"
+                                value={channel.id}
+                                checked={uploadChannelSelections[revision.id] === String(channel.id)}
+                                onChange={() => handleChannelSelection(revision.id, String(channel.id))}
+                                disabled={!channel.isConnected}
+                                className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
+                              />
+                              <label
+                                htmlFor={`channel-${revision.id}-${channel.id}`}
+                                className={`ml-3 text-sm font-medium ${
+                                  !channel.isConnected
+                                    ? "text-gray-500 cursor-not-allowed"
+                                    : "text-gray-900 cursor-pointer"
+                                }`}
+                              >
+                                {channel.channelName}
+                              </label>
+                            </div>
+                            {channel.isConnected ? (
+                              <div className="flex items-center space-x-2">
+                                <span className="flex items-center text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                                  <Check className="h-3 w-3 mr-1" />
+                                  Connected
+                                </span>
+                                {/* Playlist expansion toggle */}
+                                {uploadChannelSelections[revision.id] === String(channel.id) && (
+                                  <button
+                                    onClick={() => toggleChannelExpansion(revision.id, channel.id)}
+                                    className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
+                                    title="Show/Hide Playlists"
+                                  >
+                                    {expandedChannels[`${revision.id}-${channel.id}`] ? (
+                                      <ChevronDown className="h-4 w-4" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => navigate("/settings")}
+                                className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                              >
+                                Connect now
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 px-2 bg-gray-50 rounded-md">
+                        <p className="text-sm text-gray-600">
+                          No YouTube channels configured in the system.
+                        </p>
+                        {user.role === "ADMIN" && (
+                          <button
+                            onClick={() => navigate("/settings")}
+                            className="mt-2 text-sm text-blue-600 hover:underline"
+                          >
+                            Go to Settings to add channels
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Playlist Selection UI - Show only if channel is selected and expanded */}
+                  {uploadChannelSelections[revision.id] && 
+                   expandedChannels[`${revision.id}-${uploadChannelSelections[revision.id]}`] && (
+                    <div className="border-t border-gray-200 pt-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Add to Playlists (Optional)
+                        </label>
+                        {loadingPlaylists[uploadChannelSelections[revision.id]] && (
+                          <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                        )}
+                      </div>
+                      
+                      {(() => {
+                        const channelId = uploadChannelSelections[revision.id];
+                        const playlists = channelPlaylists[channelId] || [];
+                        const isLoading = loadingPlaylists[channelId];
+                        
+                        if (isLoading) {
+                          return (
+                            <div className="text-center py-4 text-sm text-gray-500">
+                              Loading playlists...
+                            </div>
+                          );
+                        }
+                        
+                        if (playlists.length === 0) {
+                          return (
+                            <div className="text-center py-4 text-sm text-gray-500 bg-gray-50 rounded-md">
+                              No playlists found for this channel
+                            </div>
+                          );
+                        }
+                        
+                        return (
+                          <div className="space-y-2 border border-gray-200 rounded-md p-2 max-h-40 overflow-y-auto">
+                            {playlists.map((playlist) => (
+                              <div
+                                key={playlist.id}
+                                className="flex items-center p-2 hover:bg-gray-50 rounded-md"
+                              >
+                                <input
+                                  id={`playlist-${revision.id}-${playlist.id}`}
+                                  type="checkbox"
+                                  checked={selectedPlaylists[revision.id]?.includes(playlist.id) || false}
+                                  onChange={(e) => handlePlaylistSelection(
+                                    revision.id, 
+                                    playlist.id, 
+                                    e.target.checked
+                                  )}
+                                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <label
+                                  htmlFor={`playlist-${revision.id}-${playlist.id}`}
+                                  className="ml-3 text-sm text-gray-900 cursor-pointer flex-1"
+                                >
+                                  {playlist.snippet?.title || playlist.id}
+                                </label>
+                                {playlist.snippet?.description && (
+                                  <span className="text-xs text-gray-500 ml-2 truncate max-w-32">
+                                    {playlist.snippet.description}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                      
+                      {/* Selected playlists summary */}
+                      {selectedPlaylists[revision.id] && selectedPlaylists[revision.id].length > 0 && (
+                        <div className="mt-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                          {selectedPlaylists[revision.id].length} playlist(s) selected
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1716,7 +1985,7 @@ const TaskDetails = () => {
             <div className="mt-6 flex justify-end space-x-3">
               <button
                 onClick={() => setShowUploadSelectionModal(false)}
-                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
               >
                 Cancel
               </button>

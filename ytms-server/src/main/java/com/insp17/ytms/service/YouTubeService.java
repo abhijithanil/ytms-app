@@ -8,16 +8,14 @@ import com.google.api.client.googleapis.media.MediaHttpUploaderProgressListener;
 import com.google.api.client.http.InputStreamContent;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.youtube.YouTube;
-import com.google.api.services.youtube.model.ThumbnailSetResponse;
-import com.google.api.services.youtube.model.Video;
-import com.google.api.services.youtube.model.VideoSnippet;
-import com.google.api.services.youtube.model.VideoStatus;
+import com.google.api.services.youtube.model.*;
 import com.google.cloud.secretmanager.v1.SecretManagerServiceClient;
 import com.google.cloud.secretmanager.v1.SecretVersionName;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.insp17.ytms.dtos.*;
 import com.insp17.ytms.entity.*;
+import com.insp17.ytms.repository.YouTubeChannelRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,10 +31,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.GeneralSecurityException;
 import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -74,6 +69,8 @@ public class YouTubeService {
     private CommentService commentService;
     @Autowired
     private RevisionService revisionService;
+    @Autowired
+    private YouTubeChannelRepository youTubeChannelRepository;
 
     @Autowired
     public YouTubeService(@Lazy YouTubeService self) {
@@ -115,7 +112,7 @@ public class YouTubeService {
     /**
      * NEW: Upload multiple videos to different channels
      */
-    @Async("youtubeUploadExecutor")
+//    @Async("youtubeUploadExecutor")
     public void uploadMultipleVideos(VideoTask task, List<MultiVideoUploadRequest.VideoUploadItem> uploads, User user) {
         log.info("Starting multiple video uploads for task: {} with {} uploads", task.getId(), uploads.size());
 
@@ -213,7 +210,7 @@ public class YouTubeService {
     /**
      * Upload a single revision video (used by both single and multi-upload)
      */
-    @Async("youtubeUploadExecutor")
+//    @Async("youtubeUploadExecutor")
     public void uploadSingleRevisionVideo(Revision revision, VideoMetadataDTO metadata,
                                           YouTubeChannel channel, VideoTask task, User user) throws IOException {
 
@@ -221,8 +218,7 @@ public class YouTubeService {
         byte[] fileContent = fileStorageService.downloadFile(revision.getEditedVideoUrl());
         validateVideoFile(fileContent, revision.getEditedVideoFilename());
 
-        // Create video object (WITHOUT thumbnail - we'll upload it separately)
-        Video videoObject = createVideoObjectWithoutThumbnail(metadata);
+        Video videoObject = createVideoObject(metadata);
 
         // Upload video
         try (InputStream inputStream = new ByteArrayInputStream(fileContent)) {
@@ -246,22 +242,26 @@ public class YouTubeService {
             Video uploadedVideo = videoInsert.execute();
             String videoId = uploadedVideo.getId();
 
+            if (metadata.getPlaylistIds() != null && !metadata.getPlaylistIds().isEmpty()) {
+                addVideoToPlaylists(videoId, metadata.getPlaylistIds(), youtubeService);
+            }
+
             log.info("Successfully uploaded video - ID: {}, Title: {}, Channel: {}, Status: {}",
                     videoId,
                     uploadedVideo.getSnippet().getTitle(),
                     channel.getChannelName(),
                     uploadedVideo.getStatus().getPrivacyStatus());
 
-            // UPLOAD THUMBNAIL SEPARATELY (if provided)
-            if (metadata.getThumbnailUrl() != null && !metadata.getThumbnailUrl().trim().isEmpty()) {
-                try {
-                    uploadThumbnail(youtubeService, videoId, metadata.getThumbnailUrl());
-                    log.info("Successfully uploaded custom thumbnail for video: {}", videoId);
-                } catch (Exception thumbnailError) {
-                    log.error("Failed to upload thumbnail for video {}: {}", videoId, thumbnailError.getMessage());
-                    // Don't fail the entire upload if thumbnail fails
-                }
-            }
+//            // UPLOAD THUMBNAIL SEPARATELY (if provided)
+//            if (metadata.getThumbnailUrl() != null && !metadata.getThumbnailUrl().trim().isEmpty()) {
+//                try {
+//                    uploadThumbnail(youtubeService, videoId, metadata.getThumbnailUrl());
+//                    log.info("Successfully uploaded custom thumbnail for video: {}", videoId);
+//                } catch (Exception thumbnailError) {
+//                    log.error("Failed to upload thumbnail for video {}: {}", videoId, thumbnailError.getMessage());
+//                    // Don't fail the entire upload if thumbnail fails
+//                }
+//            }
 
         } catch (Exception e) {
             log.error("Failed to upload video '{}' to channel '{}': {}",
@@ -270,8 +270,45 @@ public class YouTubeService {
         }
     }
 
+    // Method to add video to playlists after upload
+    private void addVideoToPlaylists(String videoId, Set<String> playlistIds, YouTube youtube) throws IOException {
+        if (playlistIds == null || playlistIds.isEmpty()) {
+            return;
+        }
 
-    @Async("youtubeUploadExecutor")
+        for (String playlistId : playlistIds) {
+            try {
+                // Create a playlist item
+                PlaylistItem playlistItem = new PlaylistItem();
+
+                // Set the snippet
+                PlaylistItemSnippet snippet = new PlaylistItemSnippet();
+                snippet.setPlaylistId(playlistId);
+
+                // Set the video resource
+                ResourceId resourceId = new ResourceId();
+                resourceId.setKind("youtube#video");
+                resourceId.setVideoId(videoId);
+                snippet.setResourceId(resourceId);
+
+                playlistItem.setSnippet(snippet);
+
+                YouTube.PlaylistItems.Insert playlistItemsInsert =
+                        youtube.playlistItems().insert(List.of("snippet"), playlistItem);
+
+                PlaylistItem returnedPlaylistItem = playlistItemsInsert.execute();
+
+                log.info("Added video {} to playlist {}", videoId, playlistId);
+
+            } catch (IOException e) {
+                log.error("Failed to add video {} to playlist {}: {}",
+                        videoId, playlistId, e.getMessage());
+                // Continue with other playlists even if one fails
+            }
+        }
+    }
+
+    //    @Async("youtubeUploadExecutor")
     public void uploadVideoOperations(Revision latestRevision, VideoMetadataDTO metadata, YouTubeChannel channel, VideoTask task, UploadVideoRequest uploadVideoRequest, User user) throws IOException {
 
         // Use the single revision upload method
@@ -425,23 +462,36 @@ public class YouTubeService {
     /**
      * Creates Video object WITHOUT thumbnail (thumbnail uploaded separately)
      */
-    private Video createVideoObjectWithoutThumbnail(VideoMetadataDTO metadata) throws IOException {
+    private Video createVideoObject(VideoMetadataDTO metadata) throws IOException {
         VideoSnippet snippet = new VideoSnippet();
         snippet.setTitle(metadata.getTitle());
         snippet.setDescription(formatDescriptionWithChapters(metadata));
+
+        // Setting thumbnail
+        if (metadata.getThumbnailUrl() != null && !metadata.getThumbnailUrl().trim().isEmpty()) {
+            ThumbnailDetails thumbnailDetails = new ThumbnailDetails();
+            Thumbnail thumbnail = new Thumbnail();
+            thumbnail.setUrl(metadata.getThumbnailUrl());
+            thumbnailDetails.setHigh(thumbnail);
+            snippet.setThumbnails(thumbnailDetails);
+        }
+
 
         if (metadata.getTags() != null && !metadata.getTags().isEmpty()) {
             snippet.setTags(new ArrayList<>(metadata.getTags()));
         }
 
         VideoStatus status = new VideoStatus();
+        status.setLicense(metadata.getLicense());
         status.setPrivacyStatus(metadata.getPrivacyStatus());
         status.setMadeForKids(metadata.getMadeForKids());
 
         Video videoObject = new Video();
         videoObject.setSnippet(snippet);
         videoObject.setStatus(status);
-
+//        VideoMonetizationDetails monetizationDetails = new VideoMonetizationDetails();
+//        monetizationDetails.se
+//        videoObject.setMonetizationDetails()
         return videoObject;
     }
 
@@ -577,7 +627,7 @@ public class YouTubeService {
      */
     private boolean isValidUrl(String url) {
         try {
-            new java.net.URL(url);
+            new URL(url);
             return url.startsWith("http://") || url.startsWith("https://");
         } catch (Exception e) {
             return false;
@@ -603,7 +653,7 @@ public class YouTubeService {
             }
 
             // Add chapters section header (optional)
-            description.append("📍 CHAPTERS:\n");
+            description.append("CHAPTERS:\n");
 
             // Validate and add chapters
             List<VideoChapterDTO> validChapters = validateAndSortChapters(metadata.getVideoChapters());
@@ -694,12 +744,10 @@ public class YouTubeService {
 
 
     /**
-     * Helper method to get channel by ID (should be implemented in YouTubeChannelService)
+     * Helper method to get channel by ID
      */
     private YouTubeChannel getChannelById(Long channelId) {
-        // This should call YouTubeChannelService.getChannelById()
-        // For now, throwing an exception - this needs to be implemented
-        throw new RuntimeException("getChannelById method needs to be implemented");
+        return youTubeChannelRepository.findById(channelId).orElseThrow(() -> new RuntimeException("No channel found with id: " + channelId));
     }
 
     /**
@@ -730,7 +778,7 @@ public class YouTubeService {
     /**
      * Get user's YouTube channels (requires valid token)
      */
-    public List<com.google.api.services.youtube.model.Channel> getUserYouTubeChannels(YouTubeChannel channel)
+    public List<Channel> getUserYouTubeChannels(YouTubeChannel channel)
             throws IOException, GeneralSecurityException {
 
         YouTube youtubeService = getYouTubeService(channel);
@@ -820,5 +868,136 @@ public class YouTubeService {
         }
 
         return videos.get(0);
+    }
+
+    /**
+     * Get all playlists from a specific channel
+     *
+     * @param channelId The YouTube channel ID
+     * @param youtube   The authenticated YouTube service instance
+     * @return List of playlists
+     * @throws IOException if API call fails
+     */
+    public List<Playlist> getAllPlaylistsFromChannel(String channelId, YouTube youtube) throws IOException {
+        List<Playlist> allPlaylists = new ArrayList<>();
+        String nextPageToken = null;
+
+        do {
+            // Create the API request
+            YouTube.Playlists.List request = youtube.playlists()
+                    .list(Arrays.asList("snippet", "contentDetails", "status"))
+                    .setChannelId(channelId)
+                    .setMaxResults(50L); // Maximum allowed per request
+
+            // Set page token for pagination
+            if (nextPageToken != null) {
+                request.setPageToken(nextPageToken);
+            }
+
+            // Execute the request
+            PlaylistListResponse response = request.execute();
+
+            List<Playlist> playlists = response.getItems();
+            if (playlists != null) {
+                allPlaylists.addAll(playlists);
+
+                // Log playlist information
+                for (Playlist playlist : playlists) {
+                    System.out.printf("Playlist: %s (ID: %s) - %d videos%n",
+                            playlist.getSnippet().getTitle(),
+                            playlist.getId(),
+                            playlist.getContentDetails().getItemCount());
+                }
+            }
+
+            // Get next page token for pagination
+            nextPageToken = response.getNextPageToken();
+
+        } while (nextPageToken != null);
+
+        System.out.printf("Total playlists found: %d%n", allPlaylists.size());
+        return allPlaylists;
+    }
+
+    /**
+     * Get playlists with additional filtering options
+     *
+     * @param youTubeChannel Youtube channel
+     * @param includePrivate Whether to include private playlists (requires appropriate permissions)
+     * @return List of playlists
+     * @throws IOException if API call fails
+     */
+    public List<Playlist> getPlaylistsWithOptions(YouTubeChannel youTubeChannel, boolean includePrivate) throws IOException, GeneralSecurityException {
+        List<Playlist> allPlaylists = new ArrayList<>();
+        String nextPageToken = null;
+
+        YouTube youtube = getYouTubeService(youTubeChannel);
+
+        do {
+            YouTube.Playlists.List request = youtube.playlists()
+                    .list(Arrays.asList("snippet", "contentDetails", "status"))
+                    .setChannelId(youTubeChannel.getChannelId())
+                    .setMaxResults(50L);
+
+            if (nextPageToken != null) {
+                request.setPageToken(nextPageToken);
+            }
+
+            PlaylistListResponse response = request.execute();
+            List<Playlist> playlists = response.getItems();
+
+            if (playlists != null) {
+                for (Playlist playlist : playlists) {
+                    // Filter based on privacy settings if needed
+                    if (includePrivate || !"private".equals(playlist.getStatus().getPrivacyStatus())) {
+                        allPlaylists.add(playlist);
+                    }
+                }
+            }
+
+            nextPageToken = response.getNextPageToken();
+
+        } while (nextPageToken != null);
+
+        return allPlaylists;
+    }
+
+    /**
+     * Get playlist IDs only (more efficient if you only need IDs)
+     *
+     * @param youTubeChannel youtube channel
+     * @return List of playlist IDs
+     * @throws IOException if API call fails
+     */
+    public List<String> getPlaylistIds(YouTubeChannel youTubeChannel) throws IOException, GeneralSecurityException {
+        List<String> playlistIds = new ArrayList<>();
+        String nextPageToken = null;
+
+        YouTube youtube = getYouTubeService(youTubeChannel);
+
+        do {
+            YouTube.Playlists.List request = youtube.playlists()
+                    .list(Arrays.asList("id")) // Only request ID to save quota
+                    .setChannelId(youTubeChannel.getChannelId())
+                    .setMaxResults(50L);
+
+            if (nextPageToken != null) {
+                request.setPageToken(nextPageToken);
+            }
+
+            PlaylistListResponse response = request.execute();
+            List<Playlist> playlists = response.getItems();
+
+            if (playlists != null) {
+                for (Playlist playlist : playlists) {
+                    playlistIds.add(playlist.getId());
+                }
+            }
+
+            nextPageToken = response.getNextPageToken();
+
+        } while (nextPageToken != null);
+
+        return playlistIds;
     }
 }
