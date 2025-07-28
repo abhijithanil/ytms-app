@@ -40,8 +40,23 @@ public class User {
     @Column(columnDefinition = "TEXT")
     private String secret;
 
+    @Column(name = "super_admin", nullable = false)
+    private boolean superAdmin = false;
+
     // Constructors, getters, setters
     public User() {
+    }
+
+    public User(String firstName, String lastName, String username, String email, String password, UserRole role, UserStatus userStatus, boolean superAdmin) {
+        this.fistName = firstName;
+        this.lastName = lastName;
+        this.username = username;
+        this.email = email;
+        this.password = password;
+        this.role = role;
+        this.createdAt = LocalDateTime.now();
+        this.userStatus = userStatus;
+        this.superAdmin = superAdmin;
     }
 
     public User(String firstName, String lastName, String username, String email, String password, UserRole role, UserStatus userStatus) {

@@ -51,6 +51,32 @@ public class AuthController {
     @Autowired
     private MfaService mfaService;
 
+    @GetMapping("/user-exists")
+    public ResponseEntity<Map<String, Boolean>> checkUsersExist() {
+        boolean usersExist = userService.hasAnyUsers();
+        return ResponseEntity.ok(Map.of("usersExist", usersExist));
+    }
+
+    @PostMapping("/initial-admin")
+    public ResponseEntity<?> createInitialAdmin(@RequestBody CreateUserRequest request) {
+        User user = new User(
+                request.getFirstName(),
+                request.getLastName(),
+                request.getUsername(),
+                request.getEmail(),
+                request.getPassword(),
+                UserRole.ADMIN,
+                UserStatus.ACTIVE,
+                true
+        );
+
+        UserResponse result = userService.createUser(user);
+
+
+        return ResponseEntity.ok(new UserRegistrationResponse(true, "User registered successfully", result.getId(), result.getUsername()));
+
+    }
+
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody SignUpRequest signUpRequest) {
         try {
@@ -128,19 +154,23 @@ public class AuthController {
     }
 
     @PostMapping("/login/verify")
-    public ResponseEntity<?> verifyCode(@RequestBody MfaVerifyCodeRequest verifyCodeRequest) {
+    public ResponseEntity<JwtMFAResponse> verifyCode(@RequestBody MfaVerifyCodeRequest verifyCodeRequest) {
         try {
             UserResponse user = userService.getUserByUsername(verifyCodeRequest.getUsername());
             if (!mfaService.verifyTotp(user.getSecret(), verifyCodeRequest.getToken())) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse(false, "Invalid OTP"));
+                JwtMFAResponse jwtMFAResponse = new JwtMFAResponse( "Invalid OTP", false);
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(jwtMFAResponse);
             }
 
             UserDetails userDetails = userDetailsService.loadUserByUsername(verifyCodeRequest.getUsername());
             String jwt = jwtTokenUtil.generateToken(userDetails);
-            return ResponseEntity.ok(new JwtAuthenticationResponse(jwt, (UserPrincipal) userDetails));
+            JwtAuthenticationResponse jwtAuthenticationResponse = new JwtAuthenticationResponse(jwt, (UserPrincipal) userDetails);
+            JwtMFAResponse jwtMFAResponse = new JwtMFAResponse(jwtAuthenticationResponse, "MFA verification successful", true);
+            return ResponseEntity.ok(jwtMFAResponse);
 
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse(false, "Verification failed"));
+            JwtMFAResponse jwtMFAResponse = new JwtMFAResponse( "Verification failed", false);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(jwtMFAResponse);
         }
     }
 
@@ -313,7 +343,7 @@ public class AuthController {
             InviteRequest inviteRequest = inviteRequestOp.get();
             resp.put("message", "Valid token");
             resp.put("email", inviteRequest.getEmail());
-            resp.put("userRole", inviteRequest.getUserRole().name());
+            resp.put("role", inviteRequest.getUserRole().name());
             return ResponseEntity.ok(resp);
         } else {
             resp.put("error", "Invalid token, or expired");

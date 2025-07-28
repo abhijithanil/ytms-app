@@ -1,5 +1,6 @@
 package com.insp17.ytms.repository;
 
+import com.insp17.ytms.dtos.TaskStatusCount;
 import com.insp17.ytms.entity.TaskStatus;
 import com.insp17.ytms.entity.VideoTask;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -92,6 +93,12 @@ public interface VideoTaskRepository extends JpaRepository<VideoTask, Long> {
               AND  vt.taskStatus = 'SCHEDULED'
             """)
     List<VideoTask> findScheduledTasksForUpload(@Param("uploadTime") LocalDateTime uploadTime);
+
+    @Query("SELECT new com.insp17.ytms.dtos.TaskStatusCount(v.taskStatus, COUNT(v)) FROM VideoTask v GROUP BY v.taskStatus")
+    List<TaskStatusCount> countTasksByStatus();
+
+    @Query("SELECT new com.insp17.ytms.dtos.TaskStatusCount(v.taskStatus, COUNT(v)) FROM VideoTask v  WHERE v.assignedEditor.id = :assignedEditorId GROUP BY v.taskStatus")
+    List<TaskStatusCount> countTasksByStatusByUserId(@Param("assignedEditorId") long assignedUserId);
 }
 
 

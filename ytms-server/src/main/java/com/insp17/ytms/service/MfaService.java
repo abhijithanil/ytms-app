@@ -127,15 +127,8 @@ public class MfaService {
                 return false;
             }
 
-            boolean isValid = googleAuthenticator.authorize(secret, code);
 
-            if (isValid) {
-                System.out.println("TOTP verification successful");
-            } else {
-                System.out.println("TOTP verification failed");
-            }
-
-            return isValid;
+            return googleAuthenticator.authorize(secret, code);
         } catch (Exception e) {
             System.err.println("Error verifying TOTP code: " + e.getMessage());
             e.printStackTrace();

@@ -81,6 +81,32 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
+  loginVerify: async(username, otp) =>{
+     const response = await api.post('/auth/login/verify', { username, token: parseInt(otp) });
+     return response.data
+  },
+  
+  verifyMfa: (mfaVerifyRequest) => {
+    return api.post("/auth/mfa/verify", mfaVerifyRequest);
+  },
+
+  singUpMFAEnable: (mfaRequest) => {
+    return api.post("auth/mfa/signup/enable", mfaRequest);
+  },
+
+  usersExist: async () =>{
+      const response = await api.get("/auth/user-exists");
+      return response.data;
+  },
+   createInitialAdmin: async (adminData) => {
+    try {
+      const response = await api.post("/auth/initial-admin", adminData);
+      return response.data;
+    } catch (error) {
+      console.error("Create initial admin error:", error);
+      throw error;
+    }
+  },
   login: async (credentials) => {
     try {
       const response = await api.post("/auth/login", credentials);
@@ -152,6 +178,15 @@ export const authAPI = {
 
 // Team API
 export const teamAPI = {
+  getTasksCount: async() =>{
+    try{
+      const response = await api.get("/team/task-counts");
+      return response.data;
+    } catch(error) {
+      console.error("Failed to get task counts:", error);
+      throw error;
+    }
+  },
   getAllUsers: async () => {
     try {
       const response = await api.get("/team");

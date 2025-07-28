@@ -1,12 +1,23 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { authAPI } from "../services/api";
 import { Video, Eye, EyeOff, Shield, ArrowLeft } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+
+const MFA_SESSION_KEY = 'mfa_session_temp';
 
 const Login = () => {
-  const [mfaRequired, setMfaRequired] = useState(false);
-  const [userForMfa, setUserForMfa] = useState(null);
+  // Initialize MFA state from localStorage
+  const [mfaRequired, setMfaRequired] = useState(() => {
+    const saved = localStorage.getItem(MFA_SESSION_KEY);
+    return saved ? JSON.parse(saved).mfaRequired : false;
+  });
+  
+  const [userForMfa, setUserForMfa] = useState(() => {
+    const saved = localStorage.getItem(MFA_SESSION_KEY);
+    return saved ? JSON.parse(saved).userForMfa : null;
+  });
 
   const [formData, setFormData] = useState({
     username: "",
@@ -17,8 +28,77 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isMfaVerifying, setIsMfaVerifying] = useState(false);
   const [errors, setErrors] = useState({});
+  
+  // Timer and attempt counter states
+  const [timeLeft, setTimeLeft] = useState(() => {
+    const saved = localStorage.getItem(MFA_SESSION_KEY);
+    return saved ? (JSON.parse(saved).timeLeft || 180) : 180; // 3 minutes = 180 seconds
+  });
+  const [attemptCount, setAttemptCount] = useState(() => {
+    const saved = localStorage.getItem(MFA_SESSION_KEY);
+    return saved ? (JSON.parse(saved).attemptCount || 0) : 0;
+  });
+  
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // Save MFA state to localStorage whenever it changes
+  useEffect(() => {
+    if (mfaRequired && userForMfa) {
+      localStorage.setItem(MFA_SESSION_KEY, JSON.stringify({
+        mfaRequired,
+        userForMfa,
+        timeLeft,
+        attemptCount
+      }));
+      console.log("MFA state saved to localStorage:", { mfaRequired, userForMfa, timeLeft, attemptCount });
+    } else if (!mfaRequired) {
+      localStorage.removeItem(MFA_SESSION_KEY);
+      console.log("MFA state cleared from localStorage");
+    }
+  }, [mfaRequired, userForMfa, timeLeft, attemptCount]);
+
+  // Timer countdown effect
+  useEffect(() => {
+    let interval = null;
+    
+    if (mfaRequired && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft(prevTime => {
+          if (prevTime <= 1) {
+            // Time expired, redirect to login
+            console.log("MFA timer expired, redirecting to login");
+            toast.error('Session expired. Please log in again.');
+            setMfaRequired(false);
+            setUserForMfa(null);
+            setAttemptCount(0);
+            localStorage.removeItem(MFA_SESSION_KEY);
+            return 0;
+          }
+          return prevTime - 1;
+        });
+      }, 1000);
+    } else if (!mfaRequired) {
+      clearInterval(interval);
+    }
+
+    return () => clearInterval(interval);
+  }, [mfaRequired, timeLeft]);
+
+  // Format time for display (MM:SS)
+  const formatTime = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  // Clear MFA session on component mount if user has a valid token
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      localStorage.removeItem(MFA_SESSION_KEY);
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -43,13 +123,23 @@ const Login = () => {
 
     try {
       const response = await login(formData);
+      console.log("Login response:", response);
 
-      if (response.mfaRequired) {
+      if (response && response.mfaRequired) {
         // If MFA is required, switch to the OTP view
+        console.log("MFA required, switching to MFA view");
+        const userData = response.user || { username: response.username || formData.username };
+        
+        // Set state and save to localStorage
         setMfaRequired(true);
-        setUserForMfa(response.user || { username: response.username }); // Store user info for MFA verification
-      } else {
+        setUserForMfa(userData);
+        setTimeLeft(180); // Reset timer to 3 minutes
+        setAttemptCount(0); // Reset attempt counter
+        
+        console.log("MFA state set:", { mfaRequired: true, userForMfa: userData, timeLeft: 180, attemptCount: 0 });
+      } else if (response) {
         // Otherwise, login is complete
+        localStorage.removeItem(MFA_SESSION_KEY);
         window.location.reload();
       }
     } catch (error) {
@@ -68,11 +158,23 @@ const Login = () => {
 
   const handleVerifyCode = async (e) => {
     e.preventDefault();
+    
+    // Get current MFA state (from localStorage if needed)
+    const currentMfaState = JSON.parse(localStorage.getItem(MFA_SESSION_KEY) || '{}');
+    const currentUser = userForMfa || currentMfaState.userForMfa;
+    
+    if (!currentUser) {
+      console.error("No user data for MFA verification");
+      setErrors({ otp: "Session expired. Please log in again." });
+      setMfaRequired(false);
+      setUserForMfa(null);
+      return;
+    }
+    
     setIsMfaVerifying(true);
     setErrors({});
 
     try {
-      // Parse OTP to integer as expected by backend
       const token = parseInt(formData.otp);
 
       if (isNaN(token) || formData.otp.length !== 6) {
@@ -80,37 +182,70 @@ const Login = () => {
         return;
       }
 
-      // const response = await authAPI.loginVerify({
-      //   userId: userForMfa.username,
-      //   token: token,
-      // });
-      const response = await authAPI.loginVerify({
-        username: userForMfa.username,
-        token: token,
-      });
+      console.log("Attempting MFA verification for:", currentUser.username);
+      
+      const response = await authAPI.loginVerify(
+        currentUser.username,
+        token,
+      );
 
-      if (response.status == 200) {
-        // MFA verification successful, complete login
-        localStorage.setItem("token", response.data.accessToken);
-        localStorage.setItem("user", JSON.stringify(response.data.user));
+      console.log("MFA verification response:", response);
+
+      // Check for successful verification - adapt this to your API response format
+      if (response?.success == true && response?.jwtAuthenticationResponse?.accessToken) {
+        console.log("MFA verification successful");
+        localStorage.setItem("token", response.jwtAuthenticationResponse.accessToken);
+        localStorage.setItem("user", response.jwtAuthenticationResponse.user);
+        localStorage.removeItem(MFA_SESSION_KEY); // Clear MFA session
         window.location.reload();
+        return;
       }
+
+      // If we reach here, verification failed
+      console.log("MFA verification failed");
+      throw new Error("Invalid verification code");
+      
     } catch (error) {
       console.error("MFA verification error:", error);
+      
+      // Clear the OTP field
+      setFormData(prev => ({ ...prev, otp: "" }));
+      
+      // Show error message
+      const errorMessage = error.response?.data?.message || "Invalid verification code. Please try again.";
+      setErrors({ otp: errorMessage });
 
-      if (error.response?.data?.message) {
-        setErrors({ otp: error.response.data.message });
-      } else {
-        setErrors({ otp: "Invalid verification code. Please try again." });
+      // Increment attempt counter
+      const newAttemptCount = attemptCount + 1;
+      setAttemptCount(newAttemptCount);
+
+      // Check if max attempts reached
+      if (newAttemptCount >= 3) {
+        console.log("Maximum MFA attempts reached, redirecting to login");
+        toast.error('Maximum attempts reached. Please log in again.');
+        setMfaRequired(false);
+        setUserForMfa(null);
+        setAttemptCount(0);
+        setTimeLeft(180);
+        localStorage.removeItem(MFA_SESSION_KEY);
+        return;
       }
+
+      // CRITICAL: Keep MFA state - the localStorage approach should handle this automatically
+      console.log(`MFA verification failed (attempt ${newAttemptCount}/3), but staying in MFA mode`);
+      
     } finally {
       setIsMfaVerifying(false);
     }
   };
 
   const handleBackToLogin = () => {
+    console.log("User clicked back to login");
     setMfaRequired(false);
     setUserForMfa(null);
+    setAttemptCount(0);
+    setTimeLeft(180);
+    localStorage.removeItem(MFA_SESSION_KEY);
     setFormData({ ...formData, otp: "" });
     setErrors({});
   };
@@ -160,6 +295,7 @@ const Login = () => {
       if (result.ok) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
+        localStorage.removeItem(MFA_SESSION_KEY);
         window.location.reload();
       } else {
         setErrors({ general: data.message || "Google Sign-In failed" });
@@ -174,8 +310,20 @@ const Login = () => {
     navigate("/signup");
   };
 
-  // MFA Verification Form
-  if (mfaRequired) {
+  console.log("Current render state:", { 
+    mfaRequired, 
+    userForMfa: !!userForMfa,
+    localStorage: localStorage.getItem(MFA_SESSION_KEY)
+  });
+
+  // MFA Verification Form - Check both state and localStorage
+  const savedMfaState = JSON.parse(localStorage.getItem(MFA_SESSION_KEY) || '{}');
+  const shouldShowMFA = mfaRequired || savedMfaState.mfaRequired;
+  const currentUserForMfa = userForMfa || savedMfaState.userForMfa;
+
+  if (shouldShowMFA && currentUserForMfa) {
+    console.log("Rendering MFA form for user:", currentUserForMfa.username);
+    
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
@@ -192,6 +340,17 @@ const Login = () => {
             <p className="mt-2 text-sm text-gray-600">
               Enter the 6-digit code from your authenticator app
             </p>
+            {/* Timer display */}
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center justify-center space-x-2">
+                <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-sm text-yellow-800">
+                  Time remaining: <span className="font-mono font-semibold">{formatTime(timeLeft)}</span>
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* MFA Verification Form */}
@@ -209,9 +368,14 @@ const Login = () => {
                 <p className="text-sm text-gray-600">
                   Signed in as:{" "}
                   <span className="font-medium text-gray-900">
-                    {userForMfa?.username}
+                    {currentUserForMfa.username}
                   </span>
                 </p>
+                {attemptCount > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Attempts remaining: {3 - attemptCount}
+                  </p>
+                )}
               </div>
 
               {/* OTP Input */}
@@ -245,7 +409,7 @@ const Login = () => {
               <div className="space-y-3">
                 <button
                   type="submit"
-                  disabled={isMfaVerifying || formData.otp.length !== 6}
+                  disabled={isMfaVerifying || formData.otp.length !== 6 || timeLeft === 0}
                   className="w-full btn-primary flex justify-center py-3 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isMfaVerifying ? (
@@ -253,6 +417,8 @@ const Login = () => {
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                       <span>Verifying...</span>
                     </div>
+                  ) : timeLeft === 0 ? (
+                    "Session Expired"
                   ) : (
                     "Verify & Sign in"
                   )}
@@ -285,6 +451,8 @@ const Login = () => {
       </div>
     );
   }
+
+  console.log("Rendering login form");
 
   // Regular Login Form
   return (

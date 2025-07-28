@@ -1,6 +1,7 @@
 package com.insp17.ytms.service;
 
 import com.insp17.ytms.dtos.AudioInstructionDTO;
+import com.insp17.ytms.dtos.TaskStatusCount;
 import com.insp17.ytms.dtos.TaskUpdateRequest;
 import com.insp17.ytms.entity.*;
 import com.insp17.ytms.repository.*;
@@ -12,7 +13,9 @@ import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -420,6 +423,9 @@ public class VideoTaskService {
 
         return taskPermissionRepository.existsByVideoTaskIdAndUserIdAndPermissionType(task.getId(), userId, PermissionType.VIEW);
     }
+
+
+
 
     public static class DashboardStats {
         private long totalTasks;

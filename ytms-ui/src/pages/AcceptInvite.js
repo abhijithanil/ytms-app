@@ -1,40 +1,74 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Mail, Shield, Check, X, AlertCircle, User, UserSquare, Lock, Eye, EyeOff, Video } from 'lucide-react';
+import { Mail, Shield, Check, X, AlertCircle, User, UserSquare, Lock, Eye, EyeOff, Video, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authAPI } from '../services/api';
 import api from '../services/api';
 
 // MFA Setup Modal Component
-const MfaSetupModal = ({ isOpen, onClose, qrCodeImageUri, userId, onMfaEnabled }) => {
+const MfaSetupModal = ({
+  isOpen,
+  onClose,
+  qrCodeImageUri,
+  userId,
+  onMfaEnabled,
+}) => {
   const [otp, setOtp] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  // Reset image states when QR code changes
+  useEffect(() => {
+    if (qrCodeImageUri) {
+      setImageLoaded(false);
+      setImageError(false);
+    }
+  }, [qrCodeImageUri]);
 
   if (!isOpen) return null;
+
+  const handleImageLoad = () => {
+    console.log('QR Code image loaded successfully');
+    setImageLoaded(true);
+    setImageError(false);
+  };
+
+  const handleImageError = (e) => {
+    console.error('QR Code image failed to load:', e);
+    setImageLoaded(false);
+    setImageError(true);
+  };
 
   const handleVerify = async (e) => {
     e.preventDefault();
     setIsVerifying(true);
     try {
-      const response = await authAPI.verifyMfa("/auth/mfa/verify", { 
-        userId: userId, 
-        token: parseInt(otp) 
+      const response = await authAPI.verifyMfa({
+        userId: userId,
+        token: parseInt(otp),
       });
-      
-      if (response.data.message) {
+
+      // Check for success in response data
+      if (response.data?.message || response.message) {
+        toast.success("Signup completed and MFA enabled successfully!");
         onMfaEnabled();
         onClose();
       }
     } catch (error) {
       console.error("MFA verification error:", error);
-      toast.error(error.response?.data?.message || "Invalid OTP. Please try again.");
+      toast.error(
+        error.response?.data?.message || "Invalid OTP. Please try again."
+      );
     } finally {
       setIsVerifying(false);
     }
   };
 
   const handleSkip = () => {
-    toast.success("Account created successfully! You can enable MFA later in settings.");
+    toast.success(
+      "Account created successfully! You can enable MFA later in settings."
+    );
     onMfaEnabled();
     onClose();
   };
@@ -48,43 +82,76 @@ const MfaSetupModal = ({ isOpen, onClose, qrCodeImageUri, userId, onMfaEnabled }
         >
           <X size={24} />
         </button>
-        
+
         <div className="text-center mb-6">
           <div className="flex justify-center mb-4">
             <div className="flex items-center justify-center w-16 h-16 bg-primary-600 rounded-2xl shadow-lg">
               <Shield className="w-8 h-8 text-white" />
             </div>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Setup Multi-Factor Authentication</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Setup Multi-Factor Authentication
+          </h2>
           <p className="text-gray-600">
-            Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+            Scan this QR code with your authenticator app (Google Authenticator,
+            Authy, etc.)
           </p>
         </div>
 
         <div className="flex justify-center mb-6 bg-gray-50 p-4 rounded-lg">
-          {qrCodeImageUri ? (
-            <img 
-              src={qrCodeImageUri} 
-              alt="MFA QR Code" 
-              className="w-48 h-48"
-            />
-          ) : (
+          {!qrCodeImageUri && (
             <div className="w-48 h-48 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
               <p className="text-gray-500">Loading QR Code...</p>
             </div>
           )}
+          
+          {qrCodeImageUri && !imageLoaded && !imageError && (
+            <div className="w-48 h-48 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
+              <p className="text-gray-500">Loading QR Code...</p>
+            </div>
+          )}
+          
+          {imageError && (
+            <div className="w-48 h-48 bg-red-50 border-2 border-red-200 rounded-lg flex flex-col items-center justify-center">
+              <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
+              <p className="text-red-600 text-sm text-center">Failed to load QR code</p>
+              <button 
+                onClick={() => {
+                  setImageError(false);
+                  setImageLoaded(false);
+                }}
+                className="text-red-600 text-xs underline mt-1"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          
+          {qrCodeImageUri && (
+            <img 
+              src={qrCodeImageUri} 
+              alt="MFA QR Code" 
+              className={`w-48 h-48 rounded-lg ${!imageLoaded ? 'hidden' : ''}`}
+              onLoad={handleImageLoad}
+              onError={handleImageError}
+            />
+          )}
         </div>
+
 
         <form onSubmit={handleVerify} className="space-y-4">
           <div>
-            <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="otp"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Enter 6-digit verification code
             </label>
             <input
               id="otp"
               type="text"
               value={otp}
-              onChange={(e) => setOtp(e.target.value)}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} // Only allow digits
               className="input-field w-full text-center text-lg font-mono tracking-widest"
               placeholder="000000"
               maxLength="6"
@@ -139,7 +206,9 @@ const AcceptInvite = () => {
     lastName: '',
     username: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    email: '',
+    role: ''
   });
   const [formErrors, setFormErrors] = useState({});
   const [isRegistering, setIsRegistering] = useState(false);
@@ -147,7 +216,7 @@ const AcceptInvite = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [enableMfa, setEnableMfa] = useState(false);
 
-  // MFA Modal state
+  // Modal state
   const [showMfaModal, setShowMfaModal] = useState(false);
   const [qrCodeImageUri, setQrCodeImageUri] = useState("");
   const [newUserId, setNewUserId] = useState(null);
@@ -223,16 +292,38 @@ const AcceptInvite = () => {
         password: formData.password,
       });
 
-      if (response.data.success) {
-        const userId = response.data.userId;
+      if (response.success) {
+        const userId = response.userId;
         setNewUserId(userId);
         
         if (enableMfa && userId) {
           // Generate MFA QR code
           try {
-            const mfaResponse = await authAPI.singUpMFAEnable({ userId: userId })
-            setQrCodeImageUri(mfaResponse.data.qrCodeImageUri);
-            setShowMfaModal(true);
+            console.log('Attempting to enable MFA for user:', userId);
+            const mfaResponse = await authAPI.singUpMFAEnable({ userId: userId });
+            
+            console.log('MFA Response:', mfaResponse);
+            
+            // Handle different possible response structures
+            let qrUri = null;
+            if (mfaResponse.qrCodeImageUri) {
+              qrUri = mfaResponse.qrCodeImageUri;
+            } else if (mfaResponse.data?.qrCodeImageUri) {
+              qrUri = mfaResponse.data.qrCodeImageUri;
+            } else if (mfaResponse.data) {
+              qrUri = mfaResponse.data;
+            }
+            
+            if (qrUri) {
+              console.log('Setting QR Code URI, length:', qrUri.length);
+              setQrCodeImageUri(qrUri);
+              setShowMfaModal(true);
+            } else {
+              console.error('No QR code URI found in response:', mfaResponse);
+              toast.error('Failed to generate MFA QR code. Please try again.');
+              navigate('/login');
+            }
+            
           } catch (mfaError) {
             console.error('MFA setup error:', mfaError);
             toast.error('Account created but MFA setup failed. You can enable it later in settings.');
@@ -243,12 +334,13 @@ const AcceptInvite = () => {
           navigate('/login');
         }
       } else {
-        const errorMessage = response.data.message || 'Failed to create account.';
+        const errorMessage = response.message || 'Failed to create account.';
         setFormErrors({ general: errorMessage });
         toast.error(errorMessage);
       }
     } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Failed to create account.';
+      console.error('Registration error:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to create account.';
       setFormErrors({ general: errorMessage });
       toast.error(errorMessage);
     } finally {

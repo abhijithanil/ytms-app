@@ -185,6 +185,7 @@ const Team = () => {
 
   useEffect(() => {
     fetchTeamMembers();
+    fetchTasksCount();
   }, []);
   
   useEffect(() => {
@@ -198,6 +199,25 @@ const Team = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  const fetchTasksCount = async () => {
+    try{
+      setLoading(true);
+      const response = await teamAPI.getTasksCount();
+      setStats(prev => ({
+        ...prev, 
+        activeTasks: response.activeTask,
+        completedTasks: response.completedTask,
+        totalTasks: response.totalTask
+      }));
+
+    } catch (error) {
+      console.error('Failed to fetch tasks status count:', error);
+      toast.error("Could not tasks stats.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const fetchTeamMembers = async () => {
     try {
@@ -372,15 +392,15 @@ const Team = () => {
         {/* Member Stats */}
         <div className="grid grid-cols-3 gap-2 pt-4 border-t border-gray-100">
           <div className="text-center">
-            <p className="text-xl md:text-2xl font-bold text-gray-900">0</p>
+            <p className="text-xl md:text-2xl font-bold text-gray-900">{member.videoTaskCounts.totalTask||0}</p>
             <p className="text-xs md:text-sm text-gray-600">Total</p>
           </div>
           <div className="text-center">
-            <p className="text-xl md:text-2xl font-bold text-orange-600">0</p>
+            <p className="text-xl md:text-2xl font-bold text-orange-600">{member.videoTaskCounts.activeTask||0}</p>
             <p className="text-xs md:text-sm text-gray-600">Active</p>
           </div>
           <div className="text-center">
-            <p className="text-xl md:text-2xl font-bold text-green-600">0</p>
+            <p className="text-xl md:text-2xl font-bold text-green-600">{member.videoTaskCounts.completedTask||0}</p>
             <p className="text-xs md:text-sm text-gray-600">Done</p>
           </div>
         </div>

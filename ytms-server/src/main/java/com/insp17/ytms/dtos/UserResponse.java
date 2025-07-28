@@ -7,6 +7,7 @@ import jakarta.persistence.Transient;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Data
 public class UserResponse {
@@ -21,6 +22,7 @@ public class UserResponse {
     private String lastName;
     @Transient
     private String secret;
+    private Map<String, Integer> videoTaskCounts;
 
     public UserResponse(User user) {
         this.id = user.getId();

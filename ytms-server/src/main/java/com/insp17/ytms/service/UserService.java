@@ -1,8 +1,10 @@
 package com.insp17.ytms.service;
 
+import com.insp17.ytms.dtos.TaskStatusCount;
 import com.insp17.ytms.dtos.UpdatePasswordRequest;
 import com.insp17.ytms.dtos.UpdateProfileRequest;
 import com.insp17.ytms.dtos.UserResponse;
+import com.insp17.ytms.entity.TaskStatus;
 import com.insp17.ytms.entity.User;
 import com.insp17.ytms.entity.UserRole;
 import com.insp17.ytms.entity.UserStatus;
@@ -13,7 +15,9 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -42,9 +46,17 @@ public class UserService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private TaskSupportService taskSupportService;
+
+
     public List<UserResponse> getAllUsers() {
         List<User> allActiveUsers = userRepository.findAllActiveUsers();
-        return allActiveUsers.stream().map(UserResponse::new).collect(Collectors.toList());
+        List<UserResponse> users = allActiveUsers.stream().map(UserResponse::new).toList();
+        for (UserResponse user : users) {
+            user.setVideoTaskCounts(taskSupportService.getTaskCountsByUserId(user.getId()));
+        }
+        return users;
     }
 
     public UserResponse getUserById(Long id) {
@@ -129,5 +141,10 @@ public class UserService {
         }
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+    }
+
+
+    public boolean hasAnyUsers() {
+        return userRepository.count() > 0;
     }
 }

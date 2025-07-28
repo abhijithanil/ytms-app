@@ -1,0 +1,71 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: password
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+    defer-datasource-initialization: true
+
+  h2:
+    console:
+      enabled: true
+
+  sql:
+    init:
+      mode: embedded
+
+  redis:
+    host: localhost
+    port: 6379
+    timeout: 2000ms
+    jedis:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: test@example.com
+    password: testpassword
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+# Test specific configurations
+gcp:
+  bucket-name: test-bucket
+  public.bucket-name: test-public-bucket
+  project-id: test-project
+
+app:
+  mfa:
+    issuer: YTMS-TEST
+    icon-url: https://test.com/icon.png
+
+company:
+  name: YTMSTestTeam
+  logo: https://test.com/logo.png
+
+HOST_URL: http://localhost:8080
+UI_HOST_URL: http://localhost:3000/admin
+
+logging:
+  level:
+    com.insp17.ytms: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
