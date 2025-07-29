@@ -1,6 +1,7 @@
 package com.insp17.ytms.repository;
 
 import com.insp17.ytms.entity.Comment;
+import com.insp17.ytms.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -31,4 +32,6 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     @Modifying(clearAutomatically = true)
     @Query("DELETE FROM Comment c WHERE c.id = :id")
     int deleteByIdNativeSql(@Param("id") Long id);
+
+    List<Comment> findByAuthor(User userToDelete);
 }

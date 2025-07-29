@@ -9,6 +9,7 @@ import { Toaster } from "react-hot-toast";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { authAPI } from "./services/api";
 
+import Chat from './pages/Chat';
 import Layout from "./components/Layout/Layout";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -168,6 +169,7 @@ function AppContent() {
 
       <Routes>
         {/* Public routes that are only accessible when not logged in */}
+        <Route path="/chat" element={<Chat />} />
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
         <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />

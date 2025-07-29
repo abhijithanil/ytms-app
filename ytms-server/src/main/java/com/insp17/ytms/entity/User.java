@@ -12,7 +12,7 @@ public class User {
     private Long id;
 
     @Column(nullable = false)
-    private String fistName;
+    private String firstName;
 
     @Column(nullable = false)
     private String lastName;
@@ -48,7 +48,7 @@ public class User {
     }
 
     public User(String firstName, String lastName, String username, String email, String password, UserRole role, UserStatus userStatus, boolean superAdmin) {
-        this.fistName = firstName;
+        this.firstName = firstName;
         this.lastName = lastName;
         this.username = username;
         this.email = email;
@@ -60,7 +60,7 @@ public class User {
     }
 
     public User(String firstName, String lastName, String username, String email, String password, UserRole role, UserStatus userStatus) {
-        this.fistName = firstName;
+        this.firstName = firstName;
         this.lastName = lastName;
         this.username = username;
         this.email = email;
@@ -119,12 +119,12 @@ public class User {
         this.createdAt = createdAt;
     }
 
-    public String getFistName() {
-        return fistName;
+    public String getFirstName() {
+        return firstName;
     }
 
-    public void setFistName(String fistName) {
-        this.fistName = fistName;
+    public void setFirstName(String fistName) {
+        this.firstName = fistName;
     }
 
     public String getLastName() {
@@ -158,6 +158,11 @@ public class User {
     public void setSecret(String secret) {
         this.secret = secret;
     }
+
+    public boolean isSuperAdmin() {
+        return superAdmin;
+    }
+
 }
 
 

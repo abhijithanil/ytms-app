@@ -1,5 +1,6 @@
 package com.insp17.ytms.repository;
 
+import com.insp17.ytms.entity.User;
 import com.insp17.ytms.entity.YouTubeChannel;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -67,4 +68,6 @@ public interface YouTubeChannelRepository extends JpaRepository<YouTubeChannel, 
      */
     @Query("SELECT DISTINCT yc.youtubeChannelOwnerEmail FROM YouTubeChannel yc WHERE yc.isActive = true")
     List<String> findDistinctYoutubeAccountEmails();
+
+    List<YouTubeChannel> findByAddedBy(User userToDelete);
 }

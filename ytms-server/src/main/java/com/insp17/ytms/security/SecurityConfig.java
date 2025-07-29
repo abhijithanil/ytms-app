@@ -71,6 +71,9 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/error").permitAll()
 
+                        // WebSocket endpoints
+                        .requestMatchers("/ws/**").permitAll()
+
                         // File endpoints (will be secured by service layer)
                         .requestMatchers("/api/files/**").authenticated()
 
@@ -82,6 +85,9 @@ public class SecurityConfig {
 
                         // Editor and Admin endpoints
                         .requestMatchers("/api/revisions/**").hasAnyRole("EDITOR", "ADMIN")
+
+                        .requestMatchers("/api/chat/**").hasAnyRole("ADMIN", "EDITOR", "VIEWER")
+
 
                         // Authenticated endpoints
                         .requestMatchers("/api/**").authenticated()

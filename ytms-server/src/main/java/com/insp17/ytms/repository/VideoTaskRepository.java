@@ -2,6 +2,7 @@ package com.insp17.ytms.repository;
 
 import com.insp17.ytms.dtos.TaskStatusCount;
 import com.insp17.ytms.entity.TaskStatus;
+import com.insp17.ytms.entity.User;
 import com.insp17.ytms.entity.VideoTask;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -99,6 +100,10 @@ public interface VideoTaskRepository extends JpaRepository<VideoTask, Long> {
 
     @Query("SELECT new com.insp17.ytms.dtos.TaskStatusCount(v.taskStatus, COUNT(v)) FROM VideoTask v  WHERE v.assignedEditor.id = :assignedEditorId GROUP BY v.taskStatus")
     List<TaskStatusCount> countTasksByStatusByUserId(@Param("assignedEditorId") long assignedUserId);
+
+    List<VideoTask> findByCreatedBy(User userToDelete);
+
+    List<VideoTask> findByAssignedEditor(User userToDelete);
 }
 
 

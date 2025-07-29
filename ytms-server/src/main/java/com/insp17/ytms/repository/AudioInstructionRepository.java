@@ -1,6 +1,7 @@
 package com.insp17.ytms.repository;
 
 import com.insp17.ytms.entity.AudioInstruction;
+import com.insp17.ytms.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -23,4 +24,6 @@ public interface AudioInstructionRepository extends JpaRepository<AudioInstructi
     @Modifying(clearAutomatically = true)
     @Query("DELETE FROM AudioInstruction a WHERE a.id = :id")
     int deleteByIdNativeSql(@Param("id") Long id);
+
+    List<AudioInstruction> findByUploadedBy(User userToDelete);
 }

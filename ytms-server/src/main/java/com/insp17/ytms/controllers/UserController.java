@@ -71,6 +71,16 @@ public class UserController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<UserResponse> updateUser(@PathVariable Long id, @RequestBody UpdateUserRequest updateUserRequest) {
         User userDetails = userService.getUserByIdPrivateUse(id);
+
+        if (userDetails == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        //check if the user is a super admin
+        if(userDetails.isSuperAdmin()){
+            return ResponseEntity.status(403).body(new UserResponse(userDetails));
+        }
+
         if (updateUserRequest.getUsername() != null) {
             userDetails.setUsername(updateUserRequest.getUsername());
         }
@@ -81,6 +91,18 @@ public class UserController {
 
         if (updateUserRequest.getRole() != null) {
             userDetails.setRole(updateUserRequest.getRole());
+        }
+
+        if (updateUserRequest.getUserStatus() != null) {
+            userDetails.setUserStatus(updateUserRequest.getUserStatus());
+        }
+
+        if (updateUserRequest.getFirstName() != null) {
+            userDetails.setFirstName(updateUserRequest.getFirstName());
+        }
+
+        if (updateUserRequest.getLastName() != null) {
+            userDetails.setLastName(updateUserRequest.getLastName());
         }
 
         UserResponse updatedUser = userService.updateUser(userDetails);
@@ -107,4 +129,12 @@ public class UserController {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }
+
+    @DeleteMapping("/{id}/permanently")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> deleteUserPermanently(@PathVariable Long id) {
+        userService.permanentlyDeleteUser(id);
+        return ResponseEntity.noContent().build();
+    }
+
 }

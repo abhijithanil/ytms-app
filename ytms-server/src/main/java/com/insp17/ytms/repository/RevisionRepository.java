@@ -1,6 +1,7 @@
 package com.insp17.ytms.repository;
 
 import com.insp17.ytms.entity.Revision;
+import com.insp17.ytms.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -49,4 +50,6 @@ public interface RevisionRepository extends JpaRepository<Revision, Long> {
 
     @Query("SELECT r FROM Revision r WHERE r.videoTask.id = :taskId")
     List<Revision> findByVideoTaskId(Long taskId);
+
+    List<Revision> findByUploadedBy(User userToDelete);
 }

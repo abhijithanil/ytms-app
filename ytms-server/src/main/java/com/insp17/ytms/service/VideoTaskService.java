@@ -366,6 +366,14 @@ public class VideoTaskService {
             hasModificationItem = true;
         }
 
+        if (taskUpdateRequest.getAssignedEditorId() != null) {
+            long assigneeId = Long.parseLong(taskUpdateRequest.getAssignedEditorId());
+            User assigner = userRepository.findById(assigneeId).orElseThrow(() -> new RuntimeException("Assignee not found"));
+            if (assigner.getUserStatus() == UserStatus.ACTIVE) {
+                videoTask.setAssignedEditor(assigner);
+            }
+        }
+
         if (taskUpdateRequest.getTitle() != null) {
             videoTask.setTitle(taskUpdateRequest.getTitle());
             hasModificationItem = true;
@@ -423,8 +431,6 @@ public class VideoTaskService {
 
         return taskPermissionRepository.existsByVideoTaskIdAndUserIdAndPermissionType(task.getId(), userId, PermissionType.VIEW);
     }
-
-
 
 
     public static class DashboardStats {

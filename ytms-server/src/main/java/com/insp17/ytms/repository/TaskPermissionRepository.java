@@ -30,4 +30,6 @@ public interface TaskPermissionRepository extends JpaRepository<TaskPermission, 
 
     @Query("SELECT tp.user FROM TaskPermission tp WHERE tp.videoTask.id = :taskId AND tp.permissionType = :permissionType")
     List<User> findUsersByTaskIdAndPermissionType(@Param("taskId") Long taskId, @Param("permissionType") PermissionType permissionType);
+
+    List<TaskPermission> findByUser(User userToDelete);
 }

@@ -720,7 +720,6 @@ const TaskDetails = () => {
       // Prepare upload data for multiple videos using revision metadata and playlists
       const uploadData = selectedRevisionsForUpload.map((revision) => {
         const metadata = { ...revisionMetadata[revision.id] };
-        debugger
         const revisionPlaylists = selectedPlaylists[revision.id] || [];
         
         // Append selected playlists to metadata if any are selected

@@ -23,6 +23,7 @@ public class UserResponse {
     @Transient
     private String secret;
     private Map<String, Integer> videoTaskCounts;
+    private boolean isSuperAdmin;
 
     public UserResponse(User user) {
         this.id = user.getId();
@@ -32,9 +33,10 @@ public class UserResponse {
         this.role = user.getRole();
         this.createdAt = user.getCreatedAt();
         this.userStatus = user.getUserStatus();
-        this.fistName = user.getFistName();
+        this.fistName = user.getFirstName();
         this.lastName = user.getLastName();
         this.secret = user.getSecret();
+        this.isSuperAdmin = user.isSuperAdmin();
     }
 
     public boolean isMfaEnabled() {

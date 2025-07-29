@@ -209,6 +209,10 @@ export const teamAPI = {
 
 // Users API
 export const usersAPI = {
+   permanentlyDeleteUser: async (userId) => {
+    const response = await api.delete(`/users/${userId}/permanently`);
+    return response.data;
+  },
   getAllUsers: async () => {
     try {
       const response = await api.get("/users");
@@ -485,7 +489,6 @@ export const commentsAPI = {
 export const metadataAPI = {
   // Task-level metadata endpoints
   createMetadata: (taskId, metadataData) =>{
-    debugger
     api.post(`/metadata/${taskId}`, metadataData)
   },
 
@@ -822,6 +825,21 @@ export const youtubeOAuthAPI = {
       params: { code, state },
     });
   },
+};
+
+export const chatAPI = {
+  getChatHistory: (taskId = null, page = 0, size = 50) => {
+    const params = new URLSearchParams({ page, size });
+    if (taskId) params.append('taskId', taskId);
+    return api.get(`/chat/history?${params}`);
+  },
+
+  getOnlineUsers: () => api.get('/chat/online-users'),
+
+  getChatStats: (taskId = null) => {
+    const params = taskId ? `?taskId=${taskId}` : '';
+    return api.get(`/chat/stats${params}`);
+  }
 };
 
 export default api;
