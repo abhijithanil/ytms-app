@@ -2,6 +2,7 @@ package com.insp17.ytms.controllers;
 
 import com.insp17.ytms.dtos.*;
 import com.insp17.ytms.entity.User;
+import com.insp17.ytms.entity.UserRole;
 import com.insp17.ytms.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +23,7 @@ public class UserController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<List<UserResponse>> getAllUsers() {
-        return ResponseEntity.ok(userService.getAllUsers());
+        return ResponseEntity.ok(userService.getAllUsers(UserRole.ADMIN));
     }
 
     @GetMapping("/{id}")

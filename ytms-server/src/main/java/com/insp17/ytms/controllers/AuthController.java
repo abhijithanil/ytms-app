@@ -132,6 +132,11 @@ public class AuthController {
             UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
             UserResponse user = userService.getUserById(userPrincipal.getId());
 
+            if (user.getUserStatus()!= UserStatus.ACTIVE) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(new JwtMFAResponse( "User is not active, contact Administrator", false));
+            }
+
             if (user.isMfaEnabled()) {
                 Map<String, Object> response = new HashMap<>();
                 response.put("mfaRequired", true);
@@ -157,6 +162,11 @@ public class AuthController {
     public ResponseEntity<JwtMFAResponse> verifyCode(@RequestBody MfaVerifyCodeRequest verifyCodeRequest) {
         try {
             UserResponse user = userService.getUserByUsername(verifyCodeRequest.getUsername());
+            if (user.getUserStatus()!= UserStatus.ACTIVE) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(new JwtMFAResponse( "User is not active, contact Administrator", false));
+            }
+
             if (!mfaService.verifyTotp(user.getSecret(), verifyCodeRequest.getToken())) {
                 JwtMFAResponse jwtMFAResponse = new JwtMFAResponse( "Invalid OTP", false);
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(jwtMFAResponse);
@@ -328,7 +338,7 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    @PreAuthorize("hasRole('USER') or hasRole('ADMIN') or hasRole('EDITOR')")
+    @PreAuthorize("hasRole('VIEWER') or hasRole('ADMIN') or hasRole('EDITOR')")
     public ResponseEntity<UserResponse> getCurrentUser(@CurrentUser UserPrincipal userPrincipal) {
         UserResponse user = userService.getUserById(userPrincipal.getId());
         return ResponseEntity.ok(user);

@@ -128,9 +128,12 @@ const UploadVideo = () => {
   const recordingIntervalRef = useRef(null);
   const audioChunksRef = useRef([]);
 
-  useEffect(() => {
-    fetchEditors();
-    fetchAllUsers();
+useEffect(() => {
+    // Only fetch data if user is admin
+    if (user?.role === "ADMIN") {
+      fetchEditors();
+      fetchAllUsers();
+    }
 
     return () => {
       if (cancelTokenSource) {
@@ -140,8 +143,9 @@ const UploadVideo = () => {
         clearInterval(recordingIntervalRef.current);
       }
     };
-  }, [cancelTokenSource]);
+  }, [user?.role]);
 
+  
   const fetchEditors = async () => {
     try {
       const response = await usersAPI.getEditors();
@@ -607,6 +611,30 @@ const UploadVideo = () => {
       if (uploadToastId) toast.dismiss(uploadToastId);
     }
   };
+
+  if (user?.role !== "ADMIN") {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md mx-auto text-center">
+          <Shield className="mx-auto h-12 w-12 text-gray-400" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900">Access Denied</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            You don't have permission to access this page. Only administrators can upload videos.
+          </p>
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Go Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">

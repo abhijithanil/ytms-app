@@ -50,13 +50,23 @@ public class UserService {
     private TaskSupportService taskSupportService;
 
 
-    public List<UserResponse> getAllUsers() {
-        List<User> allActiveUsers = userRepository.findAllActiveUsers();
-        List<UserResponse> users = allActiveUsers.stream().map(UserResponse::new).toList();
-        for (UserResponse user : users) {
+    public List<UserResponse> getAllUsers(UserRole userRole) {
+        if (userRole == null) {
+            throw new IllegalArgumentException("User role cannot be null");
+        }
+        List<User> users;
+
+        if (userRole == UserRole.ADMIN) {
+            users = userRepository.findAll();
+        } else {
+            users = userRepository.findAllActiveUsers();
+        }
+
+        List<UserResponse> userResponses = users.stream().map(UserResponse::new).toList();
+        for (UserResponse user : userResponses) {
             user.setVideoTaskCounts(taskSupportService.getTaskCountsByUserId(user.getId()));
         }
-        return users;
+        return userResponses;
     }
 
     public UserResponse getUserById(Long id) {

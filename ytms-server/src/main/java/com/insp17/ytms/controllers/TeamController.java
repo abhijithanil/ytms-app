@@ -1,7 +1,10 @@
 package com.insp17.ytms.controllers;
 
+import com.insp17.ytms.dtos.CurrentUser;
 import com.insp17.ytms.dtos.InviteRequest;
+import com.insp17.ytms.dtos.UserPrincipal;
 import com.insp17.ytms.dtos.UserResponse;
+import com.insp17.ytms.entity.User;
 import com.insp17.ytms.service.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -33,8 +36,9 @@ public class TeamController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'EDITOR', 'VIEWER')")
-    public ResponseEntity<List<UserResponse>> getAllUsers() {
-        return ResponseEntity.ok(userService.getAllUsers());
+    public ResponseEntity<List<UserResponse>> getAllUsers(@CurrentUser UserPrincipal userPrincipal) {
+        User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
+        return ResponseEntity.ok(userService.getAllUsers(user.getRole()));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN')")

@@ -378,9 +378,8 @@ const RevisionsList = ({
                 {canUploadRevision() && (
                   <button
                     onClick={() => setShowUploadRevision(true)}
-                    className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition-colors flex items-center space-x-1 mt-4"
+                    className="btn-primary mt-4 text-sm"
                   >
-                    <Plus className="h-3 w-3" />
                     <span>Add First Revision</span>
                   </button>
                 )}
