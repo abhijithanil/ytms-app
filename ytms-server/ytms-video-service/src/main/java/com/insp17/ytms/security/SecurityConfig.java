@@ -73,6 +73,7 @@ public class SecurityConfig {
 
                         // WebSocket endpoints
                         .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers("/api/chat/status").permitAll()
 
                         // File endpoints (will be secured by service layer)
                         .requestMatchers("/api/files/**").authenticated()

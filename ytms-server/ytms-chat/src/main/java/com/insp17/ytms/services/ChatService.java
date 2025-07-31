@@ -237,7 +237,6 @@ public class ChatService {
 
         return buildChatRoomDTO(room, userId);
     }
-
     private ChatRoomDTO buildChatRoomDTO(ChatRoom room, Long userId) {
         ChatRoomDTO dto = new ChatRoomDTO(room);
 
@@ -256,8 +255,8 @@ public class ChatService {
         long unreadCount = chatMessageRepository.countUnreadMessages(room.getId(), userId);
         dto.setUnreadCount(unreadCount);
 
-        // Get latest message
-        Optional<ChatMessage> latestMessage = chatMessageRepository.findLatestMessageInRoom(room.getId(), PageRequest.of(0, 1));
+        // FIXED: Get latest message using the corrected method
+        Optional<ChatMessage> latestMessage = chatMessageRepository.findTopByChatRoomIdAndIsDeletedFalseOrderByCreatedAtDesc(room.getId());
         if (latestMessage.isPresent()) {
             dto.setLastMessage(new ChatMessageDTO(latestMessage.get()));
             dto.setLastMessageAt(latestMessage.get().getCreatedAt());
@@ -303,7 +302,6 @@ public class ChatService {
 
         return dto;
     }
-
     //  MESSAGING 
 
     public ChatMessageDTO sendMessageToRoom(SendMessageRequest request, Long senderId) {

@@ -209,28 +209,34 @@ export const teamAPI = {
 
 // Users API
 export const usersAPI = {
-   permanentlyDeleteUser: async (userId) => {
+  // EXISTING methods - keep all your current ones
+  permanentlyDeleteUser: async (userId) => {
     const response = await api.delete(`/users/${userId}/permanently`);
     return response.data;
   },
+  
   getAllUsers: async () => {
     try {
-      const response = await api.get("/users");
+      // UPDATED: Use the new chat-friendly endpoint
+      const response = await api.get("/users/all");
       return response;
     } catch (error) {
       console.error("Get all users error:", error);
       throw error;
     }
   },
+  
   getUserById: async (id) => {
     try {
-      const response = await api.get(`/users/${id}`);
+      // UPDATED: Use chat-friendly endpoint  
+      const response = await api.get(`/users/chat/${id}`);
       return response;
     } catch (error) {
       console.error(`Get user ${id} error:`, error);
       throw error;
     }
   },
+  
   createUser: async (userData) => {
     try {
       const response = await api.post("/users", userData);
@@ -240,6 +246,7 @@ export const usersAPI = {
       throw error;
     }
   },
+  
   updateUser: async (id, userData) => {
     try {
       const response = await api.put(`/users/${id}`, userData);
@@ -249,6 +256,7 @@ export const usersAPI = {
       throw error;
     }
   },
+  
   deleteUser: async (id) => {
     try {
       const response = await api.delete(`/users/${id}`);
@@ -258,6 +266,7 @@ export const usersAPI = {
       throw error;
     }
   },
+  
   getEditors: async () => {
     try {
       const response = await api.get("/users/editors");
@@ -267,6 +276,7 @@ export const usersAPI = {
       throw error;
     }
   },
+  
   getAdmins: async () => {
     try {
       const response = await api.get("/users/admins");
@@ -276,6 +286,7 @@ export const usersAPI = {
       throw error;
     }
   },
+  
   updateUserProfile: async (id, profileData) => {
     try {
       const response = await api.put(`/users/${id}/profile`, profileData);
@@ -285,6 +296,7 @@ export const usersAPI = {
       throw error;
     }
   },
+  
   changePassword: async (id, passwordData) => {
     try {
       const response = await api.put(`/users/${id}/password`, passwordData);
@@ -294,19 +306,156 @@ export const usersAPI = {
       throw error;
     }
   },
-   // Existing methods...
-  
-  
-  // Search users
-  searchUsers: (query) => api.get(`/api/users/search?q=${encodeURIComponent(query)}`),
 
+  // NEW: Enhanced chat-specific methods
+  
+  // Search users for chat
+  searchUsers: (query) => {
+    console.log(`Searching users with query: ${query}`);
+    return api.get(`/users/search?q=${encodeURIComponent(query)}`);
+  },
   
   // Get current user's profile
-  getCurrentUser: () => api.get('/api/users/me'),
+  getCurrentUser: () => {
+    console.log("Getting current user profile");
+    return api.get('/users/me');
+  },
   
-  // Update user status
-  updateUserStatus: (status) => api.patch('/api/users/me/status', { status }),
+  // Update user status for chat presence
+  updateUserStatus: (status) => {
+    console.log(`Updating user status to: ${status}`);
+    return api.patch('/users/me/status', { status });
+  },
+  
+  // Get user profile by ID
+  getUserProfile: (userId) => {
+    console.log(`Getting user profile for: ${userId}`);
+    return api.get(`/users/profile/${userId}`);
+  },
+  
+  // Check if username exists
+  checkUsernameExists: (username) => {
+    console.log(`Checking if username exists: ${username}`);
+    return api.get(`/users/check/username/${username}`);
+  },
+  
+  // Check if email exists
+  checkEmailExists: (email) => {
+    console.log(`Checking if email exists: ${email}`);
+    return api.get(`/users/check/email/${email}`);
+  },
+
+  // Admin methods (updated paths)
+  getAllUsersAdmin: () => {
+    console.log("Getting all users for admin");
+    return api.get('/users/admin/all');
+  },
+  
+  getUserByIdAdmin: (userId) => {
+    console.log(`Getting user ${userId} for admin`);
+    return api.get(`/users/admin/${userId}`);
+  },
 };
+
+// export const usersAPI = {
+//    permanentlyDeleteUser: async (userId) => {
+//     const response = await api.delete(`/users/${userId}/permanently`);
+//     return response.data;
+//   },
+//   getAllUsers: async () => {
+//     try {
+//       const response = await api.get("/users");
+//       return response;
+//     } catch (error) {
+//       console.error("Get all users error:", error);
+//       throw error;
+//     }
+//   },
+//   getUserById: async (id) => {
+//     try {
+//       const response = await api.get(`/users/${id}`);
+//       return response;
+//     } catch (error) {
+//       console.error(`Get user ${id} error:`, error);
+//       throw error;
+//     }
+//   },
+//   createUser: async (userData) => {
+//     try {
+//       const response = await api.post("/users", userData);
+//       return response;
+//     } catch (error) {
+//       console.error("Create user error:", error);
+//       throw error;
+//     }
+//   },
+//   updateUser: async (id, userData) => {
+//     try {
+//       const response = await api.put(`/users/${id}`, userData);
+//       return response;
+//     } catch (error) {
+//       console.error(`Update user ${id} error:`, error);
+//       throw error;
+//     }
+//   },
+//   deleteUser: async (id) => {
+//     try {
+//       const response = await api.delete(`/users/${id}`);
+//       return response;
+//     } catch (error) {
+//       console.error(`Delete user ${id} error:`, error);
+//       throw error;
+//     }
+//   },
+//   getEditors: async () => {
+//     try {
+//       const response = await api.get("/users/editors");
+//       return response;
+//     } catch (error) {
+//       console.error("Get editors error:", error);
+//       throw error;
+//     }
+//   },
+//   getAdmins: async () => {
+//     try {
+//       const response = await api.get("/users/admins");
+//       return response.data;
+//     } catch (error) {
+//       console.error("Get admins error:", error);
+//       throw error;
+//     }
+//   },
+//   updateUserProfile: async (id, profileData) => {
+//     try {
+//       const response = await api.put(`/users/${id}/profile`, profileData);
+//       return response;
+//     } catch (error) {
+//       console.error(`Update user ${id} profile error:`, error);
+//       throw error;
+//     }
+//   },
+//   changePassword: async (id, passwordData) => {
+//     try {
+//       const response = await api.put(`/users/${id}/password`, passwordData);
+//       return response;
+//     } catch (error) {
+//       console.error(`Change password for user ${id} error:`, error);
+//       throw error;
+//     }
+//   },
+//    // Existing methods...
+  
+  
+//   // Search users
+//   searchUsers: (query) => api.get(`/api/users/search?q=${encodeURIComponent(query)}`),
+
+  
+//   // Get current user's profile
+//   getCurrentUser: () => api.get('/api/users/me'),
+  
+//   // Update user status
+//   updateUserStatus: (status) => api.patch('/api/users/me/status', { status }),
+// };
 
 // Tasks API - Updated for multiple videos support
 export const tasksAPI = {
@@ -843,28 +992,28 @@ export const chatAPI = {
   getChatHistory: (taskId, page = 0, size = 50) => {
     const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
     if (taskId) params.append('taskId', taskId.toString());
-    return api.get(`/api/chat/history?${params}`);
+    return api.get(`/chat/history?${params}`);
   },
 
-  getOnlineUsers: () => api.get('/api/chat/online-users'),
+  getOnlineUsers: () => api.get('/chat/online-users'),
 
   // New room-based methods
   
   // Get list of all chat rooms for current user
-  getChatRoomList: () => api.get('/api/chat/rooms'),
+  getChatRoomList: () => api.get('/chat/rooms'),
   
   // Get details of a specific room
-  getRoomDetails: (roomId) => api.get(`/api/chat/rooms/${roomId}`),
+  getRoomDetails: (roomId) => api.get(`/chat/rooms/${roomId}`),
   
   // Create a new chat room
-  createChatRoom: (request) => api.post('/api/chat/rooms', request),
+  createChatRoom: (request) => api.post('/chat/rooms', request),
   
   // Get or create direct message room
   createOrGetDirectMessage: (recipientId) => 
-    api.post(`/api/chat/direct-messages?recipientId=${recipientId}`),
+    api.post(`/chat/direct-messages?recipientId=${recipientId}`),
   
   // Send direct message
-  sendDirectMessage: (request) => api.post('/api/chat/direct-messages/send', request),
+  sendDirectMessage: (request) => api.post('/chat/direct-messages/send', request),
   
   // Get messages for a specific room
   getRoomMessages: (roomId, page = 0, size = 50) => {
@@ -872,28 +1021,28 @@ export const chatAPI = {
       page: page.toString(), 
       size: size.toString() 
     });
-    return api.get(`/api/chat/rooms/${roomId}/messages?${params}`);
+    return api.get(`/chat/rooms/${roomId}/messages?${params}`);
   },
   
   // Mark room as read
-  markRoomAsRead: (roomId) => api.post(`/api/chat/rooms/${roomId}/read`),
+  markRoomAsRead: (roomId) => api.post(`/chat/rooms/${roomId}/read`),
   
   // Search messages
-  searchMessages: (request) => api.post('/api/chat/search', request),
+  searchMessages: (request) => api.post('/chat/search', request),
   
   // Room member management
   addMembersToRoom: (roomId, request) => 
-    api.post(`/api/chat/rooms/${roomId}/members`, request),
+    api.post(`/chat/rooms/${roomId}/members`, request),
   
   removeMemberFromRoom: (roomId, userId) => 
-    api.delete(`/api/chat/rooms/${roomId}/members/${userId}`),
+    api.delete(`/chat/rooms/${roomId}/members/${userId}`),
   
   // Update room settings
-  updateRoom: (roomId, request) => api.put(`/api/chat/rooms/${roomId}`, request),
+  updateRoom: (roomId, request) => api.put(`/chat/rooms/${roomId}`, request),
   
   // Archive/unarchive room
-  archiveRoom: (roomId) => api.patch(`/api/chat/rooms/${roomId}/archive`),
-  unarchiveRoom: (roomId) => api.patch(`/api/chat/rooms/${roomId}/unarchive`),
+  archiveRoom: (roomId) => api.patch(`/chat/rooms/${roomId}/archive`),
+  unarchiveRoom: (roomId) => api.patch(`/chat/rooms/${roomId}/unarchive`),
 };
 
 

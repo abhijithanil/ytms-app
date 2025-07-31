@@ -45,7 +45,7 @@ public class UserDTO {
         this.email = user.getEmail();
         this.role = user.getRole();
         this.createdAt = user.getCreatedAt();
-        this.updatedAt = user.getUpdatedAt();
+        this.updatedAt = user.getLastUpdateAt();
         this.lastLoginAt = user.getLastLoginAt();
         this.active = user.getUserStatus() != null && user.getUserStatus().name().equals("ACTIVE");
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, User, MessageCircle } from 'lucide-react';
-import { userAPI, chatAPI } from '../../services/api';
+import { usersAPI, chatAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
 const CreateDirectMessageModal = ({ onClose, onDirectMessageCreated }) => {
@@ -33,7 +33,7 @@ const CreateDirectMessageModal = ({ onClose, onDirectMessageCreated }) => {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const response = await userAPI.getAllUsers();
+      const response = await usersAPI.getAllUsers();
       // Filter out current user
       const otherUsers = response.data.filter(u => u.id !== user.id);
       setUsers(otherUsers);

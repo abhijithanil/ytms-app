@@ -11,7 +11,7 @@ import {
   Settings,
   Circle
 } from 'lucide-react';
-import { chatAPI, userAPI } from '../../services/api';
+import { chatAPI, usersAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const RoomMembersModal = ({ room, members, currentUserId, onClose }) => {
@@ -42,7 +42,7 @@ const RoomMembersModal = ({ room, members, currentUserId, onClose }) => {
   const loadAvailableUsers = async () => {
     try {
       setLoading(true);
-      const response = await userAPI.getAllUsers();
+      const response = await usersAPI.getAllUsers();
       // Filter out current members and current user
       const memberIds = new Set([...members.map(m => m.userId), currentUserId]);
       const available = response.data.filter(user => !memberIds.has(user.id));

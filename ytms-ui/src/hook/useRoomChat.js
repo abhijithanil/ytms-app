@@ -12,10 +12,14 @@ export const useRoomChat = (roomId) => {
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [roomDetails, setRoomDetails] = useState(null);
   
   const mountedRef = useRef(true);
   const connectionAttemptedRef = useRef(false);
   const currentRoomIdRef = useRef(roomId);
+  const reconnectTimeoutRef = useRef(null);
+  const reconnectAttemptsRef = useRef(0);
+  const maxReconnectAttempts = 5;
 
   console.log('🎯 useRoomChat: Render', { 
     roomId,
@@ -30,7 +34,18 @@ export const useRoomChat = (roomId) => {
 
   // Update current room ID ref when roomId changes
   useEffect(() => {
+    const previousRoomId = currentRoomIdRef.current;
     currentRoomIdRef.current = roomId;
+    
+    // If room changed, clean up previous room subscriptions
+    if (previousRoomId && previousRoomId !== roomId) {
+      console.log('🎯 useRoomChat: Room changed from', previousRoomId, 'to', roomId);
+      cleanupRoomSubscriptions(previousRoomId);
+      setMessages([]);
+      setMembers([]);
+      setTypingUsers([]);
+      setRoomDetails(null);
+    }
   }, [roomId]);
 
   // Helper function to add a message safely (prevents duplicates)
@@ -46,10 +61,19 @@ export const useRoomChat = (roomId) => {
 
     setMessages(prev => {
       // Check if message already exists
-      const messageExists = prev.some(msg => msg.id === newMessage.id);
+      const messageExists = prev.some(msg => 
+        msg.id === newMessage.id || 
+        (msg.tempId && msg.tempId === newMessage.tempId)
+      );
+      
       if (messageExists) {
-        console.log('🎯 useRoomChat: Message already exists, skipping duplicate ID:', newMessage.id);
-        return prev;
+        console.log('🎯 useRoomChat: Message already exists, updating if needed');
+        // Update message if it was a temporary message
+        return prev.map(msg => 
+          (msg.id === newMessage.id || msg.tempId === newMessage.tempId)
+            ? { ...newMessage, tempId: undefined }
+            : msg
+        );
       }
       
       // Add message and ensure chronological order
@@ -62,6 +86,8 @@ export const useRoomChat = (roomId) => {
   useEffect(() => {
     if (!roomId || !user || !token || token === 'undefined' || token === 'null') {
       console.log('🎯 useRoomChat: Missing requirements', { roomId, user: !!user, token: !!token });
+      setConnected(false);
+      setLoading(false);
       return;
     }
 
@@ -69,8 +95,7 @@ export const useRoomChat = (roomId) => {
     mountedRef.current = true;
     
     // Load room data
-    loadRoomMessages();
-    loadRoomMembers();
+    loadRoomData();
     
     // Connect to WebSocket if not already connected
     if (!connectionAttemptedRef.current) {
@@ -94,7 +119,13 @@ export const useRoomChat = (roomId) => {
       console.log('🎯 useRoomChat: Component unmounting');
       mountedRef.current = false;
       connectionAttemptedRef.current = false;
-      WebSocketService.disconnect();
+      
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      
+      // Don't disconnect WebSocket here as other components might be using it
+      cleanupRoomSubscriptions();
     };
   }, []);
 
@@ -112,6 +143,7 @@ export const useRoomChat = (roomId) => {
             setConnected(true);
             setLoading(false);
             setError(null);
+            reconnectAttemptsRef.current = 0;
             
             // Join general chat and setup room subscriptions
             WebSocketService.joinChat({ userId: user.id });
@@ -124,6 +156,9 @@ export const useRoomChat = (roomId) => {
             setConnected(false);
             setLoading(false);
             setError('Failed to connect to chat: ' + error.message);
+            
+            // Attempt to reconnect
+            handleReconnect();
           }
         }
       );
@@ -133,8 +168,27 @@ export const useRoomChat = (roomId) => {
         setConnected(false);
         setLoading(false);
         setError('Failed to connect to chat: ' + error.message);
+        handleReconnect();
       }
     }
+  };
+
+  const handleReconnect = () => {
+    if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+      console.log('🎯 useRoomChat: Max reconnect attempts reached');
+      setError('Connection failed. Please refresh the page.');
+      return;
+    }
+
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+    console.log(`🎯 useRoomChat: Scheduling reconnect attempt ${reconnectAttemptsRef.current + 1} in ${delay}ms`);
+    
+    reconnectTimeoutRef.current = setTimeout(() => {
+      if (mountedRef.current) {
+        reconnectAttemptsRef.current++;
+        connectToWebSocket();
+      }
+    }, delay);
   };
 
   const setupRoomSubscriptions = () => {
@@ -187,55 +241,73 @@ export const useRoomChat = (roomId) => {
         // Handle read status updates if needed
       }
     );
-  };
 
-  const cleanupRoomSubscriptions = () => {
-    if (!roomId) return;
-
-    console.log('🎯 useRoomChat: Cleaning up room subscriptions for', roomId);
-    WebSocketService.unsubscribe(`/topic/chat/room/${roomId}`);
-    WebSocketService.unsubscribe(`/topic/typing/room/${roomId}`);
-    WebSocketService.unsubscribe(`/topic/rooms/${roomId}/members`);
-    WebSocketService.unsubscribe(`/topic/rooms/${roomId}/read-status`);
-  };
-
-  const loadRoomMessages = async () => {
-    if (!roomId) return;
-
-    try {
-      console.log('🎯 useRoomChat: Loading messages for room', roomId);
-      const response = await chatAPI.getRoomMessages(roomId, 0, 50);
-      console.log('🎯 useRoomChat: Loaded', response.data.length, 'messages');
-      
-      if (mountedRef.current && currentRoomIdRef.current === roomId) {
-        // Sort messages chronologically (oldest first)
-        const sortedMessages = response.data.sort((a, b) => 
-          new Date(a.createdAt) - new Date(b.createdAt)
-        );
-        setMessages(sortedMessages);
-      }
-    } catch (error) {
-      console.error('🎯 useRoomChat: Failed to load room messages:', error);
-      if (mountedRef.current) {
-        setError('Failed to load messages');
-      }
+    // Join the room via WebSocket
+    if (WebSocketService.joinRoom) {
+      WebSocketService.joinRoom(roomId);
     }
   };
 
-  const loadRoomMembers = async () => {
+  const cleanupRoomSubscriptions = (roomIdToCleanup = roomId) => {
+    if (!roomIdToCleanup) return;
+
+    console.log('🎯 useRoomChat: Cleaning up room subscriptions for', roomIdToCleanup);
+    WebSocketService.unsubscribe(`/topic/chat/room/${roomIdToCleanup}`);
+    WebSocketService.unsubscribe(`/topic/typing/room/${roomIdToCleanup}`);
+    WebSocketService.unsubscribe(`/topic/rooms/${roomIdToCleanup}/members`);
+    WebSocketService.unsubscribe(`/topic/rooms/${roomIdToCleanup}/read-status`);
+    
+    // Leave the room via WebSocket
+    if (WebSocketService.leaveRoom) {
+      WebSocketService.leaveRoom(roomIdToCleanup);
+    }
+  };
+
+  const loadRoomData = async () => {
     if (!roomId) return;
 
     try {
-      console.log('🎯 useRoomChat: Loading members for room', roomId);
-      const response = await chatAPI.getRoomDetails(roomId);
-      console.log('🎯 useRoomChat: Loaded room details with', response.data.members?.length || 0, 'members');
+      console.log('🎯 useRoomChat: Loading room data for', roomId);
+      setLoading(true);
       
+      // Load room details and messages in parallel
+      const [roomResponse, messagesResponse] = await Promise.all([
+        chatAPI.getChatRoom ? chatAPI.getChatRoom(roomId) : chatAPI.getRoomDetails(roomId),
+        chatAPI.getRoomMessages(roomId, 0, 50)
+      ]);
+
       if (mountedRef.current && currentRoomIdRef.current === roomId) {
-        setMembers(response.data.members || []);
+        // Set room details
+        setRoomDetails(roomResponse.data);
+        setMembers(roomResponse.data.members || []);
+        
+        // Set messages (sorted chronologically)
+        const sortedMessages = messagesResponse.data.sort((a, b) => 
+          new Date(a.createdAt) - new Date(b.createdAt)
+        );
+        setMessages(sortedMessages);
+        
+        console.log('🎯 useRoomChat: Loaded room data:', {
+          roomName: roomResponse.data.roomName,
+          memberCount: roomResponse.data.members?.length || 0,
+          messageCount: sortedMessages.length
+        });
       }
     } catch (error) {
-      console.error('🎯 useRoomChat: Failed to load room members:', error);
-      // Don't set error for member loading failure as it's not critical
+      console.error('🎯 useRoomChat: Failed to load room data:', error);
+      if (mountedRef.current) {
+        if (error.response?.status === 403) {
+          setError('You do not have access to this chat room');
+        } else if (error.response?.status === 404) {
+          setError('Chat room not found');
+        } else {
+          setError('Failed to load chat room');
+        }
+      }
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -295,29 +367,57 @@ export const useRoomChat = (roomId) => {
     });
   };
 
-  const sendMessage = useCallback((content) => {
+  const sendMessage = useCallback((content, options = {}) => {
     console.log('🎯 useRoomChat: Attempting to send message to room', roomId);
     if (!content.trim() || !connected || !roomId) {
       console.log('🎯 useRoomChat: Cannot send - invalid state');
+      toast.error('Cannot send message - not connected');
       return false;
     }
 
     try {
+      // Generate temporary ID for optimistic update
+      const tempId = `temp_${Date.now()}_${Math.random()}`;
+      const tempMessage = {
+        id: tempId,
+        tempId,
+        content: content.trim(),
+        senderId: user.id,
+        senderUsername: user.username,
+        senderName: user.firstName || user.username,
+        chatRoomId: roomId,
+        type: 'CHAT',
+        createdAt: new Date().toISOString(),
+        isOptimistic: true,
+        ...options
+      };
+
+      // Add optimistic message
+      addMessageSafely(tempMessage);
+
       // Send message via WebSocket to room
-      const success = WebSocketService.sendRoomMessage(roomId, {
-        content: content.trim()
-      });
+      const messageData = {
+        content: content.trim(),
+        ...options
+      };
+
+      const success = WebSocketService.sendRoomMessage ? 
+        WebSocketService.sendRoomMessage(roomId, messageData) :
+        WebSocketService.sendMessage(`/app/chat/room/${roomId}`, messageData);
       
       if (!success) {
+        // Remove optimistic message on failure
+        setMessages(prev => prev.filter(msg => msg.tempId !== tempId));
         toast.error('Failed to send message');
       }
+      
       return success;
     } catch (error) {
       console.error('🎯 useRoomChat: Error sending message:', error);
       toast.error('Failed to send message');
       return false;
     }
-  }, [connected, roomId]);
+  }, [connected, roomId, user, addMessageSafely]);
 
   const typingTimeoutRef = useRef(null);
   const lastTypingRef = useRef(0);
@@ -327,8 +427,13 @@ export const useRoomChat = (roomId) => {
 
     const now = Date.now();
     if (now - lastTypingRef.current > 1000) { // Only send every 1 second
-      WebSocketService.sendRoomTypingIndicator(roomId, true);
-      lastTypingRef.current = now;
+      const success = WebSocketService.sendRoomTypingIndicator ? 
+        WebSocketService.sendRoomTypingIndicator(roomId, true) :
+        WebSocketService.sendMessage(`/app/typing/room/${roomId}`, { isTyping: true });
+      
+      if (success) {
+        lastTypingRef.current = now;
+      }
     }
 
     // Clear existing timeout
@@ -338,7 +443,9 @@ export const useRoomChat = (roomId) => {
 
     // Set timeout to stop typing
     typingTimeoutRef.current = setTimeout(() => {
-      WebSocketService.sendRoomTypingIndicator(roomId, false);
+      WebSocketService.sendRoomTypingIndicator ? 
+        WebSocketService.sendRoomTypingIndicator(roomId, false) :
+        WebSocketService.sendMessage(`/app/typing/room/${roomId}`, { isTyping: false });
     }, 1000);
   }, [roomId, connected]);
 
@@ -349,7 +456,10 @@ export const useRoomChat = (roomId) => {
       clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
     }
-    WebSocketService.sendRoomTypingIndicator(roomId, false);
+    
+    WebSocketService.sendRoomTypingIndicator ? 
+      WebSocketService.sendRoomTypingIndicator(roomId, false) :
+      WebSocketService.sendMessage(`/app/typing/room/${roomId}`, { isTyping: false });
   }, [roomId, connected]);
 
   const markAsRead = useCallback(async () => {
@@ -360,20 +470,74 @@ export const useRoomChat = (roomId) => {
       console.log('🎯 useRoomChat: Marked room as read:', roomId);
     } catch (error) {
       console.error('🎯 useRoomChat: Failed to mark room as read:', error);
+      // Don't show error to user as this is not critical
     }
   }, [roomId, connected]);
 
+  const reconnect = useCallback(() => {
+    console.log('🎯 useRoomChat: Manual reconnect requested');
+    reconnectAttemptsRef.current = 0;
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+    connectionAttemptedRef.current = false;
+    connectToWebSocket();
+  }, []);
+
+  const loadMoreMessages = useCallback(async (page = 1) => {
+    if (!roomId || loading) return;
+
+    try {
+      console.log('🎯 useRoomChat: Loading more messages, page:', page);
+      const response = await chatAPI.getRoomMessages(roomId, page, 50);
+      
+      if (mountedRef.current && currentRoomIdRef.current === roomId) {
+        const newMessages = response.data.sort((a, b) => 
+          new Date(a.createdAt) - new Date(b.createdAt)
+        );
+        
+        setMessages(prev => {
+          // Merge with existing messages, avoiding duplicates
+          const existingIds = new Set(prev.map(msg => msg.id));
+          const uniqueNewMessages = newMessages.filter(msg => !existingIds.has(msg.id));
+          
+          return [...uniqueNewMessages, ...prev].sort((a, b) => 
+            new Date(a.createdAt) - new Date(b.createdAt)
+          );
+        });
+        
+        return newMessages.length;
+      }
+    } catch (error) {
+      console.error('🎯 useRoomChat: Failed to load more messages:', error);
+      throw error;
+    }
+  }, [roomId, loading]);
+
   return {
+    // Data
     messages,
     members,
     typingUsers,
+    roomDetails,
+    
+    // State
     connected,
     loading,
     error,
+    
+    // Actions
     sendMessage,
     startTyping,
     stopTyping,
     markAsRead,
-    reconnect: connectToWebSocket
+    reconnect,
+    loadMoreMessages,
+    
+    // Utilities
+    isConnected: connected,
+    canSendMessage: connected && roomId && user,
+    memberCount: members.length,
+    messageCount: messages.length
   };
 };

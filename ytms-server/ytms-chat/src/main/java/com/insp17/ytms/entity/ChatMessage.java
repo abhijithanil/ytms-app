@@ -1,11 +1,14 @@
 package com.insp17.ytms.entity;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Entity
 @Table(name = "chat_messages")
@@ -62,8 +65,9 @@ public class ChatMessage {
     private Integer threadReplyCount = 0;
 
     // Message reactions
-    @Column(name = "reactions", columnDefinition = "JSON")
-    private String reactions; // Store as JSON string
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "reactions", columnDefinition = "jsonb") // Using jsonb is recommended
+    private String reactions = "{}";
 
     // File attachments
     @Column(name = "attachment_url")

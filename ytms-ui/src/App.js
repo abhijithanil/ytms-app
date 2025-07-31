@@ -9,11 +9,11 @@ import { Toaster } from "react-hot-toast";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { authAPI } from "./services/api";
 
-import Chat from './pages/Chat';
+import Chat from './pages/Chat'; // Enhanced Chat page
 import Layout from "./components/Layout/Layout";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
-import InitialAdminSignup from "./pages/InitialAdminSignup"; // New component
+import InitialAdminSignup from "./pages/InitialAdminSignup";
 import ResetPassword from "./pages/ResetPassword";
 import AcceptInvite from "./pages/AcceptInvite";
 import Dashboard from "./pages/Dashboard";
@@ -56,8 +56,6 @@ function PublicRoute({ children }) {
 function InviteRoute({ children }) {
   const { user, loading } = useAuth();
 
-  console.log('InviteRoute - Loading:', loading, 'User:', user);
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -66,8 +64,6 @@ function InviteRoute({ children }) {
     );
   }
 
-  // Allow both logged-in and logged-out users to access invite links
-  console.log('InviteRoute - Rendering children');
   return children;
 }
 
@@ -87,14 +83,12 @@ function AppContent() {
         const response = await authAPI.usersExist();
         console.log("Users exist response:", response);
         
-        // Assuming your API returns { usersExist: boolean } or { exists: boolean }
         const exists = response.usersExist || response.exists || false;
         setUsersExist(exists);
         
         console.log("Users exist:", exists);
       } catch (error) {
         console.error('Error checking if users exist:', error);
-        // If there's an error, assume users exist and show login
         setUsersExist(true);
       } finally {
         setCheckingUsers(false);
@@ -105,7 +99,6 @@ function AppContent() {
     checkIfUsersExist();
   }, []);
 
-  // Show loading while initializing or checking authentication
   if (initializing || checkingUsers || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100">
@@ -117,7 +110,6 @@ function AppContent() {
     );
   }
 
-  // If no users exist, show the initial admin signup
   if (!usersExist) {
     return (
       <div className="App">
@@ -139,14 +131,12 @@ function AppContent() {
           }}
         />
         <InitialAdminSignup onAdminCreated={() => {
-          // Refresh the users exist check after admin is created
           setUsersExist(true);
         }} />
       </div>
     );
   }
 
-  // Normal routing when users exist
   return (
     <div className="App">
       <Toaster
@@ -168,8 +158,7 @@ function AppContent() {
       />
 
       <Routes>
-        {/* Public routes that are only accessible when not logged in */}
-        <Route path="/chat" element={<Chat />} />
+        {/* Public routes */}
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
         <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
@@ -177,21 +166,24 @@ function AppContent() {
         {/* MFA Setup Route */}
         <Route path="/mfa-setup" element={<MfaSetup />} />
 
-        {/* Invite route accessible by both logged-in and logged-out users */}
+        {/* Invite route */}
         <Route path="/invite/:token" element={<InviteRoute><AcceptInvite /></InviteRoute>} />
 
-        {/* Protected routes that require authentication */}
+        {/* Protected routes */}
         <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
         <Route path="/tasks" element={<ProtectedRoute><Layout><TaskBoard /></Layout></ProtectedRoute>} />
         <Route path="/tasks/:id" element={<ProtectedRoute><Layout><TaskDetails /></Layout></ProtectedRoute>} />
         <Route path="/upload" element={<ProtectedRoute><Layout><UploadVideo /></Layout></ProtectedRoute>} />
         <Route path="/team" element={<ProtectedRoute><Layout><Team /></Layout></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
+        
+        {/* UPDATED: Chat route with Layout */}
+        <Route path="/chat" element={<ProtectedRoute><Layout><Chat /></Layout></ProtectedRoute>} />
 
-        {/* Default route redirects to dashboard, which will then redirect to login if not authenticated */}
+        {/* Default route */}
         <Route path="/" element={<Navigate to="/dashboard" />} />
         
-        {/* A catch-all route to handle invalid URLs */}
+        {/* Catch-all route */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </div>

@@ -8,6 +8,8 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+
 
 @Data
 @NoArgsConstructor
@@ -33,8 +35,7 @@ public class ChatMessageDTO {
     private Integer threadReplyCount;
     private List<ChatMessageDTO> threadReplies = new ArrayList<>();
 
-    // Reactions
-    private String reactions;
+    private String reactions = "{}";
     private List<MessageReactionDTO> reactionsList = new ArrayList<>();
 
     // Attachments

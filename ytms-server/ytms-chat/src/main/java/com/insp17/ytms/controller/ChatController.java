@@ -41,6 +41,11 @@ public class ChatController {
         return null;
     }
 
+    @GetMapping("/status")
+    public String getChatStatus() {
+        return "Chat service is running";
+    }
+
     //  CHAT ROOMS MANAGEMENT (REST ENDPOINTS) 
 
     @PostMapping("/rooms")
@@ -478,7 +483,7 @@ public class ChatController {
     @MessageMapping("/typing/global")
     public void handleGlobalTyping(Map<String, Object> payload, Principal principal) {
         try {
-            UserPrincipal userPrincipal = getUserPrincipal(principal);
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
             if (userPrincipal != null) {
                 Boolean isTyping = (Boolean) payload.get("isTyping");
                 if (isTyping != null) {
