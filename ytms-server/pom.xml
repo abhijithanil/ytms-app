@@ -11,8 +11,16 @@
     <groupId>com.insp17.ytms</groupId>
     <artifactId>ytms</artifactId>
     <version>0.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
     <name>ytms</name>
     <description>YouTube Video Management System like Jira</description>
+    <modules>
+        <module>ytms-chat</module>
+        <module>ytms-video-service</module>
+        <module>ytms-entities</module>
+        <module>ytms-repo</module>
+        <module>ytms-services</module>
+    </modules>
 
     <properties>
         <java.version>21</java.version>

@@ -1,0 +1,60 @@
+{
+  "groups": [
+    {
+      "name": "mail",
+      "type": "com.insp17.ytms.config.EmailConfigurationProperties",
+      "sourceType": "com.insp17.ytms.config.EmailConfigurationProperties"
+    },
+    {
+      "name": "mail.smtp",
+      "type": "com.insp17.ytms.config.EmailConfigurationProperties$Smtp",
+      "sourceType": "com.insp17.ytms.config.EmailConfigurationProperties"
+    },
+    {
+      "name": "mail.smtp.auth",
+      "type": "com.insp17.ytms.config.EmailConfigurationProperties$Smtp$Auth",
+      "sourceType": "com.insp17.ytms.config.EmailConfigurationProperties$Smtp"
+    },
+    {
+      "name": "mail.smtp.starttls",
+      "type": "com.insp17.ytms.config.EmailConfigurationProperties$Smtp$Starttls",
+      "sourceType": "com.insp17.ytms.config.EmailConfigurationProperties$Smtp"
+    }
+  ],
+  "properties": [
+    {
+      "name": "mail.host",
+      "type": "java.lang.String",
+      "sourceType": "com.insp17.ytms.config.EmailConfigurationProperties"
+    },
+    {
+      "name": "mail.password",
+      "type": "java.lang.String",
+      "sourceType": "com.insp17.ytms.config.EmailConfigurationProperties"
+    },
+    {
+      "name": "mail.port",
+      "type": "java.lang.Integer",
+      "sourceType": "com.insp17.ytms.config.EmailConfigurationProperties"
+    },
+    {
+      "name": "mail.smtp.auth.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.insp17.ytms.config.EmailConfigurationProperties$Smtp$Auth"
+    },
+    {
+      "name": "mail.smtp.starttls.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.insp17.ytms.config.EmailConfigurationProperties$Smtp$Starttls"
+    },
+    {
+      "name": "mail.username",
+      "type": "java.lang.String",
+      "sourceType": "com.insp17.ytms.config.EmailConfigurationProperties"
+    }
+  ],
+  "hints": [],
+  "ignored": {
+    "properties": []
+  }
+}
