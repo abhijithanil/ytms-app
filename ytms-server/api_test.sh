@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# =================================================================
+# ==
 # API Load Test Script
 # This script sends 100 POST requests to the /validate-token endpoint
 # and prints the full response for each call to test its
@@ -10,7 +10,7 @@
 # 1. Save this file as test_api.sh
 # 2. Make it executable: chmod +x test_api.sh
 # 3. Run it: ./test_api.sh
-# =================================================================
+# ==
 
 # --- Configuration ---
 # The full URL of your API endpoint.

@@ -73,9 +73,9 @@ CREATE TYPE user_status AS ENUM ('ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING', '
 Complete Initialization Script
 Here is the full, ordered script for convenience. You can save this to a file (e.g., init.sql) and run it.
 ```
--- =================================================================
+-- ==
 --  PostgreSQL Initialization Script for YTMS
--- =================================================================
+-- ==
 
 -- Step 1: Create a dedicated user for the application
 CREATE USER ytms_user WITH PASSWORD 'ytms_password';
@@ -111,7 +111,7 @@ CREATE TYPE privacy_level AS ENUM ('ALL', 'SELECTED');
 CREATE TYPE task_priority AS ENUM ('LOW', 'MEDIUM', 'HIGH');
 CREATE TYPE user_status AS ENUM ('ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING', 'DELETED');
 
--- =================================================================
+-- ==
 --  Initialization Complete
--- =================================================================
+-- ==
 ```

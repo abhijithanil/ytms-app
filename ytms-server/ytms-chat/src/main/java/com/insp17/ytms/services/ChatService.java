@@ -1,18 +1,15 @@
 package com.insp17.ytms.services;
 
-
 import com.insp17.ytms.dto.*;
-import com.insp17.ytms.dto.ChatMessageDTO;
 import com.insp17.ytms.dtos.OnlineUserDTO;
-import com.insp17.ytms.dto.TypingIndicatorDTO;
 import com.insp17.ytms.dtos.UserPrincipal;
 import com.insp17.ytms.entity.*;
-import com.insp17.ytms.entity.OnlineUser;
 import com.insp17.ytms.repositories.ChatMessageRepository;
 import com.insp17.ytms.repositories.ChatRoomMemberRepository;
 import com.insp17.ytms.repositories.ChatRoomRepository;
 import com.insp17.ytms.service.UserService;
 import com.insp17.ytms.service.VideoTaskService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -27,6 +24,7 @@ import java.util.stream.Collectors;
 
 @Service
 @Transactional
+@Slf4j
 public class ChatService {
 
     @Autowired
@@ -51,18 +49,24 @@ public class ChatService {
     private final Map<String, OnlineUser> onlineUsers = new ConcurrentHashMap<>();
     private final Map<Long, String> userSessions = new ConcurrentHashMap<>();
 
-    // === CHAT ROOMS MANAGEMENT ===
+    //  CHAT ROOMS MANAGEMENT 
 
     public ChatRoomDTO createChatRoom(CreateChatRoomRequest request, Long creatorId) {
+        log.info("Creating chat room: {} by user: {}", request.getRoomName(), creatorId);
+
         User creator = userService.getUserByIdPrivateUse(creatorId);
+        if (creator == null) {
+            throw new IllegalArgumentException("Creator user not found");
+        }
 
         ChatRoom chatRoom = new ChatRoom();
         chatRoom.setRoomName(request.getRoomName());
         chatRoom.setRoomDescription(request.getRoomDescription());
         chatRoom.setRoomType(request.getRoomType());
-        chatRoom.setIsPrivate(request.getIsPrivate());
+        chatRoom.setIsPrivate(request.getIsPrivate() != null ? request.getIsPrivate() : false);
         chatRoom.setCreatedBy(creatorId);
         chatRoom.setTaskId(request.getTaskId());
+        chatRoom.setCreatedAt(LocalDateTime.now());
 
         // For direct messages, set participant ID and generate room name
         if (request.getRoomType() == ChatRoom.RoomType.DIRECT_MESSAGE) {
@@ -73,16 +77,22 @@ public class ChatService {
             // Check if DM already exists
             Optional<ChatRoom> existingDM = chatRoomRepository.findDirectMessageRoom(creatorId, request.getDmParticipantId());
             if (existingDM.isPresent()) {
-                return new ChatRoomDTO(existingDM.get());
+                log.info("Direct message room already exists between users {} and {}", creatorId, request.getDmParticipantId());
+                return buildChatRoomDTO(existingDM.get(), creatorId);
             }
 
             User participant = userService.getUserByIdPrivateUse(request.getDmParticipantId());
+            if (participant == null) {
+                throw new IllegalArgumentException("DM participant user not found");
+            }
+
             chatRoom.setDmParticipantId(request.getDmParticipantId());
             chatRoom.setRoomName(ChatRoom.generateDMRoomName(creator.getUsername(), participant.getUsername()));
             chatRoom.setIsPrivate(true);
         }
 
         chatRoom = chatRoomRepository.save(chatRoom);
+        log.info("Created chat room with ID: {}", chatRoom.getId());
 
         // Add creator as owner
         addMemberToRoom(chatRoom.getId(), creatorId, ChatRoomMember.MemberRole.OWNER);
@@ -98,7 +108,7 @@ public class ChatService {
             }
         }
 
-        ChatRoomDTO roomDTO = getChatRoomById(chatRoom.getId(), creatorId);
+        ChatRoomDTO roomDTO = buildChatRoomDTO(chatRoom, creatorId);
 
         // Broadcast room creation to relevant users
         broadcastRoomUpdate(roomDTO, "created");
@@ -106,11 +116,50 @@ public class ChatService {
         return roomDTO;
     }
 
+    public ChatRoomDTO updateChatRoom(Long roomId, UpdateChatRoomRequest request, Long userId) {
+        log.info("Updating chat room {} by user: {}", roomId, userId);
+
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found"));
+
+        // Check if user has permission to update room
+        ChatRoomMember member = chatRoomMemberRepository.findByChatRoomIdAndUserId(roomId, userId)
+                .orElseThrow(() -> new SecurityException("User is not a member of this room"));
+
+        if (!canEditRoom(member.getRole())) {
+            throw new SecurityException("Insufficient permissions to edit room");
+        }
+
+        // Update room details
+        if (request.getRoomName() != null) {
+            room.setRoomName(request.getRoomName());
+        }
+        if (request.getRoomDescription() != null) {
+            room.setRoomDescription(request.getRoomDescription());
+        }
+        if (request.getIsPrivate() != null) {
+            room.setIsPrivate(request.getIsPrivate());
+        }
+        if (request.getIsArchived() != null) {
+            room.setIsArchived(request.getIsArchived());
+        }
+
+        room.setUpdatedAt(LocalDateTime.now());
+        room = chatRoomRepository.save(room);
+
+        ChatRoomDTO roomDTO = buildChatRoomDTO(room, userId);
+        broadcastRoomUpdate(roomDTO, "updated");
+
+        return roomDTO;
+    }
+
     public ChatRoomDTO getOrCreateDirectMessage(Long userId1, Long userId2) {
+        log.debug("Getting or creating direct message between users {} and {}", userId1, userId2);
+
         Optional<ChatRoom> existingRoom = chatRoomRepository.findDirectMessageRoom(userId1, userId2);
 
         if (existingRoom.isPresent()) {
-            return getChatRoomById(existingRoom.get().getId(), userId1);
+            return buildChatRoomDTO(existingRoom.get(), userId1);
         }
 
         CreateChatRoomRequest request = new CreateChatRoomRequest();
@@ -121,6 +170,8 @@ public class ChatService {
     }
 
     public List<ChatRoomDTO> getUserChatRooms(Long userId) {
+        log.debug("Fetching chat rooms for user: {}", userId);
+
         List<ChatRoom> rooms = chatRoomRepository.findUserChatRooms(userId);
         return rooms.stream()
                 .map(room -> buildChatRoomDTO(room, userId))
@@ -128,37 +179,54 @@ public class ChatService {
     }
 
     public ChatRoomListResponse getChatRoomList(Long userId) {
+        log.debug("Building chat room list for user: {}", userId);
+
         List<ChatRoom> allRooms = chatRoomRepository.findUserChatRooms(userId);
 
         ChatRoomListResponse response = new ChatRoomListResponse();
+        List<ChatRoomDTO> directMessages = new ArrayList<>();
+        List<ChatRoomDTO> groupChats = new ArrayList<>();
+        List<ChatRoomDTO> taskChats = new ArrayList<>();
+        ChatRoomDTO globalChat = null;
 
-        // Separate rooms by type
         for (ChatRoom room : allRooms) {
             ChatRoomDTO roomDTO = buildChatRoomDTO(room, userId);
 
             switch (room.getRoomType()) {
                 case DIRECT_MESSAGE:
-                    response.getDirectMessages().add(roomDTO);
+                    directMessages.add(roomDTO);
                     break;
                 case GROUP_CHAT:
-                    response.getGroupChats().add(roomDTO);
+                    groupChats.add(roomDTO);
                     break;
                 case TASK_CHAT:
-                    response.getTaskChats().add(roomDTO);
+                    taskChats.add(roomDTO);
                     break;
                 case GLOBAL_CHAT:
-                    response.setGlobalChat(roomDTO);
+                    globalChat = roomDTO;
                     break;
             }
         }
 
+        response.setDirectMessages(directMessages);
+        response.setGroupChats(groupChats);
+        response.setTaskChats(taskChats);
+        response.setGlobalChat(globalChat);
+
         // Calculate total unread count
-        response.setTotalUnreadCount(chatRoomRepository.countUnreadRooms(userId));
+        long totalUnread = directMessages.stream().mapToLong(r -> r.getUnreadCount() != null ? r.getUnreadCount() : 0).sum() +
+                groupChats.stream().mapToLong(r -> r.getUnreadCount() != null ? r.getUnreadCount() : 0).sum() +
+                taskChats.stream().mapToLong(r -> r.getUnreadCount() != null ? r.getUnreadCount() : 0).sum() +
+                (globalChat != null && globalChat.getUnreadCount() != null ? globalChat.getUnreadCount() : 0);
+
+        response.setTotalUnreadCount(totalUnread);
 
         return response;
     }
 
     public ChatRoomDTO getChatRoomById(Long roomId, Long userId) {
+        log.debug("Fetching chat room {} for user: {}", roomId, userId);
+
         ChatRoom room = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new RuntimeException("Chat room not found"));
 
@@ -181,43 +249,66 @@ public class ChatService {
             dto.setIsMuted(member.getIsMuted());
             dto.setNotificationsEnabled(member.getNotificationsEnabled());
             dto.setLastReadAt(member.getLastReadAt());
+            dto.setUserJoinedAt(member.getJoinedAt());
         }
 
         // Get unread count
-        dto.setUnreadCount(chatMessageRepository.countUnreadMessages(room.getId(), userId));
+        long unreadCount = chatMessageRepository.countUnreadMessages(room.getId(), userId);
+        dto.setUnreadCount(unreadCount);
 
         // Get latest message
         Optional<ChatMessage> latestMessage = chatMessageRepository.findLatestMessageInRoom(room.getId(), PageRequest.of(0, 1));
         if (latestMessage.isPresent()) {
             dto.setLastMessage(new ChatMessageDTO(latestMessage.get()));
+            dto.setLastMessageAt(latestMessage.get().getCreatedAt());
         }
 
         // For DMs, get participant info
         if (room.isDirectMessage() && room.getDmParticipantId() != null) {
-            User participant = userService.getUserByIdPrivateUse(room.getDmParticipantId());
-            dto.setDmParticipantName(participant.getFirstName() != null ? participant.getFirstName() : participant.getUsername());
-            dto.setDmParticipantUsername(participant.getUsername());
-            dto.setDmParticipantStatus(isUserOnline(participant.getId()) ? "online" : "offline");
+            // Determine which user is the "other" participant
+            Long participantId = room.getDmParticipantId().equals(userId) ? room.getCreatedBy() : room.getDmParticipantId();
+
+            try {
+                User participant = userService.getUserByIdPrivateUse(participantId);
+                if (participant != null) {
+                    dto.setDmParticipantId(participant.getId());
+                    dto.setDmParticipantName(participant.getFirstName() != null ? participant.getFirstName() : participant.getUsername());
+                    dto.setDmParticipantUsername(participant.getUsername());
+                    dto.setDmParticipantEmail(participant.getEmail());
+                    dto.setDmParticipantStatus(isUserOnline(participant.getId()) ? "online" : "offline");
+                }
+            } catch (Exception e) {
+                log.warn("Failed to load DM participant info for user {}: {}", participantId, e.getMessage());
+            }
         }
 
-        // Get members for group chats
-        if (room.isGroupChat()) {
+        // Get members for group chats (limited info for performance)
+        if (room.isGroupChat() || room.getRoomType() == ChatRoom.RoomType.TASK_CHAT) {
             List<ChatRoomMember> members = chatRoomMemberRepository.findByChatRoomIdOrderByJoinedAtAsc(room.getId());
-            dto.setMembers(members.stream()
+            List<ChatRoomMemberDTO> memberDTOs = members.stream()
                     .map(member -> {
                         ChatRoomMemberDTO memberDTO = new ChatRoomMemberDTO(member);
                         memberDTO.setStatus(isUserOnline(member.getUserId()) ? "online" : "offline");
+                        memberDTO.setIsOnline(isUserOnline(member.getUserId()));
                         return memberDTO;
                     })
-                    .collect(Collectors.toList()));
+                    .collect(Collectors.toList());
+            dto.setMembers(memberDTOs);
+            dto.setMemberCount((long) members.size());
         }
+
+        // Get message count
+        long messageCount = chatMessageRepository.countByChatRoomIdAndIsDeletedFalse(room.getId());
+        dto.setMessageCount(messageCount);
 
         return dto;
     }
 
-    // === MESSAGING ===
+    //  MESSAGING 
 
     public ChatMessageDTO sendMessageToRoom(SendMessageRequest request, Long senderId) {
+        log.debug("Sending message to room {} by user: {}", request.getChatRoomId(), senderId);
+
         ChatRoom room = chatRoomRepository.findById(request.getChatRoomId())
                 .orElseThrow(() -> new RuntimeException("Chat room not found"));
 
@@ -227,18 +318,22 @@ public class ChatService {
         }
 
         User sender = userService.getUserByIdPrivateUse(senderId);
+        if (sender == null) {
+            throw new RuntimeException("Sender user not found");
+        }
 
         ChatMessage message = new ChatMessage();
         message.setContent(request.getContent());
         message.setSenderId(senderId);
         message.setSenderUsername(sender.getUsername());
         message.setSenderName(sender.getFirstName() != null ? sender.getFirstName() : sender.getUsername());
-        message.setType(request.getType());
+        message.setType(request.getType() != null ? request.getType() : ChatMessage.MessageType.CHAT);
         message.setChatRoom(room);
         message.setParentMessageId(request.getParentMessageId());
         message.setAttachmentUrl(request.getAttachmentUrl());
         message.setAttachmentName(request.getAttachmentName());
         message.setAttachmentType(request.getAttachmentType());
+        message.setCreatedAt(LocalDateTime.now());
 
         // Handle thread replies
         if (request.getParentMessageId() != null) {
@@ -261,6 +356,7 @@ public class ChatService {
         // Broadcast message to room subscribers
         String destination = "/topic/chat/room/" + room.getId();
         messagingTemplate.convertAndSend(destination, messageDTO);
+        log.debug("Broadcasted message to {}", destination);
 
         // Send notifications to room members
         sendNotificationsToMembers(room, messageDTO, senderId);
@@ -269,6 +365,8 @@ public class ChatService {
     }
 
     public ChatMessageDTO sendDirectMessage(DirectMessageRequest request, Long senderId) {
+        log.debug("Sending direct message from {} to {}", senderId, request.getRecipientId());
+
         ChatRoomDTO dmRoom = getOrCreateDirectMessage(senderId, request.getRecipientId());
 
         SendMessageRequest messageRequest = new SendMessageRequest();
@@ -281,64 +379,26 @@ public class ChatService {
         return sendMessageToRoom(messageRequest, senderId);
     }
 
-    // === BACKWARD COMPATIBILITY ===
+    //  MEMBER MANAGEMENT 
 
-    public ChatMessageDTO sendMessage(String content, User sender, Long taskId) {
-        if (taskId != null) {
-            // Task-specific message
-            if (!videoTaskService.canUserAccessTask(taskId, sender)) {
-                throw new SecurityException("User does not have access to this task");
-            }
+    public void addMembersToRoom(Long roomId, List<Long> userIds, ChatRoomMember.MemberRole defaultRole, Long requesterId) {
+        log.info("Adding {} members to room {} by user: {}", userIds.size(), roomId, requesterId);
 
-            // Get or create task chat room
-            ChatRoom taskRoom = getOrCreateTaskChatRoom(taskId);
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found"));
 
-            SendMessageRequest request = new SendMessageRequest();
-            request.setChatRoomId(taskRoom.getId());
-            request.setContent(content);
+        // Check permissions
+        ChatRoomMember requesterMember = chatRoomMemberRepository.findByChatRoomIdAndUserId(roomId, requesterId)
+                .orElseThrow(() -> new SecurityException("Requester is not a member of this room"));
 
-            return sendMessageToRoom(request, sender.getId());
-        } else {
-            // Global chat message - keep existing logic for compatibility
-            ChatMessage message = new ChatMessage();
-            message.setContent(content);
-            message.setSenderId(sender.getId());
-            message.setSenderUsername(sender.getUsername());
-            message.setSenderName(sender.getFirstName() != null ? sender.getFirstName() : sender.getUsername());
-            message.setType(ChatMessage.MessageType.CHAT);
-            message.setTaskId(taskId);
-            message.setCreatedAt(LocalDateTime.now());
-
-            ChatMessage savedMessage = chatMessageRepository.save(message);
-            ChatMessageDTO messageDTO = new ChatMessageDTO(savedMessage);
-
-            messagingTemplate.convertAndSend("/topic/chat/global", messageDTO);
-            return messageDTO;
-        }
-    }
-
-    private ChatRoom getOrCreateTaskChatRoom(Long taskId) {
-        Optional<ChatRoom> existingRoom = chatRoomRepository.findByTaskIdAndRoomType(taskId, ChatRoom.RoomType.TASK_CHAT);
-
-        if (existingRoom.isPresent()) {
-            return existingRoom.get();
+        if (!canManageMembers(requesterMember.getRole())) {
+            throw new SecurityException("Insufficient permissions to add members");
         }
 
-        // Create new task chat room
-        CreateChatRoomRequest request = new CreateChatRoomRequest();
-        request.setRoomType(ChatRoom.RoomType.TASK_CHAT);
-        request.setTaskId(taskId);
-        request.setRoomName("Task Chat #" + taskId);
-        request.setIsPrivate(true);
-
-        // Add all users who have access to the task
-        // This would need to be implemented based on your task permission system
-
-        ChatRoomDTO roomDTO = createChatRoom(request, getCurrentUser().getId());
-        return chatRoomRepository.findById(roomDTO.getId()).get();
+        for (Long userId : userIds) {
+            addMemberToRoom(roomId, userId, defaultRole != null ? defaultRole : ChatRoomMember.MemberRole.MEMBER);
+        }
     }
-
-    // === ROOM MEMBER MANAGEMENT ===
 
     public void addMemberToRoom(Long roomId, Long userId, ChatRoomMember.MemberRole role) {
         ChatRoom room = chatRoomRepository.findById(roomId)
@@ -346,28 +406,39 @@ public class ChatService {
 
         // Check if user is already a member
         if (chatRoomMemberRepository.existsByChatRoomIdAndUserId(roomId, userId)) {
+            log.debug("User {} is already a member of room {}", userId, roomId);
             return; // User is already a member
         }
 
         User user = userService.getUserByIdPrivateUse(userId);
+        if (user == null) {
+            log.warn("User {} not found when adding to room {}", userId, roomId);
+            return;
+        }
 
         ChatRoomMember member = new ChatRoomMember();
         member.setChatRoom(room);
         member.setUserId(userId);
         member.setUsername(user.getUsername());
         member.setDisplayName(user.getFirstName() != null ? user.getFirstName() : user.getUsername());
-        member.setRole(role);
+        member.setRole(role != null ? role : ChatRoomMember.MemberRole.MEMBER);
+        member.setJoinedAt(LocalDateTime.now());
 
         chatRoomMemberRepository.save(member);
 
-        // Send join message
-        sendSystemMessage(room, user.getUsername() + " joined the chat", ChatMessage.MessageType.JOIN);
+        // Send join message (except for DMs)
+        if (room.getRoomType() != ChatRoom.RoomType.DIRECT_MESSAGE) {
+            sendSystemMessage(room, user.getUsername() + " joined the chat", ChatMessage.MessageType.JOIN);
+        }
 
         // Notify room members
         broadcastMemberUpdate(roomId, new ChatRoomMemberDTO(member), "joined");
+        log.debug("Added user {} to room {} with role {}", userId, roomId, role);
     }
 
     public void removeMemberFromRoom(Long roomId, Long userId, Long requesterId) {
+        log.info("Removing member {} from room {} by user: {}", userId, roomId, requesterId);
+
         ChatRoom room = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new RuntimeException("Chat room not found"));
 
@@ -383,12 +454,22 @@ public class ChatService {
             throw new SecurityException("Insufficient permissions to remove members");
         }
 
+        // Prevent removing room owner unless they're removing themselves
+        if (targetMember.getRole() == ChatRoomMember.MemberRole.OWNER && !userId.equals(requesterId)) {
+            throw new SecurityException("Cannot remove room owner");
+        }
+
         User user = userService.getUserByIdPrivateUse(userId);
 
         chatRoomMemberRepository.deleteByChatRoomIdAndUserId(roomId, userId);
 
-        // Send leave message
-        sendSystemMessage(room, user.getUsername() + " left the chat", ChatMessage.MessageType.LEAVE);
+        // Send leave message (except for DMs)
+        if (room.getRoomType() != ChatRoom.RoomType.DIRECT_MESSAGE && user != null) {
+            String leaveMessage = userId.equals(requesterId) ?
+                    user.getUsername() + " left the chat" :
+                    user.getUsername() + " was removed from the chat";
+            sendSystemMessage(room, leaveMessage, ChatMessage.MessageType.LEAVE);
+        }
 
         // Notify room members
         broadcastMemberUpdate(roomId, new ChatRoomMemberDTO(targetMember), "left");
@@ -398,9 +479,15 @@ public class ChatService {
         return role == ChatRoomMember.MemberRole.OWNER || role == ChatRoomMember.MemberRole.ADMIN;
     }
 
-    // === MESSAGE HISTORY ===
+    private boolean canEditRoom(ChatRoomMember.MemberRole role) {
+        return role == ChatRoomMember.MemberRole.OWNER || role == ChatRoomMember.MemberRole.ADMIN;
+    }
+
+    //  MESSAGE HISTORY 
 
     public List<ChatMessageDTO> getChatHistory(Long taskId, int page, int size) {
+        log.debug("Fetching chat history for taskId: {}, page: {}, size: {}", taskId, page, size);
+
         // Backward compatibility method
         UserPrincipal currentUser = getCurrentUser();
         if (currentUser == null) {
@@ -429,6 +516,8 @@ public class ChatService {
     }
 
     public List<ChatMessageDTO> getRoomMessages(Long roomId, int page, int size, Long userId) {
+        log.debug("Fetching messages for room {} by user: {}", roomId, userId);
+
         // Verify user has access to room
         if (!chatRoomMemberRepository.existsByChatRoomIdAndUserId(roomId, userId)) {
             throw new SecurityException("User does not have access to this chat room");
@@ -442,9 +531,11 @@ public class ChatService {
                 .collect(Collectors.toList());
     }
 
-    // === READ STATUS ===
+    //  READ STATUS 
 
     public void markRoomAsRead(Long roomId, Long userId) {
+        log.debug("Marking room {} as read by user: {}", roomId, userId);
+
         ChatRoomMember member = chatRoomMemberRepository.findByChatRoomIdAndUserId(roomId, userId)
                 .orElseThrow(() -> new RuntimeException("User is not a member of this room"));
 
@@ -458,9 +549,11 @@ public class ChatService {
         }
     }
 
-    // === SEARCH ===
+    //  SEARCH 
 
     public List<ChatMessageDTO> searchMessages(MessageSearchRequest request, Long userId) {
+        log.debug("Searching messages with query: '{}' by user: {}", request.getQuery(), userId);
+
         if (request.getChatRoomId() != null) {
             // Verify user has access to room
             if (!chatRoomMemberRepository.existsByChatRoomIdAndUserId(request.getChatRoomId(), userId)) {
@@ -469,18 +562,48 @@ public class ChatService {
         }
 
         PageRequest pageRequest = PageRequest.of(request.getPage(), request.getSize());
-        List<ChatMessage> messages = chatMessageRepository.searchMessagesInRoom(
-                request.getChatRoomId(),
-                request.getQuery(),
-                pageRequest
-        );
+        List<ChatMessage> messages;
+
+        if (request.getChatRoomId() != null) {
+            messages = chatMessageRepository.searchMessagesInRoom(
+                    request.getChatRoomId(),
+                    request.getQuery(),
+                    pageRequest
+            );
+        } else {
+            // Search across all rooms user has access to
+            List<ChatRoom> userRooms = chatRoomRepository.findUserChatRooms(userId);
+            messages = new ArrayList<>();
+            for (ChatRoom room : userRooms) {
+                List<ChatMessage> roomMessages = chatMessageRepository.searchMessagesInRoom(
+                        room.getId(),
+                        request.getQuery(),
+                        PageRequest.of(0, request.getSize())
+                );
+                messages.addAll(roomMessages);
+            }
+
+            // Sort by creation date and limit results
+            messages = messages.stream()
+                    .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                    .limit(request.getSize())
+                    .collect(Collectors.toList());
+        }
 
         return messages.stream()
                 .map(ChatMessageDTO::new)
                 .collect(Collectors.toList());
     }
 
-    // === UTILITIES ===
+    //  TYPING INDICATORS 
+
+    public void broadcastRoomTypingIndicator(Long roomId, TypingIndicatorDTO typingIndicator) {
+        String destination = "/topic/typing/room/" + roomId;
+        messagingTemplate.convertAndSend(destination, typingIndicator);
+        log.debug("Broadcasted typing indicator to {}", destination);
+    }
+
+    //  UTILITIES 
 
     private void sendSystemMessage(ChatRoom room, String content, ChatMessage.MessageType type) {
         ChatMessage systemMessage = new ChatMessage();
@@ -490,6 +613,7 @@ public class ChatService {
         systemMessage.setSenderName("System");
         systemMessage.setType(type);
         systemMessage.setChatRoom(room);
+        systemMessage.setCreatedAt(LocalDateTime.now());
 
         chatMessageRepository.save(systemMessage);
 
@@ -502,7 +626,9 @@ public class ChatService {
         List<ChatRoomMember> members = chatRoomMemberRepository.findByChatRoomIdOrderByJoinedAtAsc(room.getId());
 
         for (ChatRoomMember member : members) {
-            if (!member.getUserId().equals(senderId) && member.getNotificationsEnabled()) {
+            if (!member.getUserId().equals(senderId) &&
+                    (member.getNotificationsEnabled() == null || member.getNotificationsEnabled())) {
+
                 // Send personal notification
                 messagingTemplate.convertAndSendToUser(
                         member.getUserId().toString(),
@@ -552,7 +678,69 @@ public class ChatService {
         messagingTemplate.convertAndSend("/topic/rooms/" + roomId + "/read-status", readStatus);
     }
 
-    // === EXISTING METHODS (preserved for compatibility) ===
+    //  BACKWARD COMPATIBILITY METHODS 
+
+    public ChatMessageDTO sendMessage(String content, User sender, Long taskId) {
+        log.debug("Sending backward compatibility message by user: {} for task: {}", sender.getUsername(), taskId);
+
+        if (taskId != null) {
+            // Task-specific message
+            if (!videoTaskService.canUserAccessTask(taskId, sender)) {
+                throw new SecurityException("User does not have access to this task");
+            }
+
+            // Get or create task chat room
+            ChatRoom taskRoom = getOrCreateTaskChatRoom(taskId);
+
+            SendMessageRequest request = new SendMessageRequest();
+            request.setChatRoomId(taskRoom.getId());
+            request.setContent(content);
+
+            return sendMessageToRoom(request, sender.getId());
+        } else {
+            // Global chat message - keep existing logic for compatibility
+            ChatMessage message = new ChatMessage();
+            message.setContent(content);
+            message.setSenderId(sender.getId());
+            message.setSenderUsername(sender.getUsername());
+            message.setSenderName(sender.getFirstName() != null ? sender.getFirstName() : sender.getUsername());
+            message.setType(ChatMessage.MessageType.CHAT);
+            message.setTaskId(taskId);
+            message.setCreatedAt(LocalDateTime.now());
+
+            ChatMessage savedMessage = chatMessageRepository.save(message);
+            ChatMessageDTO messageDTO = new ChatMessageDTO(savedMessage);
+
+            messagingTemplate.convertAndSend("/topic/chat/global", messageDTO);
+            return messageDTO;
+        }
+    }
+
+    private ChatRoom getOrCreateTaskChatRoom(Long taskId) {
+        Optional<ChatRoom> existingRoom = chatRoomRepository.findByTaskIdAndRoomType(taskId, ChatRoom.RoomType.TASK_CHAT);
+
+        if (existingRoom.isPresent()) {
+            return existingRoom.get();
+        }
+
+        // Create new task chat room
+        CreateChatRoomRequest request = new CreateChatRoomRequest();
+        request.setRoomType(ChatRoom.RoomType.TASK_CHAT);
+        request.setTaskId(taskId);
+        request.setRoomName("Task Chat #" + taskId);
+        request.setIsPrivate(true);
+
+        // Add all users who have access to the task
+        UserPrincipal currentUser = getCurrentUser();
+        if (currentUser == null) {
+            throw new SecurityException("No authenticated user");
+        }
+
+        ChatRoomDTO roomDTO = createChatRoom(request, currentUser.getId());
+        return chatRoomRepository.findById(roomDTO.getId()).orElseThrow();
+    }
+
+    //  ONLINE USERS MANAGEMENT 
 
     public List<OnlineUserDTO> getOnlineUsers() {
         return onlineUsers.values().stream()
@@ -577,6 +765,7 @@ public class ChatService {
 
         broadcastOnlineUsersUpdate();
         broadcastUserStatusChange(onlineUser, "joined");
+        log.info("User {} is now online with session {}", user.getUsername(), sessionId);
     }
 
     public void removeOnlineUser(String sessionId) {
@@ -585,6 +774,7 @@ public class ChatService {
             userSessions.remove(user.getUserId());
             broadcastOnlineUsersUpdate();
             broadcastUserStatusChange(user, "left");
+            log.info("User {} went offline", user.getUsername());
         }
     }
 
@@ -596,6 +786,7 @@ public class ChatService {
                 user.setStatus(status);
                 user.setLastSeen(LocalDateTime.now());
                 broadcastOnlineUsersUpdate();
+                log.debug("User {} updated status to: {}", user.getUsername(), status);
             }
         }
     }
@@ -647,7 +838,7 @@ public class ChatService {
                 return (UserPrincipal) principal;
             }
         } catch (Exception e) {
-            // Handle case where no authentication context is available
+            log.debug("No authentication context available: {}", e.getMessage());
         }
         return null;
     }

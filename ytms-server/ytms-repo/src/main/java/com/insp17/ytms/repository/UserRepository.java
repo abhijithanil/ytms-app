@@ -5,6 +5,7 @@ import com.insp17.ytms.entity.UserRole;
 import com.insp17.ytms.entity.UserStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -34,5 +35,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findAllActiveUsers();
 
     List<User> findByRoleAndUserStatus(UserRole role, UserStatus userStatus);
+
+    /**
+     * Find all active users for chat functionality
+     */
+    @Query("SELECT u FROM User u WHERE u.userStatus = :status")
+    List<User> findByUserStatus(@Param("status") UserStatus status);
 
 }

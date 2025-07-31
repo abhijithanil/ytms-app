@@ -76,14 +76,14 @@ public class YouTubeRefreshTokenSetup {
                 .setState(state)
                 .build();
 
-        log.info("=== YOUTUBE AUTHORIZATION SETUP FOR {} ===", channelName);
+        log.info(" YOUTUBE AUTHORIZATION SETUP FOR {} ", channelName);
         log.info("1. Open this URL in your browser:");
         log.info("   {}", authorizationUrl);
         log.info("2. Sign in with the Google account that owns your YouTube channel");
         log.info("3. Make sure you're switched to the correct channel: {}", channelName);
         log.info("4. Grant permissions to your ytms-app");
         log.info("5. You'll be redirected automatically with the refresh token");
-        log.info("===============================================");
+        log.info("==");
 
         return authorizationUrl;
     }
@@ -127,11 +127,11 @@ public class YouTubeRefreshTokenSetup {
             );
         }
 
-        log.info("=== REFRESH TOKEN SETUP SUCCESSFUL ===");
+        log.info(" REFRESH TOKEN SETUP SUCCESSFUL ");
         log.info("Refresh Token: {}", refreshToken);
         log.info("Access Token: {}", accessToken.substring(0, 20) + "...");
         log.info("Expires In: {} seconds", expiresIn);
-        log.info("=====================================");
+        log.info("=");
 
         return new RefreshTokenResult(refreshToken, accessToken, expiresIn);
     }

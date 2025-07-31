@@ -1,4 +1,3 @@
-// Enhanced ChatController.java
 package com.insp17.ytms.controller;
 
 import com.insp17.ytms.dto.*;
@@ -22,6 +21,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/chat")
 @Slf4j
+@CrossOrigin(origins = "*", maxAge = 3600)
 public class ChatController {
 
     @Autowired
@@ -41,18 +41,23 @@ public class ChatController {
         return null;
     }
 
-    // === CHAT ROOMS MANAGEMENT (REST ENDPOINTS) ===
+    //  CHAT ROOMS MANAGEMENT (REST ENDPOINTS) 
 
     @PostMapping("/rooms")
     public ResponseEntity<ChatRoomDTO> createChatRoom(@RequestBody CreateChatRoomRequest request, Principal principal) {
         try {
             UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
             if (userPrincipal == null) {
+                log.warn("Unauthorized create room attempt");
                 return ResponseEntity.status(401).build();
             }
 
+            log.info("Creating chat room: {} by user: {}", request.getRoomName(), userPrincipal.getUsername());
             ChatRoomDTO room = chatService.createChatRoom(request, userPrincipal.getId());
             return ResponseEntity.ok(room);
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid request for creating chat room: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
         } catch (Exception e) {
             log.error("Error creating chat room: {}", e.getMessage(), e);
             return ResponseEntity.status(500).build();
@@ -67,6 +72,7 @@ public class ChatController {
                 return ResponseEntity.status(401).build();
             }
 
+            log.debug("Fetching chat rooms for user: {}", userPrincipal.getUsername());
             ChatRoomListResponse rooms = chatService.getChatRoomList(userPrincipal.getId());
             return ResponseEntity.ok(rooms);
         } catch (Exception e) {
@@ -83,9 +89,11 @@ public class ChatController {
                 return ResponseEntity.status(401).build();
             }
 
+            log.debug("Fetching chat room {} for user: {}", roomId, userPrincipal.getUsername());
             ChatRoomDTO room = chatService.getChatRoomById(roomId, userPrincipal.getId());
             return ResponseEntity.ok(room);
         } catch (SecurityException e) {
+            log.warn("Access denied to room {} for user: {}", roomId, principal.getName());
             return ResponseEntity.status(403).build();
         } catch (Exception e) {
             log.error("Error fetching chat room {}: {}", roomId, e.getMessage(), e);
@@ -93,17 +101,42 @@ public class ChatController {
         }
     }
 
-    @PostMapping("/rooms/{roomId}/members")
-    public ResponseEntity<Void> addMembersToRoom(@PathVariable Long roomId, @RequestBody AddMembersRequest request, Principal principal) {
+    @PutMapping("/rooms/{roomId}")
+    public ResponseEntity<ChatRoomDTO> updateChatRoom(@PathVariable Long roomId,
+                                                      @RequestBody UpdateChatRoomRequest request,
+                                                      Principal principal) {
         try {
             UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
             if (userPrincipal == null) {
                 return ResponseEntity.status(401).build();
             }
 
-            for (Long userId : request.getUserIds()) {
-                chatService.addMemberToRoom(roomId, userId, request.getDefaultRole());
+            log.info("Updating chat room {} by user: {}", roomId, userPrincipal.getUsername());
+            ChatRoomDTO room = chatService.updateChatRoom(roomId, request, userPrincipal.getId());
+            return ResponseEntity.ok(room);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error updating chat room {}: {}", roomId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @PostMapping("/rooms/{roomId}/members")
+    public ResponseEntity<Void> addMembersToRoom(@PathVariable Long roomId,
+                                                 @RequestBody AddMembersRequest request,
+                                                 Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
             }
+
+            log.info("Adding {} members to room {} by user: {}",
+                    request.getUserIds().size(), roomId, userPrincipal.getUsername());
+
+            chatService.addMembersToRoom(roomId, request.getUserIds(),
+                    request.getDefaultRole(), userPrincipal.getId());
             return ResponseEntity.ok().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
@@ -114,13 +147,17 @@ public class ChatController {
     }
 
     @DeleteMapping("/rooms/{roomId}/members/{userId}")
-    public ResponseEntity<Void> removeMemberFromRoom(@PathVariable Long roomId, @PathVariable Long userId, Principal principal) {
+    public ResponseEntity<Void> removeMemberFromRoom(@PathVariable Long roomId,
+                                                     @PathVariable Long userId,
+                                                     Principal principal) {
         try {
             UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
             if (userPrincipal == null) {
                 return ResponseEntity.status(401).build();
             }
 
+            log.info("Removing member {} from room {} by user: {}",
+                    userId, roomId, userPrincipal.getUsername());
             chatService.removeMemberFromRoom(roomId, userId, userPrincipal.getId());
             return ResponseEntity.ok().build();
         } catch (SecurityException e) {
@@ -131,7 +168,7 @@ public class ChatController {
         }
     }
 
-    // === DIRECT MESSAGES ===
+    //  DIRECT MESSAGES 
 
     @PostMapping("/direct-messages")
     public ResponseEntity<ChatRoomDTO> createOrGetDirectMessage(@RequestParam Long recipientId, Principal principal) {
@@ -141,6 +178,8 @@ public class ChatController {
                 return ResponseEntity.status(401).build();
             }
 
+            log.info("Creating/getting direct message between {} and {}",
+                    userPrincipal.getUsername(), recipientId);
             ChatRoomDTO dmRoom = chatService.getOrCreateDirectMessage(userPrincipal.getId(), recipientId);
             return ResponseEntity.ok(dmRoom);
         } catch (Exception e) {
@@ -157,6 +196,7 @@ public class ChatController {
                 return ResponseEntity.status(401).build();
             }
 
+            log.debug("Sending direct message from {} to {}", userPrincipal.getUsername(), request.getRecipientId());
             ChatMessageDTO message = chatService.sendDirectMessage(request, userPrincipal.getId());
             return ResponseEntity.ok(message);
         } catch (Exception e) {
@@ -165,7 +205,7 @@ public class ChatController {
         }
     }
 
-    // === MESSAGES ===
+    //  MESSAGES 
 
     @GetMapping("/rooms/{roomId}/messages")
     public ResponseEntity<List<ChatMessageDTO>> getRoomMessages(
@@ -179,6 +219,8 @@ public class ChatController {
                 return ResponseEntity.status(401).build();
             }
 
+            log.debug("Fetching messages for room {} (page: {}, size: {}) by user: {}",
+                    roomId, page, size, userPrincipal.getUsername());
             List<ChatMessageDTO> messages = chatService.getRoomMessages(roomId, page, size, userPrincipal.getId());
             return ResponseEntity.ok(messages);
         } catch (SecurityException e) {
@@ -197,6 +239,7 @@ public class ChatController {
                 return ResponseEntity.status(401).build();
             }
 
+            log.debug("Marking room {} as read by user: {}", roomId, userPrincipal.getUsername());
             chatService.markRoomAsRead(roomId, userPrincipal.getId());
             return ResponseEntity.ok().build();
         } catch (SecurityException e) {
@@ -215,6 +258,7 @@ public class ChatController {
                 return ResponseEntity.status(401).build();
             }
 
+            log.debug("Searching messages with query: '{}' by user: {}", request.getQuery(), userPrincipal.getUsername());
             List<ChatMessageDTO> messages = chatService.searchMessages(request, userPrincipal.getId());
             return ResponseEntity.ok(messages);
         } catch (SecurityException e) {
@@ -225,24 +269,35 @@ public class ChatController {
         }
     }
 
-    // === BACKWARD COMPATIBILITY REST ENDPOINTS ===
+    //  BACKWARD COMPATIBILITY REST ENDPOINTS 
 
     @GetMapping("/history")
     public ResponseEntity<List<ChatMessageDTO>> getChatHistory(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size,
             @RequestParam(required = false) Long taskId) {
-        List<ChatMessageDTO> messages = chatService.getChatHistory(taskId, page, size);
-        return ResponseEntity.ok(messages);
+        try {
+            log.debug("Fetching chat history (page: {}, size: {}, taskId: {})", page, size, taskId);
+            List<ChatMessageDTO> messages = chatService.getChatHistory(taskId, page, size);
+            return ResponseEntity.ok(messages);
+        } catch (Exception e) {
+            log.error("Error fetching chat history: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @GetMapping("/online-users")
     public ResponseEntity<List<OnlineUserDTO>> getOnlineUsers() {
-        List<OnlineUserDTO> users = chatService.getOnlineUsers();
-        return ResponseEntity.ok(users);
+        try {
+            List<OnlineUserDTO> users = chatService.getOnlineUsers();
+            return ResponseEntity.ok(users);
+        } catch (Exception e) {
+            log.error("Error fetching online users: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
     }
 
-    // === WEBSOCKET MESSAGE HANDLERS ===
+    //  WEBSOCKET MESSAGE HANDLERS 
 
     @MessageMapping("/chat/join")
     public void joinChat(Map<String, Object> payload, SimpMessageHeaderAccessor headerAccessor, Principal principal) {
@@ -262,7 +317,7 @@ public class ChatController {
         }
     }
 
-    // === ROOM-BASED MESSAGING ===
+    //  ROOM-BASED MESSAGING 
 
     @MessageMapping("/chat/room/{roomId}")
     public void sendRoomMessage(@DestinationVariable Long roomId, Map<String, Object> payload, Principal principal) {
@@ -279,20 +334,22 @@ public class ChatController {
                 if (content != null && !content.trim().isEmpty()) {
                     SendMessageRequest request = new SendMessageRequest();
                     request.setChatRoomId(roomId);
-                    request.setContent(content);
+                    request.setContent(content.trim());
                     request.setAttachmentUrl(attachmentUrl);
                     request.setAttachmentName(attachmentName);
                     request.setAttachmentType(attachmentType);
                     request.setParentMessageId(parentMessageId);
 
                     chatService.sendMessageToRoom(request, userPrincipal.getId());
-                    log.info("Room message sent by user: {} to room: {}", userPrincipal.getUsername(), roomId);
+                    log.debug("Room message sent by user: {} to room: {}", userPrincipal.getUsername(), roomId);
                 }
             } else {
                 log.warn("Room message send attempt without valid authentication - principal: {}", principal);
             }
+        } catch (SecurityException e) {
+            log.warn("Access denied for room message to room {}: {}", roomId, e.getMessage());
         } catch (Exception e) {
-            log.error("Error handling room message: {}", e.getMessage(), e);
+            log.error("Error handling room message to room {}: {}", roomId, e.getMessage(), e);
         }
     }
 
@@ -309,23 +366,23 @@ public class ChatController {
                 if (content != null && !content.trim().isEmpty()) {
                     DirectMessageRequest request = new DirectMessageRequest();
                     request.setRecipientId(recipientId);
-                    request.setContent(content);
+                    request.setContent(content.trim());
                     request.setAttachmentUrl(attachmentUrl);
                     request.setAttachmentName(attachmentName);
                     request.setAttachmentType(attachmentType);
 
                     chatService.sendDirectMessage(request, userPrincipal.getId());
-                    log.info("Direct message sent by user: {} to user: {}", userPrincipal.getUsername(), recipientId);
+                    log.debug("Direct message sent by user: {} to user: {}", userPrincipal.getUsername(), recipientId);
                 }
             } else {
                 log.warn("Direct message send attempt without valid authentication - principal: {}", principal);
             }
         } catch (Exception e) {
-            log.error("Error handling direct message: {}", e.getMessage(), e);
+            log.error("Error handling direct message to user {}: {}", recipientId, e.getMessage(), e);
         }
     }
 
-    // === TYPING INDICATORS ===
+    //  TYPING INDICATORS 
 
     @MessageMapping("/typing/room/{roomId}")
     public void handleRoomTyping(@DestinationVariable Long roomId, Map<String, Object> payload, Principal principal) {
@@ -340,20 +397,45 @@ public class ChatController {
                     typingIndicator.setTyping(isTyping);
                     typingIndicator.setChatRoomId(roomId);
 
-                    // Broadcast to room-specific typing channel
-                    String destination = "/topic/typing/room/" + roomId;
-                    // You'll need to add this method to ChatService or handle it here
-                    // chatService.broadcastRoomTypingIndicator(typingIndicator);
+                    chatService.broadcastRoomTypingIndicator(roomId, typingIndicator);
                 }
             } else {
                 log.warn("Room typing attempt without valid authentication - principal: {}", principal);
             }
         } catch (Exception e) {
-            log.error("Error handling room typing indicator: {}", e.getMessage(), e);
+            log.error("Error handling room typing indicator for room {}: {}", roomId, e.getMessage(), e);
         }
     }
 
-    // === BACKWARD COMPATIBILITY WEBSOCKET HANDLERS ===
+    //  ROOM MANAGEMENT VIA WEBSOCKET 
+
+    @MessageMapping("/rooms/join/{roomId}")
+    public void joinRoom(@DestinationVariable Long roomId, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                // Mark room as read when joining
+                chatService.markRoomAsRead(roomId, userPrincipal.getId());
+                log.debug("User {} joined room {}", userPrincipal.getUsername(), roomId);
+            }
+        } catch (Exception e) {
+            log.error("Error handling room join for room {}: {}", roomId, e.getMessage(), e);
+        }
+    }
+
+    @MessageMapping("/rooms/leave/{roomId}")
+    public void leaveRoom(@DestinationVariable Long roomId, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                log.debug("User {} left room {}", userPrincipal.getUsername(), roomId);
+            }
+        } catch (Exception e) {
+            log.error("Error handling room leave for room {}: {}", roomId, e.getMessage(), e);
+        }
+    }
+
+    //  BACKWARD COMPATIBILITY WEBSOCKET HANDLERS 
 
     @MessageMapping("/chat/global")
     public void sendGlobalMessage(Map<String, Object> payload, Principal principal) {
@@ -363,8 +445,8 @@ public class ChatController {
                 User userById = userService.getUserByIdPrivateUse(userPrincipal.getId());
                 String content = (String) payload.get("content");
                 if (content != null && !content.trim().isEmpty()) {
-                    chatService.sendMessage(content, userById, null);
-                    log.info("Global message sent by user: {}", userPrincipal.getUsername());
+                    chatService.sendMessage(content.trim(), userById, null);
+                    log.debug("Global message sent by user: {}", userPrincipal.getUsername());
                 }
             } else {
                 log.warn("Message send attempt without valid authentication - principal: {}", principal);
@@ -382,21 +464,21 @@ public class ChatController {
                 User userById = userService.getUserByIdPrivateUse(userPrincipal.getId());
                 String content = (String) payload.get("content");
                 if (content != null && !content.trim().isEmpty()) {
-                    chatService.sendMessage(content, userById, taskId);
-                    log.info("Task message sent by user: {} for task: {}", userPrincipal.getUsername(), taskId);
+                    chatService.sendMessage(content.trim(), userById, taskId);
+                    log.debug("Task message sent by user: {} for task: {}", userPrincipal.getUsername(), taskId);
                 }
             } else {
                 log.warn("Task message send attempt without valid authentication - principal: {}", principal);
             }
         } catch (Exception e) {
-            log.error("Error handling task message: {}", e.getMessage(), e);
+            log.error("Error handling task message for task {}: {}", taskId, e.getMessage(), e);
         }
     }
 
     @MessageMapping("/typing/global")
     public void handleGlobalTyping(Map<String, Object> payload, Principal principal) {
         try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            UserPrincipal userPrincipal = getUserPrincipal(principal);
             if (userPrincipal != null) {
                 Boolean isTyping = (Boolean) payload.get("isTyping");
                 if (isTyping != null) {
@@ -435,7 +517,7 @@ public class ChatController {
                 log.warn("Task typing attempt without valid authentication - principal: {}", principal);
             }
         } catch (Exception e) {
-            log.error("Error handling task typing indicator: {}", e.getMessage(), e);
+            log.error("Error handling task typing indicator for task {}: {}", taskId, e.getMessage(), e);
         }
     }
 
@@ -447,49 +529,13 @@ public class ChatController {
                 String status = (String) payload.get("status");
                 if (status != null) {
                     chatService.updateUserStatus(userPrincipal.getId(), status);
-                    log.info("User {} updated status to: {}", userPrincipal.getUsername(), status);
+                    log.debug("User {} updated status to: {}", userPrincipal.getUsername(), status);
                 }
             } else {
                 log.warn("Status update attempt without valid authentication - principal: {}", principal);
             }
         } catch (Exception e) {
             log.error("Error handling status update: {}", e.getMessage(), e);
-        }
-    }
-
-    // === ROOM MANAGEMENT VIA WEBSOCKET ===
-
-    @MessageMapping("/rooms/join/{roomId}")
-    public void joinRoom(@DestinationVariable Long roomId, Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal != null) {
-                // Subscribe user to room-specific channels
-                // This is handled automatically by the WebSocket infrastructure
-                // when they subscribe to /topic/chat/room/{roomId}
-
-                // Mark room as read when joining
-                chatService.markRoomAsRead(roomId, userPrincipal.getId());
-
-                log.info("User {} joined room {}", userPrincipal.getUsername(), roomId);
-            }
-        } catch (Exception e) {
-            log.error("Error handling room join: {}", e.getMessage(), e);
-        }
-    }
-
-    @MessageMapping("/rooms/leave/{roomId}")
-    public void leaveRoom(@DestinationVariable Long roomId, Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal != null) {
-                // User stops receiving messages from this room
-                // This is handled by unsubscribing from the topic on the client side
-
-                log.info("User {} left room {}", userPrincipal.getUsername(), roomId);
-            }
-        } catch (Exception e) {
-            log.error("Error handling room leave: {}", e.getMessage(), e);
         }
     }
 }

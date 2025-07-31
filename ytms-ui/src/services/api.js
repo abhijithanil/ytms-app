@@ -294,6 +294,18 @@ export const usersAPI = {
       throw error;
     }
   },
+   // Existing methods...
+  
+  
+  // Search users
+  searchUsers: (query) => api.get(`/api/users/search?q=${encodeURIComponent(query)}`),
+
+  
+  // Get current user's profile
+  getCurrentUser: () => api.get('/api/users/me'),
+  
+  // Update user status
+  updateUserStatus: (status) => api.patch('/api/users/me/status', { status }),
 };
 
 // Tasks API - Updated for multiple videos support
@@ -826,20 +838,63 @@ export const youtubeOAuthAPI = {
     });
   },
 };
-
 export const chatAPI = {
-  getChatHistory: (taskId = null, page = 0, size = 50) => {
-    const params = new URLSearchParams({ page, size });
-    if (taskId) params.append('taskId', taskId);
-    return api.get(`/chat/history?${params}`);
+  // Existing methods...
+  getChatHistory: (taskId, page = 0, size = 50) => {
+    const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
+    if (taskId) params.append('taskId', taskId.toString());
+    return api.get(`/api/chat/history?${params}`);
   },
 
-  getOnlineUsers: () => api.get('/chat/online-users'),
+  getOnlineUsers: () => api.get('/api/chat/online-users'),
 
-  getChatStats: (taskId = null) => {
-    const params = taskId ? `?taskId=${taskId}` : '';
-    return api.get(`/chat/stats${params}`);
-  }
+  // New room-based methods
+  
+  // Get list of all chat rooms for current user
+  getChatRoomList: () => api.get('/api/chat/rooms'),
+  
+  // Get details of a specific room
+  getRoomDetails: (roomId) => api.get(`/api/chat/rooms/${roomId}`),
+  
+  // Create a new chat room
+  createChatRoom: (request) => api.post('/api/chat/rooms', request),
+  
+  // Get or create direct message room
+  createOrGetDirectMessage: (recipientId) => 
+    api.post(`/api/chat/direct-messages?recipientId=${recipientId}`),
+  
+  // Send direct message
+  sendDirectMessage: (request) => api.post('/api/chat/direct-messages/send', request),
+  
+  // Get messages for a specific room
+  getRoomMessages: (roomId, page = 0, size = 50) => {
+    const params = new URLSearchParams({ 
+      page: page.toString(), 
+      size: size.toString() 
+    });
+    return api.get(`/api/chat/rooms/${roomId}/messages?${params}`);
+  },
+  
+  // Mark room as read
+  markRoomAsRead: (roomId) => api.post(`/api/chat/rooms/${roomId}/read`),
+  
+  // Search messages
+  searchMessages: (request) => api.post('/api/chat/search', request),
+  
+  // Room member management
+  addMembersToRoom: (roomId, request) => 
+    api.post(`/api/chat/rooms/${roomId}/members`, request),
+  
+  removeMemberFromRoom: (roomId, userId) => 
+    api.delete(`/api/chat/rooms/${roomId}/members/${userId}`),
+  
+  // Update room settings
+  updateRoom: (roomId, request) => api.put(`/api/chat/rooms/${roomId}`, request),
+  
+  // Archive/unarchive room
+  archiveRoom: (roomId) => api.patch(`/api/chat/rooms/${roomId}/archive`),
+  unarchiveRoom: (roomId) => api.patch(`/api/chat/rooms/${roomId}/unarchive`),
 };
+
 
 export default api;

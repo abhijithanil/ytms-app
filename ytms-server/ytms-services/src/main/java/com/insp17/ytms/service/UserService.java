@@ -4,6 +4,7 @@ import com.insp17.ytms.dtos.*;
 import com.insp17.ytms.entity.*;
 import com.insp17.ytms.repository.*;
 import jakarta.transaction.Transactional;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -14,6 +15,7 @@ import java.util.stream.Collectors;
 
 @Service
 @Transactional
+@Slf4j
 public class UserService {
 
     @Autowired
@@ -43,6 +45,7 @@ public class UserService {
     @Autowired
     private YouTubeChannelRepository youTubeChannelRepository;
 
+    //  EXISTING METHODS 
 
     public List<UserResponse> getAllUsers(UserRole userRole) {
         if (userRole == null) {
@@ -276,5 +279,107 @@ public class UserService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         return UserPrincipal.create(user);
+    }
+
+    //  NEW CHAT-RELATED METHODS 
+
+    /**
+     * Get all active users for chat functionality (creating DMs, adding to groups)
+     */
+    public List<User> getAllUsers() {
+        log.debug("Fetching all active users for chat");
+        return userRepository.findAllActiveUsers();
+    }
+
+    /**
+     * Get all users as UserDTO for chat API responses
+     */
+    public List<UserDTO> getAllUsersAsDTO() {
+        log.debug("Fetching all active users as DTO for chat");
+        List<User> users = userRepository.findAllActiveUsers();
+        return users.stream()
+                .map(UserDTO::forChatResponse)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Search users by query (username, email, first name, last name)
+     */
+    public List<User> searchUsers(String query) {
+        log.debug("Searching users with query: '{}'", query);
+
+        if (query == null || query.trim().isEmpty()) {
+            return getAllUsers();
+        }
+
+        String searchTerm = query.trim().toLowerCase();
+
+        return userRepository.findAllActiveUsers().stream()
+                .filter(user -> (
+                        (user.getUsername() != null && user.getUsername().toLowerCase().contains(searchTerm)) ||
+                                (user.getEmail() != null && user.getEmail().toLowerCase().contains(searchTerm)) ||
+                                (user.getFirstName() != null && user.getFirstName().toLowerCase().contains(searchTerm)) ||
+                                (user.getLastName() != null && user.getLastName().toLowerCase().contains(searchTerm))
+                ))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Search users as UserDTO for chat API responses
+     */
+    public List<UserDTO> searchUsersAsDTO(String query) {
+        log.debug("Searching users as DTO with query: '{}'", query);
+        List<User> users = searchUsers(query);
+        return users.stream()
+                .map(UserDTO::forChatResponse)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get user by ID as UserDTO for chat API responses
+     */
+    public UserDTO getUserByIdAsDTO(Long id) {
+        log.debug("Fetching user {} as DTO", id);
+        User user = getUserByIdPrivateUse(id);
+        return UserDTO.forChatResponse(user);
+    }
+
+    /**
+     * Get current user as UserDTO for chat API responses
+     */
+    public UserDTO getCurrentUserAsDTO(Long userId) {
+        log.debug("Fetching current user {} as DTO", userId);
+        User user = getUserByIdPrivateUse(userId);
+        return UserDTO.forChatResponse(user);
+    }
+
+    /**
+     * Check if user can access task (for chat permissions)
+     */
+    public boolean canUserAccessTask(Long taskId, User user) {
+        try {
+            // This assumes you have a method to check task access
+            // You might need to implement this based on your task permission system
+            VideoTask task = videoTaskRepository.findById(taskId).orElse(null);
+            if (task == null) return false;
+
+            // Check if user is admin, task creator, or assigned editor
+            return user.getRole() == UserRole.ADMIN ||
+                    task.getCreatedBy().getId().equals(user.getId()) ||
+                    (task.getAssignedEditor() != null && task.getAssignedEditor().getId().equals(user.getId()));
+        } catch (Exception e) {
+            log.error("Error checking task access for user {} and task {}: {}", user.getId(), taskId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Update user online status (for chat presence)
+     * This is handled in-memory by ChatService, but you could persist it if needed
+     */
+    public void updateUserStatus(Long userId, String status) {
+        log.debug("Status update request for user {} to status: {}", userId, status);
+        // Currently handled in-memory by ChatService
+        // You can implement persistent status storage here if needed
     }
 }

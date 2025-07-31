@@ -279,7 +279,7 @@ public class EmailService {
         // Implementation needed
     }
 
-    // ==================== HELPER METHODS ====================
+    // == HELPER METHODS ==
 
     /**
      * Sends a plain text email using SimpleMailMessage

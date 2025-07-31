@@ -20,7 +20,7 @@ import java.util.ArrayList;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ChatRoomDTO {
 
-    // === BASIC ROOM INFORMATION ===
+    //  BASIC ROOM INFORMATION 
     private Long id;
     private String roomName;
     private String roomDescription;
@@ -41,7 +41,7 @@ public class ChatRoomDTO {
 
     private Boolean isArchived;
 
-    // === RELATIONSHIP SPECIFIC FIELDS ===
+    //  RELATIONSHIP SPECIFIC FIELDS 
 
     // For task-related chats
     private Long taskId;
@@ -56,18 +56,18 @@ public class ChatRoomDTO {
     private String dmParticipantStatus; // online, away, busy, offline
     private String dmParticipantAvatar;
 
-    // === STATISTICS AND COUNTS ===
+    //  STATISTICS AND COUNTS 
     private Long memberCount;
     private Long messageCount;
     private Long unreadCount;
     private Long threadCount;
     private Long fileCount;
 
-    // === LATEST MESSAGE PREVIEW ===
+    //  LATEST MESSAGE PREVIEW 
     private ChatMessageDTO lastMessage;
     private String lastMessagePreview; // Shortened version for lists
 
-    // === MEMBER INFORMATION ===
+    //  MEMBER INFORMATION 
     @Builder.Default
     private List<ChatRoomMemberDTO> members = new ArrayList<>();
 
@@ -82,7 +82,7 @@ public class ChatRoomDTO {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime userJoinedAt;
 
-    // === ROOM SETTINGS ===
+    //  ROOM SETTINGS 
     private Boolean canInviteMembers;
     private Boolean canManageMembers;
     private Boolean canDeleteMessages;
@@ -90,18 +90,18 @@ public class ChatRoomDTO {
     private Boolean canLeaveRoom;
     private Boolean canArchiveRoom;
 
-    // === DISPLAY HELPERS ===
+    //  DISPLAY HELPERS 
     private String displayName; // Computed display name based on room type
     private String displayDescription; // Computed description
     private String roomIcon; // Icon identifier for frontend
     private String statusIndicator; // For DMs: online status
     private String roomColor; // Optional color coding
 
-    // === PINNED MESSAGES ===
+    //  PINNED MESSAGES 
     @Builder.Default
     private List<ChatMessageDTO> pinnedMessages = new ArrayList<>();
 
-    // === ROOM ACTIVITY ===
+    //  ROOM ACTIVITY 
     private Boolean hasUnreadMentions;
     private Long unreadMentionsCount;
     private Boolean hasUnreadHighPriority;
@@ -109,7 +109,7 @@ public class ChatRoomDTO {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastActivityAt;
 
-    // === CONSTRUCTORS AND FACTORY METHODS ===
+    //  CONSTRUCTORS AND FACTORY METHODS 
 
     /**
      * Create ChatRoomDTO from ChatRoom entity
@@ -140,6 +140,9 @@ public class ChatRoomDTO {
         // Set display properties
         this.displayName = generateDisplayName();
         this.roomIcon = generateRoomIcon();
+
+        // Set default permissions
+        setDefaultPermissions();
     }
 
     /**
@@ -164,12 +167,14 @@ public class ChatRoomDTO {
         return dto;
     }
 
-    // === HELPER METHODS ===
+    //  HELPER METHODS 
 
     /**
      * Generate appropriate display name based on room type
      */
     private String generateDisplayName() {
+        if (this.roomType == null) return "Unknown Room";
+
         switch (this.roomType) {
             case DIRECT_MESSAGE:
                 return this.dmParticipantName != null ? this.dmParticipantName : this.dmParticipantUsername;
@@ -187,11 +192,13 @@ public class ChatRoomDTO {
      * Generate room icon identifier for frontend
      */
     private String generateRoomIcon() {
+        if (this.roomType == null) return "message-circle";
+
         switch (this.roomType) {
             case DIRECT_MESSAGE:
                 return "user";
             case GROUP_CHAT:
-                return this.isPrivate ? "lock" : "users";
+                return this.isPrivate != null && this.isPrivate ? "lock" : "users";
             case TASK_CHAT:
                 return "task";
             case GLOBAL_CHAT:
@@ -202,9 +209,27 @@ public class ChatRoomDTO {
     }
 
     /**
+     * Set default permissions
+     */
+    private void setDefaultPermissions() {
+        // Set conservative defaults
+        this.canInviteMembers = false;
+        this.canManageMembers = false;
+        this.canDeleteMessages = false;
+        this.canEditRoom = false;
+        this.canLeaveRoom = true;
+        this.canArchiveRoom = false;
+    }
+
+    /**
      * Set user permissions based on their role
      */
     private void setPermissionsFromRole(ChatRoomMember.MemberRole role) {
+        if (role == null) {
+            setDefaultPermissions();
+            return;
+        }
+
         switch (role) {
             case OWNER:
                 this.canInviteMembers = true;
@@ -224,7 +249,7 @@ public class ChatRoomDTO {
                 break;
             case MEMBER:
             default:
-                this.canInviteMembers = !this.isPrivate;
+                this.canInviteMembers = this.isPrivate != null && !this.isPrivate;
                 this.canManageMembers = false;
                 this.canDeleteMessages = false;
                 this.canEditRoom = false;
@@ -252,25 +277,31 @@ public class ChatRoomDTO {
         String senderName = this.lastMessage.getSenderName();
 
         // Handle different message types
-        switch (this.lastMessage.getType()) {
-            case FILE:
-                return senderName + " shared a file";
-            case IMAGE:
-                return senderName + " shared an image";
-            case JOIN:
-                return content; // Already formatted like "User joined"
-            case LEAVE:
-                return content; // Already formatted like "User left"
-            case SYSTEM:
-                return content;
-            case CHAT:
-            default:
-                String preview = content.length() > 50 ? content.substring(0, 50) + "..." : content;
-                return this.roomType == ChatRoom.RoomType.DIRECT_MESSAGE ? preview : senderName + ": " + preview;
+        if (this.lastMessage.getType() != null) {
+            switch (this.lastMessage.getType()) {
+                case FILE:
+                    return senderName + " shared a file";
+                case IMAGE:
+                    return senderName + " shared an image";
+                case JOIN:
+                    return content; // Already formatted like "User joined"
+                case LEAVE:
+                    return content; // Already formatted like "User left"
+                case SYSTEM:
+                    return content;
+                case CHAT:
+                default:
+                    String preview = content != null && content.length() > 50 ? content.substring(0, 50) + "..." : content;
+                    return this.roomType == ChatRoom.RoomType.DIRECT_MESSAGE ? preview : senderName + ": " + preview;
+            }
         }
+
+        // Fallback
+        String preview = content != null && content.length() > 50 ? content.substring(0, 50) + "..." : content;
+        return this.roomType == ChatRoom.RoomType.DIRECT_MESSAGE ? preview : senderName + ": " + preview;
     }
 
-    // === CONVENIENCE METHODS ===
+    //  CONVENIENCE METHODS 
 
     public boolean isDirectMessage() {
         return this.roomType == ChatRoom.RoomType.DIRECT_MESSAGE;
@@ -328,7 +359,7 @@ public class ChatRoomDTO {
      * Get room status for display
      */
     public String getRoomStatus() {
-        if (this.isArchived) return "archived";
+        if (this.isArchived != null && this.isArchived) return "archived";
         if (!isActive()) return "inactive";
         if (hasUnreadMessages()) return "unread";
         return "active";
@@ -345,7 +376,7 @@ public class ChatRoomDTO {
         return 5;
     }
 
-    // === BUILDER PATTERN ENHANCEMENTS ===
+    //  BUILDER PATTERN ENHANCEMENTS 
 
     public static class ChatRoomDTOBuilder {
 
@@ -386,7 +417,7 @@ public class ChatRoomDTO {
         }
     }
 
-    // === JSON SERIALIZATION HELPERS ===
+    //  JSON SERIALIZATION HELPERS 
 
     /**
      * Get minimal version for list views

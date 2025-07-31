@@ -1,53 +1,35 @@
-// Create this as a temporary debug version of your WebSocket service
-// Replace your current WebSocketService with this debug version
-
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
-class DebugWebSocketService {
+class WebSocketService {
   constructor() {
     this.client = null;
     this.connected = false;
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
-    this.reconnectInterval = 3000;
     this.subscriptions = new Map();
     this.messageHandlers = new Map();
     this.connectionPromise = null;
-    this.reconnectTimer = null;
-    
-    console.log('🔧 WebSocketService: Constructor called');
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 5;
+    this.reconnectDelay = 1000;
   }
 
-  async connect(token, onConnect, onError) {
-    console.log('🔧 WebSocketService.connect: Called with token:', token ? 'present' : 'missing');
+  async connect(token, onSuccess, onError) {
+    console.log('🔌 WebSocketService: Starting connection...');
     
-    if (this.connectionPromise) {
-      console.log('🔧 WebSocketService.connect: Connection already in progress');
-      return this.connectionPromise;
+    if (this.connected) {
+      console.log('🔌 WebSocketService: Already connected');
+      if (onSuccess) onSuccess();
+      return;
     }
 
-    if (!token || token === 'undefined' || token === 'null') {
-      console.error('🔧 WebSocketService.connect: Invalid token provided');
-      if (onError) onError(new Error('Invalid authentication token'));
-      return Promise.reject(new Error('Invalid authentication token'));
+    if (this.connectionPromise) {
+      console.log('🔌 WebSocketService: Connection already in progress');
+      return this.connectionPromise;
     }
 
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
-        console.log('🔧 WebSocketService.connect: Starting connection process');
-        
-        // Clean up any existing connection
-        this.disconnect();
-
-        const serverURL = process.env.NODE_ENV === 'production' 
-          ? 'http://34.173.178.188:8080/ws'
-          : 'http://localhost:8080/ws';
-
-        console.log('🔧 WebSocketService.connect: Server URL:', serverURL);
-
-        // Create WebSocket with SockJS fallback
-        const socket = new SockJS(serverURL);
+        const socket = new SockJS(`${process.env.REACT_APP_API_URL || 'http://localhost:8080'}/ws`);
         
         this.client = new Client({
           webSocketFactory: () => socket,
@@ -55,61 +37,64 @@ class DebugWebSocketService {
             Authorization: `Bearer ${token}`
           },
           debug: (str) => {
-            console.log('🔧 STOMP Debug:', str);
+            console.log('🔌 STOMP Debug:', str);
           },
-          reconnectDelay: this.reconnectInterval,
+          reconnectDelay: this.reconnectDelay,
           heartbeatIncoming: 4000,
           heartbeatOutgoing: 4000,
           onConnect: (frame) => {
-            console.log('🔧 WebSocketService.onConnect: Connection successful!', frame);
+            console.log('🔌 WebSocketService: Connected successfully!', frame);
             this.connected = true;
             this.reconnectAttempts = 0;
             this.connectionPromise = null;
-            
-            // Clear any pending reconnect timer
-            if (this.reconnectTimer) {
-              clearTimeout(this.reconnectTimer);
-              this.reconnectTimer = null;
-            }
 
-            // Setup default subscriptions immediately
-            console.log('🔧 WebSocketService.onConnect: Setting up default subscriptions');
-            this.setupDefaultSubscriptions();
-            
-            console.log('🔧 WebSocketService.onConnect: Calling onConnect callback');
-            if (onConnect) onConnect(frame);
+            // Set up global subscriptions
+            this.setupGlobalSubscriptions();
+
+            if (onSuccess) onSuccess(frame);
             resolve(frame);
           },
-          onDisconnect: (frame) => {
-            console.log('🔧 WebSocketService.onDisconnect:', frame);
-            this.connected = false;
-            this.connectionPromise = null;
-            this.handleDisconnection(onConnect, onError);
-          },
           onStompError: (frame) => {
-            console.error('🔧 WebSocketService.onStompError:', frame);
+            console.error('🔌 WebSocketService: STOMP Error:', frame.headers['message']);
+            console.error('Additional details:', frame.body);
             this.connected = false;
             this.connectionPromise = null;
             
-            const error = new Error(`WebSocket error: ${frame.headers?.message || 'Unknown error'}`);
+            const error = new Error(frame.headers['message'] || 'STOMP connection failed');
             if (onError) onError(error);
             reject(error);
           },
-          onWebSocketError: (error) => {
-            console.error('🔧 WebSocketService.onWebSocketError:', error);
+          onWebSocketError: (event) => {
+            console.error('🔌 WebSocketService: WebSocket Error:', event);
             this.connected = false;
             this.connectionPromise = null;
             
+            const error = new Error('WebSocket connection failed');
             if (onError) onError(error);
             reject(error);
+          },
+          onDisconnect: (frame) => {
+            console.log('🔌 WebSocketService: Disconnected', frame);
+            this.connected = false;
+            this.clearSubscriptions();
+            
+            // Auto-reconnect with exponential backoff
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+              const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
+              console.log(`🔌 WebSocketService: Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1})`);
+              
+              setTimeout(() => {
+                this.reconnectAttempts++;
+                this.connect(token, onSuccess, onError);
+              }, delay);
+            }
           }
         });
 
-        console.log('🔧 WebSocketService.connect: Activating client');
         this.client.activate();
-
+        
       } catch (error) {
-        console.error('🔧 WebSocketService.connect: Exception during initialization:', error);
+        console.error('🔌 WebSocketService: Connection setup failed:', error);
         this.connectionPromise = null;
         if (onError) onError(error);
         reject(error);
@@ -119,130 +104,115 @@ class DebugWebSocketService {
     return this.connectionPromise;
   }
 
-  setupDefaultSubscriptions() {
-    console.log('🔧 WebSocketService.setupDefaultSubscriptions: Called');
-    
+  setupGlobalSubscriptions() {
+    console.log('🔌 WebSocketService: Setting up global subscriptions');
+
     // Global chat messages
-    if (this.messageHandlers.has('globalChat')) {
-      console.log('🔧 WebSocketService: Setting up globalChat subscription');
-      this.subscribe('/topic/chat/global', 'globalChat', this.messageHandlers.get('globalChat'));
-    }
+    this.subscribe('/topic/chat/global', 'globalChat', (message) => {
+      const handler = this.messageHandlers.get('globalChat');
+      if (handler) handler(message);
+    });
 
     // Online users updates
-    if (this.messageHandlers.has('onlineUsers')) {
-      console.log('🔧 WebSocketService: Setting up onlineUsers subscription');
-      this.subscribe('/topic/users/online', 'onlineUsers', this.messageHandlers.get('onlineUsers'));
-    }
+    this.subscribe('/topic/users/online', 'onlineUsers', (users) => {
+      const handler = this.messageHandlers.get('onlineUsers');
+      if (handler) handler(users);
+    });
 
     // User status changes
-    if (this.messageHandlers.has('userStatus')) {
-      console.log('🔧 WebSocketService: Setting up userStatus subscription');
-      this.subscribe('/topic/users/status', 'userStatus', this.messageHandlers.get('userStatus'));
-    }
+    this.subscribe('/topic/users/status', 'userStatus', (statusUpdate) => {
+      const handler = this.messageHandlers.get('userStatus');
+      if (handler) handler(statusUpdate);
+    });
 
     // Global typing indicators
-    if (this.messageHandlers.has('globalTyping')) {
-      console.log('🔧 WebSocketService: Setting up globalTyping subscription');
-      this.subscribe('/topic/typing/global', 'globalTyping', this.messageHandlers.get('globalTyping'));
-    }
+    this.subscribe('/topic/typing/global', 'globalTyping', (typingData) => {
+      const handler = this.messageHandlers.get('globalTyping');
+      if (handler) handler(typingData);
+    });
+
+    // Room updates
+    this.subscribe('/topic/rooms/updates', 'roomUpdates', (roomUpdate) => {
+      const handler = this.messageHandlers.get('roomUpdates');
+      if (handler) handler(roomUpdate);
+    });
   }
 
-  setMessageHandler(type, handler) {
-    console.log('🔧 WebSocketService.setMessageHandler:', type);
-    this.messageHandlers.set(type, handler);
-    
-    // If already connected, set up subscription immediately
-    if (this.connected) {
-      console.log('🔧 WebSocketService: Already connected, setting up subscription for', type);
-      this.setupDefaultSubscriptions();
-    }
-  }
-
-  subscribe(destination, handlerKey, callback) {
-    console.log('🔧 WebSocketService.subscribe:', destination, 'with key:', handlerKey);
-    
+  subscribe(destination, subscriptionId, messageHandler) {
     if (!this.client || !this.connected) {
-      console.warn('🔧 WebSocketService.subscribe: Not connected, storing subscription for later');
-      this.subscriptions.set(destination, { handlerKey, callback });
-      return null;
+      console.warn('🔌 WebSocketService: Cannot subscribe - not connected');
+      return false;
     }
 
     try {
+      console.log(`🔌 WebSocketService: Subscribing to ${destination} with ID ${subscriptionId}`);
+      
       const subscription = this.client.subscribe(destination, (message) => {
-        console.log('🔧 WebSocketService: Received message on', destination, ':', message.body);
         try {
-          const data = JSON.parse(message.body);
-          callback(data);
+          const parsedMessage = JSON.parse(message.body);
+          console.log(`🔌 WebSocketService: Received message on ${destination}:`, parsedMessage);
+          messageHandler(parsedMessage);
         } catch (error) {
-          console.error('🔧 WebSocketService: Error parsing message:', error);
-          callback(message.body);
+          console.error(`🔌 WebSocketService: Error parsing message from ${destination}:`, error);
         }
       });
 
-      this.subscriptions.set(destination, { handlerKey, callback, subscription });
-      console.log('🔧 WebSocketService: Successfully subscribed to', destination);
-      return subscription;
+      this.subscriptions.set(subscriptionId, subscription);
+      return true;
     } catch (error) {
-      console.error('🔧 WebSocketService: Failed to subscribe to', destination, ':', error);
-      return null;
+      console.error(`🔌 WebSocketService: Failed to subscribe to ${destination}:`, error);
+      return false;
     }
   }
 
-  sendMessage(destination, message) {
-    console.log('🔧 WebSocketService.sendMessage:', destination, message);
-    
+  unsubscribe(destination) {
+    // Find subscription by destination
+    for (const [id, subscription] of this.subscriptions.entries()) {
+      if (subscription.destination === destination) {
+        console.log(`🔌 WebSocketService: Unsubscribing from ${destination}`);
+        subscription.unsubscribe();
+        this.subscriptions.delete(id);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  setMessageHandler(handlerId, handler) {
+    console.log(`🔌 WebSocketService: Setting message handler for ${handlerId}`);
+    this.messageHandlers.set(handlerId, handler);
+  }
+
+  removeMessageHandler(handlerId) {
+    console.log(`🔌 WebSocketService: Removing message handler for ${handlerId}`);
+    this.messageHandlers.delete(handlerId);
+  }
+
+  // Send messages
+  sendMessage(destination, payload) {
     if (!this.client || !this.connected) {
-      console.error('🔧 WebSocketService.sendMessage: Not connected');
+      console.warn('🔌 WebSocketService: Cannot send message - not connected');
       return false;
     }
 
     try {
+      console.log(`🔌 WebSocketService: Sending message to ${destination}:`, payload);
       this.client.publish({
-        destination,
-        body: JSON.stringify(message)
+        destination: destination,
+        body: JSON.stringify(payload)
       });
-      console.log('🔧 WebSocketService.sendMessage: Message sent successfully');
       return true;
     } catch (error) {
-      console.error('🔧 WebSocketService.sendMessage: Failed to send:', error);
+      console.error(`🔌 WebSocketService: Failed to send message to ${destination}:`, error);
       return false;
     }
   }
 
-  joinChat(userInfo) {
-    console.log('🔧 WebSocketService.joinChat:', userInfo);
-    return this.sendMessage('/app/chat/join', userInfo);
+  // Chat-specific methods
+  joinChat(payload) {
+    return this.sendMessage('/app/chat/join', payload);
   }
 
-  isConnected() {
-    const isConnected = this.connected && this.client && this.client.connected;
-    console.log('🔧 WebSocketService.isConnected:', isConnected);
-    return isConnected;
-  }
-
-  disconnect() {
-    console.log('🔧 WebSocketService.disconnect: Called');
-    
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-
-    if (this.client && this.client.connected) {
-      try {
-        this.client.deactivate();
-      } catch (error) {
-        console.error('🔧 WebSocketService.disconnect: Error during disconnection:', error);
-      }
-    }
-    
-    this.connected = false;
-    this.client = null;
-    this.connectionPromise = null;
-    this.subscriptions.clear();
-  }
-
-  // Convenience methods
   sendChatMessage(content, taskId = null) {
     const destination = taskId ? `/app/chat/task/${taskId}` : '/app/chat/global';
     return this.sendMessage(destination, { content });
@@ -257,35 +227,82 @@ class DebugWebSocketService {
     return this.sendMessage('/app/users/status', { status });
   }
 
-  removeMessageHandler(type) {
-    console.log('🔧 WebSocketService.removeMessageHandler:', type);
-    this.messageHandlers.delete(type);
+  // Room-specific methods
+  sendRoomMessage(roomId, payload) {
+    return this.sendMessage(`/app/chat/room/${roomId}`, payload);
   }
 
-  handleDisconnection(onConnect, onError) {
-    // Simplified for debugging - don't auto-reconnect
-    console.log('🔧 WebSocketService.handleDisconnection: Connection lost');
+  sendDirectMessage(recipientId, payload) {
+    return this.sendMessage(`/app/chat/direct/${recipientId}`, payload);
   }
 
-  restoreSubscriptions() {
-    console.log('🔧 WebSocketService.restoreSubscriptions: Called');
-    // Simplified for debugging
+  sendRoomTypingIndicator(roomId, isTyping) {
+    return this.sendMessage(`/app/typing/room/${roomId}`, { isTyping });
   }
 
-  unsubscribe(destination) {
-    console.log('🔧 WebSocketService.unsubscribe:', destination);
-    const subInfo = this.subscriptions.get(destination);
-    if (subInfo && subInfo.subscription) {
-      try {
-        subInfo.subscription.unsubscribe();
-      } catch (error) {
-        console.error('🔧 WebSocketService.unsubscribe: Error:', error);
-      }
+  joinRoom(roomId) {
+    return this.sendMessage(`/app/rooms/join/${roomId}`, {});
+  }
+
+  leaveRoom(roomId) {
+    return this.sendMessage(`/app/rooms/leave/${roomId}`, {});
+  }
+
+  // Connection management
+  disconnect() {
+    console.log('🔌 WebSocketService: Disconnecting...');
+    this.connected = false;
+    this.connectionPromise = null;
+    this.clearSubscriptions();
+    this.messageHandlers.clear();
+    
+    if (this.client) {
+      this.client.deactivate();
+      this.client = null;
     }
-    this.subscriptions.delete(destination);
+  }
+
+  clearSubscriptions() {
+    console.log('🔌 WebSocketService: Clearing all subscriptions');
+    this.subscriptions.forEach((subscription, id) => {
+      try {
+        subscription.unsubscribe();
+      } catch (error) {
+        console.warn(`🔌 WebSocketService: Error unsubscribing ${id}:`, error);
+      }
+    });
+    this.subscriptions.clear();
+  }
+
+  isConnected() {
+    return this.connected && this.client && this.client.connected;
+  }
+
+  // Utility methods for debugging
+  getConnectionState() {
+    return {
+      connected: this.connected,
+      clientConnected: this.client?.connected || false,
+      subscriptionsCount: this.subscriptions.size,
+      handlersCount: this.messageHandlers.size,
+      reconnectAttempts: this.reconnectAttempts
+    };
+  }
+
+  listSubscriptions() {
+    const subs = {};
+    this.subscriptions.forEach((subscription, id) => {
+      subs[id] = subscription.destination;
+    });
+    return subs;
+  }
+
+  listHandlers() {
+    return Array.from(this.messageHandlers.keys());
   }
 }
 
-// Export singleton instance
-const DebugWebSocketServiceInstance = new DebugWebSocketService();
-export default DebugWebSocketServiceInstance;
+// Create singleton instance
+const webSocketService = new WebSocketService();
+
+export default webSocketService;

@@ -20,7 +20,7 @@ import java.time.temporal.ChronoUnit;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ChatRoomMemberDTO {
 
-    // === BASIC MEMBER INFORMATION ===
+    //  BASIC MEMBER INFORMATION 
     private Long id; // ChatRoomMember ID
     private Long chatRoomId;
     private Long userId;
@@ -30,7 +30,7 @@ public class ChatRoomMemberDTO {
     private String firstName;
     private String lastName;
 
-    // === ROLE AND PERMISSIONS ===
+    //  ROLE AND PERMISSIONS 
     private ChatRoomMember.MemberRole role;
     private String roleDisplayName;
     private Boolean canManageMembers;
@@ -38,7 +38,7 @@ public class ChatRoomMemberDTO {
     private Boolean canEditRoom;
     private Boolean canKickMembers;
 
-    // === MEMBERSHIP DETAILS ===
+    //  MEMBERSHIP DETAILS 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime joinedAt;
 
@@ -48,25 +48,25 @@ public class ChatRoomMemberDTO {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastActiveAt;
 
-    // === NOTIFICATION SETTINGS ===
+    //  NOTIFICATION SETTINGS 
     private Boolean isMuted;
     private Boolean notificationsEnabled;
     private String notificationLevel; // all, mentions, none
 
-    // === PRESENCE AND STATUS ===
+    //  PRESENCE AND STATUS 
     private String status; // online, away, busy, offline
     private String statusMessage;
     private Boolean isOnline;
     private String lastSeenDisplay;
 
-    // === DISPLAY INFORMATION ===
+    //  DISPLAY INFORMATION 
     private String avatar; // URL to avatar image
     private String initials; // For avatar fallback
     private String profileColor; // Color for avatar background
     private String timezone;
     private String locale;
 
-    // === ACTIVITY METRICS ===
+    //  ACTIVITY METRICS 
     private Long messageCount; // Messages sent in this room
     private Long unreadCount; // Unread messages for this member
     private Boolean hasUnreadMentions;
@@ -74,7 +74,7 @@ public class ChatRoomMemberDTO {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastMessageAt; // Last message sent by this member
 
-    // === ROOM-SPECIFIC INFO ===
+    //  ROOM-SPECIFIC INFO 
     private String joinMethod; // invited, added, joined
     private Long invitedBy; // User ID who invited this member
     private String invitedByName;
@@ -82,13 +82,13 @@ public class ChatRoomMemberDTO {
     private Boolean isAdmin;
     private Boolean isModerator;
 
-    // === DISPLAY HELPERS ===
+    //  DISPLAY HELPERS 
     private String memberSince; // Formatted join date
     private String displayStatus; // Combined status and message
     private Boolean showAsActive; // Whether to show as active member
     private Integer sortOrder; // For member list ordering
 
-    // === CONSTRUCTORS AND FACTORY METHODS ===
+    //  CONSTRUCTORS AND FACTORY METHODS 
 
     /**
      * Create ChatRoomMemberDTO from ChatRoomMember entity
@@ -179,7 +179,7 @@ public class ChatRoomMemberDTO {
         return dto;
     }
 
-    // === HELPER METHODS ===
+    //  HELPER METHODS 
 
     /**
      * Set permissions based on member role
@@ -348,7 +348,7 @@ public class ChatRoomMemberDTO {
         }
     }
 
-    // === CONVENIENCE METHODS ===
+    //  CONVENIENCE METHODS 
 
     public boolean isActiveRole() {
         return this.role == ChatRoomMember.MemberRole.OWNER ||
@@ -452,7 +452,7 @@ public class ChatRoomMemberDTO {
         return classes.toString();
     }
 
-    // === BUILDER PATTERN ENHANCEMENTS ===
+    //  BUILDER PATTERN ENHANCEMENTS 
 
     public static class ChatRoomMemberDTOBuilder {
 
@@ -503,7 +503,7 @@ public class ChatRoomMemberDTO {
         }
     }
 
-    // === SERIALIZATION HELPERS ===
+    //  SERIALIZATION HELPERS 
 
     /**
      * Get minimal version for member lists
