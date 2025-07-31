@@ -27,6 +27,8 @@ import { usersAPI, teamAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import InviteMemberModal from '../components/InviteMemberModal';
+import ChatWidget from '../components/chat/ChatWidget';
+
 
 // A modal component for editing user roles and status
 const EditUserModal = ({ member, onClose, onSave }) => {
@@ -1231,6 +1233,8 @@ const Team = () => {
           onInviteSent={fetchTeamMembers}
         />
       )}
+       {/* Chat Widget */}
+      <ChatWidget />
     </div>
   );
 };

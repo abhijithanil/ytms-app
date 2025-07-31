@@ -4,6 +4,7 @@ import api, { usersAPI, L } from "../services/api";
 import toast from "react-hot-toast";
 import { User, Lock, Bell, Camera, Shield, AlertCircle } from "lucide-react";
 import ChannelManagement from "../components/ChannelManagement";
+import ChatWidget from '../components/chat/ChatWidget';
 
 const MfaSetupModal = ({
   isOpen,
@@ -604,6 +605,9 @@ const Settings = () => {
         userId={user?.id}
         onMfaEnabled={handleMfaEnabled}
       />
+
+      {/* Chat Widget */}
+      <ChatWidget />
     </div>
   );
 };

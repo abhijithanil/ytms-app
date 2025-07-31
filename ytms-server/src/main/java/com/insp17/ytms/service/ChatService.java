@@ -48,7 +48,7 @@ public class ChatService {
 
         String senderName = "";
         if (sender.getFirstName() != null && sender.getLastName() != null) {
-            senderName = sender.getFirstName() + " " + sender.getLastName();
+            senderName = sender.getFirstName();
         } else {
             senderName = sender.getUsername();
         }
@@ -87,11 +87,14 @@ public class ChatService {
         List<ChatMessage> messages;
 
         if (taskId != null) {
-            messages = chatMessageRepository.findByTaskIdOrderByCreatedAtDesc(taskId, pageRequest);
+            // Use the new ascending order method
+            messages = chatMessageRepository.findByTaskIdOrderByCreatedAtAsc(taskId, pageRequest);
         } else {
-            messages = chatMessageRepository.findGlobalChatMessages(pageRequest);
+            // Use the new ascending order method for global messages
+            messages = chatMessageRepository.findGlobalChatMessagesOrderByCreatedAtAsc(pageRequest);
         }
 
+        // Convert to DTOs - no need to reverse since they're already in chronological order
         return messages.stream()
                 .map(ChatMessageDTO::new)
                 .collect(Collectors.toList());

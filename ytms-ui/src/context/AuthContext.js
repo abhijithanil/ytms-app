@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
-import api,  { authAPI } from "../services/api";
+import api, { authAPI } from "../services/api";
 import toast from "react-hot-toast";
 
 const AuthContext = createContext();
@@ -14,6 +14,7 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const fetchCurrentUser = async () => {
@@ -24,15 +25,17 @@ export const AuthProvider = ({ children }) => {
       console.error("Failed to fetch current user:", error);
       localStorage.removeItem("token");
       delete api.defaults.headers.common["Authorization"];
+      setToken(null);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    const storedToken = localStorage.getItem("token");
+    if (storedToken && storedToken !== "undefined" && storedToken !== "null") {
+      setToken(storedToken);
+      api.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
       fetchCurrentUser();
     } else {
       setLoading(false);
@@ -54,6 +57,7 @@ export const AuthProvider = ({ children }) => {
 
       localStorage.setItem("token", accessToken);
       api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+      setToken(accessToken);
       setUser(userData);
 
       toast.success(`Welcome back, ${userData.username}!`);
@@ -72,6 +76,7 @@ export const AuthProvider = ({ children }) => {
 
       localStorage.setItem("token", accessToken);
       api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+      setToken(accessToken);
       setUser(userData);
 
       toast.success(`Welcome back, ${userData.username}!`);
@@ -98,12 +103,14 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem("token");
     delete api.defaults.headers.common["Authorization"];
+    setToken(null);
     setUser(null);
     toast.success("Logged out successfully");
   };
 
   const value = {
     user,
+    token,
     loading,
     login,
     loginWithMfa,
@@ -112,6 +119,7 @@ export const AuthProvider = ({ children }) => {
     fetchCurrentUser,
     isAdmin: user?.role === "ADMIN",
     isEditor: user?.role === "EDITOR",
+    isAuthenticated: !!user && !!token,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

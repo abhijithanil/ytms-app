@@ -6,21 +6,29 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
 import java.util.List;
 
 @Repository
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> {
 
-    List<ChatMessage> findAllByOrderByCreatedAtDesc(Pageable pageable);
+    // Changed from Desc to Asc for chronological order (oldest first)
+    List<ChatMessage> findByTaskIdOrderByCreatedAtAsc(Long taskId, Pageable pageable);
 
-    List<ChatMessage> findByTaskIdOrderByCreatedAtDesc(@Param("taskId") Long taskId, Pageable pageable);
+    // Add this method for global messages in ascending order
+    @Query("SELECT m FROM ChatMessage m WHERE m.taskId IS NULL ORDER BY m.createdAt ASC")
+    List<ChatMessage> findGlobalChatMessagesOrderByCreatedAtAsc(Pageable pageable);
 
-    @Query("SELECT c FROM ChatMessage c WHERE c.taskId IS NULL ORDER BY c.createdAt DESC")
+    // If you have existing methods with Desc, keep them for backwards compatibility
+    // but add the new Asc versions above
+    List<ChatMessage> findByTaskIdOrderByCreatedAtDesc(Long taskId, Pageable pageable);
+
+    @Query("SELECT m FROM ChatMessage m WHERE m.taskId IS NULL ORDER BY m.createdAt DESC")
     List<ChatMessage> findGlobalChatMessages(Pageable pageable);
 
-    @Query("SELECT COUNT(c) FROM ChatMessage c WHERE c.taskId = :taskId")
-    long countByTaskId(@Param("taskId") Long taskId);
+    // Count methods remain the same
+    long countByTaskId(Long taskId);
 
-    @Query("SELECT COUNT(c) FROM ChatMessage c WHERE c.taskId IS NULL")
+    @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.taskId IS NULL")
     long countGlobalMessages();
 }

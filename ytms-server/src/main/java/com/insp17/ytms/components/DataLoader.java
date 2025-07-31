@@ -35,7 +35,7 @@
 //        // Create admin user
 //        User admin = new User();
 //        admin.setUsername("admin");
-//        admin.setFistName("Abhi");
+//        admin.setFirstName("Abhi");
 //        admin.setLastName("Anil");
 //        admin.setEmail("admin@example.com");
 //        admin.setPassword(passwordEncoder.encode("password123"));
@@ -48,7 +48,7 @@
 //        User editor1 = new User();
 //        editor1.setUsername("editor1");
 //        editor1.setEmail("editor1@example.com");
-//        editor1.setFistName("Achu");
+//        editor1.setFirstName("Achu");
 //        editor1.setLastName("Abhi");
 //        editor1.setUserStatus(UserStatus.ACTIVE);
 //        editor1.setPassword(passwordEncoder.encode("password123"));
@@ -59,7 +59,7 @@
 //        User editor2 = new User();
 //        editor2.setUsername("editor2");
 //        editor2.setEmail("editor2@example.com");
-//        editor2.setFistName("Arjun");
+//        editor2.setFirstName("Arjun");
 //        editor2.setLastName("S");
 //        editor2.setUserStatus(UserStatus.ACTIVE);
 //        editor2.setPassword(passwordEncoder.encode("password123"));
@@ -71,7 +71,7 @@
 //        User viewer = new User();
 //        viewer.setUsername("viewer1");
 //        viewer.setEmail("viewer1@example.com");
-//        viewer.setFistName("Niranjan");
+//        viewer.setFirstName("Niranjan");
 //        viewer.setLastName("S");
 //        viewer.setUserStatus(UserStatus.ACTIVE);
 //        viewer.setPassword(passwordEncoder.encode("password123"));

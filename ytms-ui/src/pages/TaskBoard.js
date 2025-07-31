@@ -15,6 +15,8 @@ import {
 import { tasksAPI } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import ChatWidget from '../components/chat/ChatWidget';
+
 
 const TaskBoard = () => {
   const navigate = useNavigate();
@@ -340,6 +342,8 @@ const TaskBoard = () => {
           </div>
         </>
       )}
+      {/* Chat Widget */}
+      <ChatWidget />
     </div>
   );
 };

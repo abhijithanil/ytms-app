@@ -26,6 +26,8 @@ import { tasksAPI, usersAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import axios from "axios";
+import ChatWidget from '../components/chat/ChatWidget';
+
 
 const { isCancel, CancelToken } = axios;
 
@@ -1118,7 +1120,10 @@ useEffect(() => {
           </button>
         </div>
       </form>
+      {/* Chat Widget */}
+      <ChatWidget />
     </div>
+     
   );
 };
 

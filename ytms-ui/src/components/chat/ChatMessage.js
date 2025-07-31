@@ -1,7 +1,8 @@
 import React from 'react';
 import { formatDistanceToNow } from 'date-fns';
+import MessageWithMentions from './MessageWithMentions';
 
-const ChatMessage = ({ message, isOwn = false }) => {
+const ChatMessage = ({ message, isOwn = false, currentUserId, onlineUsers = [] }) => {
   const getInitials = (name, username) => {
     if (name && name.includes(' ')) {
       const parts = name.split(' ');
@@ -19,6 +20,18 @@ const ChatMessage = ({ message, isOwn = false }) => {
     }
   };
 
+  // Check if current user is mentioned in this message
+  const isUserMentioned = () => {
+    if (!currentUserId || !message.content || !Array.isArray(onlineUsers)) return false;
+    const currentUser = onlineUsers.find(user => user && user.userId === currentUserId);
+    if (!currentUser) return false;
+    
+    const mentionRegex = new RegExp(`@${currentUser.username}\\b`, 'i');
+    return mentionRegex.test(message.content);
+  };
+
+  const userMentioned = isUserMentioned();
+
   if (message.type === 'JOIN' || message.type === 'LEAVE') {
     return (
       <div className="flex justify-center my-2">
@@ -30,7 +43,9 @@ const ChatMessage = ({ message, isOwn = false }) => {
   }
 
   return (
-    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} mb-4`}>
+    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} mb-4 ${
+      userMentioned ? 'bg-blue-50 -mx-2 px-2 py-1 rounded-lg border-l-2 border-blue-500' : ''
+    }`}>
       <div className={`flex ${isOwn ? 'flex-row-reverse' : 'flex-row'} space-x-2 max-w-[70%]`}>
         {!isOwn && (
           <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
@@ -47,6 +62,11 @@ const ChatMessage = ({ message, isOwn = false }) => {
               <span className="text-xs text-gray-500">
                 {formatTime(message.createdAt)}
               </span>
+              {userMentioned && (
+                <span className="text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded-full">
+                  mentioned you
+                </span>
+              )}
             </div>
           )}
           
@@ -54,12 +74,18 @@ const ChatMessage = ({ message, isOwn = false }) => {
             className={`px-4 py-2 rounded-2xl ${
               isOwn
                 ? 'bg-blue-500 text-white rounded-br-md'
+                : userMentioned
+                ? 'bg-white text-gray-900 rounded-bl-md border border-blue-200'
                 : 'bg-gray-100 text-gray-900 rounded-bl-md'
             }`}
           >
-            <p className="text-sm whitespace-pre-wrap break-words">
-              {message.content}
-            </p>
+            <div className="text-sm">
+              <MessageWithMentions 
+                content={message.content}
+                currentUserId={currentUserId}
+                onlineUsers={onlineUsers}
+              />
+            </div>
           </div>
           
           {isOwn && (

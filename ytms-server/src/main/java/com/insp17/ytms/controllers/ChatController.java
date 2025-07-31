@@ -4,15 +4,19 @@ import com.insp17.ytms.dtos.*;
 import com.insp17.ytms.entity.User;
 import com.insp17.ytms.service.ChatService;
 import com.insp17.ytms.service.UserService;
-import com.insp17.ytms.service.VideoTaskService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import java.security.Principal;
 import java.util.List;
 import java.util.Map;
@@ -28,182 +32,153 @@ public class ChatController {
     @Autowired
     private UserService userService;
 
-    @Autowired
-    private VideoTaskService videoTaskService;
-
-    // WebSocket message mappings
-    @MessageMapping("/chat.send")
-    public void sendMessage(@Payload Map<String, Object> chatMessage,
-                            SimpMessageHeaderAccessor headerAccessor,
-                            Principal principal) {
-        try {
-            if (principal == null) {
-                log.warn("Unauthenticated user trying to send message");
-                return;
+    // Helper method to extract UserPrincipal from Principal
+    private UserPrincipal getUserPrincipalFromPrincipal(Principal principal) {
+        if (principal instanceof UsernamePasswordAuthenticationToken) {
+            UsernamePasswordAuthenticationToken auth = (UsernamePasswordAuthenticationToken) principal;
+            if (auth.getPrincipal() instanceof UserPrincipal) {
+                return (UserPrincipal) auth.getPrincipal();
             }
-
-            String content = (String) chatMessage.get("content");
-            if (content == null || content.trim().isEmpty()) {
-                log.warn("Empty message content");
-                return;
-            }
-
-            Long taskId = null;
-            if (chatMessage.get("taskId") != null) {
-                try {
-                    taskId = Long.valueOf(chatMessage.get("taskId").toString());
-                } catch (NumberFormatException e) {
-                    log.warn("Invalid taskId format: {}", chatMessage.get("taskId"));
-                    return;
-                }
-            }
-
-            User sender = userService.getUserByUsernameEntity(principal.getName());
-
-            // Verify task access if taskId is provided
-            if (taskId != null && !videoTaskService.canUserAccessTask(taskId, sender)) {
-                log.warn("User {} denied access to task chat {}", sender.getUsername(), taskId);
-                return;
-            }
-
-            chatService.sendMessage(content.trim(), sender, taskId);
-
-        } catch (Exception e) {
-            log.error("Error sending chat message", e);
         }
+        return null;
     }
 
-    @MessageMapping("/chat.join")
-    public void addUser(@Payload Map<String, Object> userInfo,
-                        SimpMessageHeaderAccessor headerAccessor,
-                        Principal principal) {
-        try {
-            if (principal == null) {
-                log.warn("Unauthenticated user trying to join chat");
-                return;
-            }
-
-            String sessionId = headerAccessor.getSessionId();
-            User user = userService.getUserByUsernameEntity(principal.getName());
-
-            chatService.addOnlineUser(sessionId, user);
-            log.info("User {} joined chat with session {}", user.getUsername(), sessionId);
-
-        } catch (Exception e) {
-            log.error("Error adding user to chat", e);
-        }
-    }
-
-    @MessageMapping("/chat.typing")
-    public void handleTyping(@Payload TypingIndicatorDTO typingIndicator,
-                             Principal principal) {
-        try {
-            if (principal == null) {
-                return;
-            }
-
-            User user = userService.getUserByUsernameEntity(principal.getName());
-
-            // Verify task access if taskId is provided
-            if (typingIndicator.getTaskId() != null &&
-                    !videoTaskService.canUserAccessTask(typingIndicator.getTaskId(), user)) {
-                return;
-            }
-
-            typingIndicator.setUserId(user.getId());
-            typingIndicator.setUsername(user.getUsername());
-
-            chatService.broadcastTypingIndicator(typingIndicator);
-
-        } catch (Exception e) {
-            log.error("Error handling typing indicator", e);
-        }
-    }
-
-    @MessageMapping("/chat.status")
-    public void updateUserStatus(@Payload Map<String, String> statusUpdate,
-                                 Principal principal) {
-        try {
-            if (principal == null) {
-                return;
-            }
-
-            String status = statusUpdate.get("status");
-            if (status == null || (!status.equals("online") && !status.equals("away") && !status.equals("busy"))) {
-                log.warn("Invalid status: {}", status);
-                return;
-            }
-
-            UserResponse user = userService.getUserByUsername(principal.getName());
-            chatService.updateUserStatus(user.getId(), status);
-
-        } catch (Exception e) {
-            log.error("Error updating user status", e);
-        }
-    }
-
-    // REST endpoints
+    // REST endpoints for chat history and online users
     @GetMapping("/history")
-    @PreAuthorize("hasAnyRole('ADMIN', 'EDITOR', 'VIEWER')")
     public ResponseEntity<List<ChatMessageDTO>> getChatHistory(
-            @RequestParam(required = false) Long taskId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size,
-            @CurrentUser UserPrincipal userPrincipal) {
-
-        try {
-            // Verify task access if taskId is provided
-            if (taskId != null) {
-                User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
-                if (!videoTaskService.canUserAccessTask(taskId, user)) {
-                    return ResponseEntity.status(403).build();
-                }
-            }
-
-            List<ChatMessageDTO> messages = chatService.getChatHistory(taskId, page, size);
-            return ResponseEntity.ok(messages);
-        } catch (Exception e) {
-            log.error("Error fetching chat history", e);
-            return ResponseEntity.status(500).build();
-        }
+            @RequestParam(required = false) Long taskId) {
+        List<ChatMessageDTO> messages = chatService.getChatHistory(taskId, page, size);
+        return ResponseEntity.ok(messages);
     }
 
     @GetMapping("/online-users")
-    @PreAuthorize("hasAnyRole('ADMIN', 'EDITOR', 'VIEWER')")
-    public ResponseEntity<List<OnlineUserDTO>> getOnlineUsers(@CurrentUser UserPrincipal userPrincipal) {
+    public ResponseEntity<List<OnlineUserDTO>> getOnlineUsers() {
+        List<OnlineUserDTO> users = chatService.getOnlineUsers();
+        return ResponseEntity.ok(users);
+    }
+
+    // WebSocket message handlers
+    @MessageMapping("/chat/join")
+    public void joinChat(Map<String, Object> payload, SimpMessageHeaderAccessor headerAccessor, Principal principal) {
         try {
-            List<OnlineUserDTO> onlineUsers = chatService.getOnlineUsers();
-            return ResponseEntity.ok(onlineUsers);
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                User userById = userService.getUserByIdPrivateUse(userPrincipal.getId());
+                String sessionId = headerAccessor.getSessionId();
+
+                chatService.addOnlineUser(sessionId, userById);
+
+                log.info("User {} joined chat with session {}", userPrincipal.getUsername(), sessionId);
+            } else {
+                log.warn("Join chat attempt without valid authentication - principal: {}", principal);
+            }
         } catch (Exception e) {
-            log.error("Error fetching online users", e);
-            return ResponseEntity.status(500).build();
+            log.error("Error handling chat join: {}", e.getMessage(), e);
         }
     }
 
-    @GetMapping("/stats")
-    @PreAuthorize("hasAnyRole('ADMIN', 'EDITOR', 'VIEWER')")
-    public ResponseEntity<Map<String, Object>> getChatStats(
-            @RequestParam(required = false) Long taskId,
-            @CurrentUser UserPrincipal userPrincipal) {
-
+    @MessageMapping("/chat/global")
+    public void sendGlobalMessage(Map<String, Object> payload, Principal principal) {
         try {
-            // Verify task access if taskId is provided
-            if (taskId != null) {
-                User user = userService.getUserByIdPrivateUse(userPrincipal.getId());
-                if (!videoTaskService.canUserAccessTask(taskId, user)) {
-                    return ResponseEntity.status(403).build();
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                User userById = userService.getUserByIdPrivateUse(userPrincipal.getId());
+                String content = (String) payload.get("content");
+                if (content != null && !content.trim().isEmpty()) {
+                    chatService.sendMessage(content, userById, null);
+                    log.info("Global message sent by user: {}", userPrincipal.getUsername());
                 }
+            } else {
+                log.warn("Message send attempt without valid authentication - principal: {}", principal);
             }
-
-            Map<String, Object> stats = Map.of(
-                    "messageCount", chatService.getMessageCount(taskId),
-                    "onlineUsersCount", chatService.getOnlineUsers().size()
-            );
-
-            return ResponseEntity.ok(stats);
         } catch (Exception e) {
-            log.error("Error fetching chat stats", e);
-            return ResponseEntity.status(500).build();
+            log.error("Error handling global message: {}", e.getMessage(), e);
+        }
+    }
+
+    @MessageMapping("/chat/task/{taskId}")
+    public void sendTaskMessage(@DestinationVariable Long taskId, Map<String, Object> payload, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                User userById = userService.getUserByIdPrivateUse(userPrincipal.getId());
+
+                String content = (String) payload.get("content");
+                if (content != null && !content.trim().isEmpty()) {
+                    chatService.sendMessage(content, userById, taskId);
+                    log.info("Task message sent by user: {} for task: {}", userPrincipal.getUsername(), taskId);
+                }
+            } else {
+                log.warn("Task message send attempt without valid authentication - principal: {}", principal);
+            }
+        } catch (Exception e) {
+            log.error("Error handling task message: {}", e.getMessage(), e);
+        }
+    }
+
+    @MessageMapping("/typing/global")
+    public void handleGlobalTyping(Map<String, Object> payload, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                Boolean isTyping = (Boolean) payload.get("isTyping");
+                if (isTyping != null) {
+                    TypingIndicatorDTO typingIndicator = new TypingIndicatorDTO();
+                    typingIndicator.setUserId(userPrincipal.getId());
+                    typingIndicator.setUsername(userPrincipal.getUsername());
+                    typingIndicator.setTyping(isTyping); // Changed from setTyping to setIsTyping
+                    typingIndicator.setTaskId(null);
+
+                    chatService.broadcastTypingIndicator(typingIndicator);
+                }
+            } else {
+                log.warn("Global typing attempt without valid authentication - principal: {}", principal);
+            }
+        } catch (Exception e) {
+            log.error("Error handling global typing indicator: {}", e.getMessage(), e);
+        }
+    }
+
+    @MessageMapping("/typing/task/{taskId}")
+    public void handleTaskTyping(@DestinationVariable Long taskId, Map<String, Object> payload, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                Boolean isTyping = (Boolean) payload.get("isTyping");
+                if (isTyping != null) {
+                    TypingIndicatorDTO typingIndicator = new TypingIndicatorDTO();
+                    typingIndicator.setUserId(userPrincipal.getId());
+                    typingIndicator.setUsername(userPrincipal.getUsername());
+                    typingIndicator.setTyping(isTyping); // Changed from setTyping to setIsTyping
+                    typingIndicator.setTaskId(taskId);
+
+                    chatService.broadcastTypingIndicator(typingIndicator);
+                }
+            } else {
+                log.warn("Task typing attempt without valid authentication - principal: {}", principal);
+            }
+        } catch (Exception e) {
+            log.error("Error handling task typing indicator: {}", e.getMessage(), e);
+        }
+    }
+
+    @MessageMapping("/users/status")
+    public void updateUserStatus(Map<String, Object> payload, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                String status = (String) payload.get("status");
+                if (status != null) {
+                    chatService.updateUserStatus(userPrincipal.getId(), status);
+                    log.info("User {} updated status to: {}", userPrincipal.getUsername(), status);
+                }
+            } else {
+                log.warn("Status update attempt without valid authentication - principal: {}", principal);
+            }
+        } catch (Exception e) {
+            log.error("Error handling status update: {}", e.getMessage(), e);
         }
     }
 }

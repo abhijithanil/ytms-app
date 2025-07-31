@@ -1,9 +1,6 @@
 package com.insp17.ytms.service;
 
-import com.insp17.ytms.dtos.UpdatePasswordRequest;
-import com.insp17.ytms.dtos.UpdateProfileRequest;
-import com.insp17.ytms.dtos.UpdateUserRequest;
-import com.insp17.ytms.dtos.UserResponse;
+import com.insp17.ytms.dtos.*;
 import com.insp17.ytms.entity.*;
 import com.insp17.ytms.repository.*;
 import jakarta.transaction.Transactional;
@@ -85,7 +82,7 @@ public class UserService {
     }
 
     public User getUserByUsernameEntity(String username) {
-       return userRepository.findByUsername(username)
+        return userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
 
@@ -273,5 +270,11 @@ public class UserService {
 
     public boolean hasAnyUsers() {
         return userRepository.count() > 0;
+    }
+
+    public UserPrincipal getUserPrincipal(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return UserPrincipal.create(user);
     }
 }

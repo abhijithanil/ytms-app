@@ -18,7 +18,7 @@ public class UserResponse {
     private UserRole role;
     private LocalDateTime createdAt;
     private UserStatus userStatus;
-    private String fistName;
+    private String firstName;
     private String lastName;
     @Transient
     private String secret;
@@ -33,7 +33,7 @@ public class UserResponse {
         this.role = user.getRole();
         this.createdAt = user.getCreatedAt();
         this.userStatus = user.getUserStatus();
-        this.fistName = user.getFirstName();
+        this.firstName = user.getFirstName();
         this.lastName = user.getLastName();
         this.secret = user.getSecret();
         this.isSuperAdmin = user.isSuperAdmin();

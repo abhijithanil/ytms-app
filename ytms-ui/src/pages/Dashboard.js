@@ -12,6 +12,7 @@ import { dashboardAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import ChatWidget from '../components/chat/ChatWidget';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -274,6 +275,9 @@ const Dashboard = () => {
           )}
         </div>
       </div>
+
+      {/* Chat Widget */}
+      <ChatWidget />
     </div>
   );
 };

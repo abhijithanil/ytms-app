@@ -1,12 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, MessageCircle, Wifi, WifiOff, Settings } from 'lucide-react';
-import { useChat } from '../../hook/useChat';
-import { useAuth } from '../../context/AuthContext';
-import ChatMessage from './ChatMessage';
-import TypingIndicator from './TypingIndicator';
-import OnlineUsers from './OnlineUsers';
+import React, { useState, useRef, useEffect } from "react";
+import { MessageCircle, Wifi, WifiOff, Settings } from "lucide-react";
+import { useChat } from "../../hook/useChat";
+import { useAuth } from "../../context/AuthContext";
+import ChatMessage from "./ChatMessage";
+import TypingIndicator from "./TypingIndicator";
+import OnlineUsers from "./OnlineUsers";
+import UserMentionInput from "./UserMentionInput";
 
-const ChatPanel = ({ taskId = null, className = '', showOnlineUsers = true }) => {
+const ChatPanel = ({
+  taskId = null,
+  className = "",
+  showOnlineUsers = true,
+}) => {
   const { user } = useAuth();
   const {
     messages,
@@ -19,61 +24,45 @@ const ChatPanel = ({ taskId = null, className = '', showOnlineUsers = true }) =>
     startTyping,
     stopTyping,
     updateUserStatus,
-    reconnect
+    reconnect,
   } = useChat(taskId);
 
-  const [newMessage, setNewMessage] = useState('');
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const messagesEndRef = useRef(null);
-  const textareaRef = useRef(null);
   const statusMenuRef = useRef(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   // Close status menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (statusMenuRef.current && !statusMenuRef.current.contains(event.target)) {
+      if (
+        statusMenuRef.current &&
+        !statusMenuRef.current.contains(event.target)
+      ) {
         setShowStatusMenu(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
+  // Debug logging
+  useEffect(() => {
+    console.log("ChatPanel state:", {
+      connected,
+      loading,
+      error,
+      messagesCount: messages.length,
+    });
+  }, [connected, loading, error, messages.length]);
 
-    const success = sendMessage(newMessage);
-    if (success) {
-      setNewMessage('');
-      stopTyping();
-      // Reset textarea height
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
-    }
-  };
-
-  const handleInputChange = (e) => {
-    setNewMessage(e.target.value);
-    startTyping();
-    
-    // Auto-resize textarea
-    e.target.style.height = 'auto';
-    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage(e);
-    }
+  const handleSendMessage = (content) => {
+    return sendMessage(content);
   };
 
   const handleStatusChange = (status) => {
@@ -82,9 +71,11 @@ const ChatPanel = ({ taskId = null, className = '', showOnlineUsers = true }) =>
   };
 
   const getConnectionStatus = () => {
-    if (loading) return { color: 'text-yellow-600', text: 'Connecting...', icon: Wifi };
-    if (connected) return { color: 'text-green-600', text: 'Connected', icon: Wifi };
-    return { color: 'text-red-600', text: 'Disconnected', icon: WifiOff };
+    if (loading)
+      return { color: "text-yellow-600", text: "Connecting...", icon: Wifi };
+    if (connected)
+      return { color: "text-green-600", text: "Connected", icon: Wifi };
+    return { color: "text-red-600", text: "Disconnected", icon: WifiOff };
   };
 
   const status = getConnectionStatus();
@@ -97,10 +88,10 @@ const ChatPanel = ({ taskId = null, className = '', showOnlineUsers = true }) =>
         <div className="flex items-center space-x-2">
           <MessageCircle className="h-5 w-5 text-blue-500" />
           <h2 className="font-semibold text-gray-900">
-            {taskId ? 'Task Chat' : 'Team Chat'}
+            {taskId ? "Task Chat" : "Team Chat"}
           </h2>
         </div>
-        
+
         <div className="flex items-center space-x-4">
           {/* Status Menu */}
           <div className="relative" ref={statusMenuRef}>
@@ -108,6 +99,7 @@ const ChatPanel = ({ taskId = null, className = '', showOnlineUsers = true }) =>
               onClick={() => setShowStatusMenu(!showStatusMenu)}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               title="Change status"
+              disabled={!connected}
             >
               <Settings className="h-4 w-4 text-gray-600" />
             </button>
@@ -116,21 +108,21 @@ const ChatPanel = ({ taskId = null, className = '', showOnlineUsers = true }) =>
               <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
                 <div className="py-1">
                   <button
-                    onClick={() => handleStatusChange('online')}
+                    onClick={() => handleStatusChange("online")}
                     className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   >
                     <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
                     Online
                   </button>
                   <button
-                    onClick={() => handleStatusChange('away')}
+                    onClick={() => handleStatusChange("away")}
                     className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   >
                     <div className="w-3 h-3 bg-yellow-500 rounded-full mr-3"></div>
                     Away
                   </button>
                   <button
-                    onClick={() => handleStatusChange('busy')}
+                    onClick={() => handleStatusChange("busy")}
                     className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   >
                     <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
@@ -167,13 +159,33 @@ const ChatPanel = ({ taskId = null, className = '', showOnlineUsers = true }) =>
             {error && (
               <div className="mb-4 p-3 bg-red-100 border border-red-200 rounded-lg text-red-700 text-sm">
                 {error}
+                {!connected && (
+                  <button
+                    onClick={reconnect}
+                    className="ml-2 text-red-800 underline hover:no-underline"
+                  >
+                    Try reconnecting
+                  </button>
+                )}
               </div>
             )}
-            
+
             {loading ? (
               <div className="flex justify-center items-center h-32">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                 <span className="ml-2 text-gray-600">Loading chat...</span>
+              </div>
+            ) : !connected ? (
+              <div className="flex flex-col items-center justify-center h-32 text-gray-500">
+                <WifiOff className="h-12 w-12 mb-2 text-red-400" />
+                <p className="text-lg font-medium">Connection Lost</p>
+                <p className="text-sm">Unable to connect to chat</p>
+                <button
+                  onClick={reconnect}
+                  className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                >
+                  Reconnect
+                </button>
               </div>
             ) : messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-32 text-gray-500">
@@ -183,11 +195,13 @@ const ChatPanel = ({ taskId = null, className = '', showOnlineUsers = true }) =>
               </div>
             ) : (
               <div className="space-y-1">
-                {messages.map((message) => (
+                {messages.map((message, index) => (
                   <ChatMessage
-                    key={message.id}
+                    key={`${message.id}-${message.createdAt}-${index}`}
                     message={message}
                     isOwn={message.senderId === user?.id}
+                    currentUserId={user?.id}
+                    onlineUsers={onlineUsers}
                   />
                 ))}
                 <TypingIndicator users={typingUsers} />
@@ -198,29 +212,13 @@ const ChatPanel = ({ taskId = null, className = '', showOnlineUsers = true }) =>
 
           {/* Message Input */}
           <div className="p-4 bg-white border-t border-gray-200 flex-shrink-0">
-            <form onSubmit={handleSendMessage} className="flex space-x-2">
-              <div className="flex-1">
-                <textarea
-                  ref={textareaRef}
-                  value={newMessage}
-                  onChange={handleInputChange}
-                  onKeyPress={handleKeyPress}
-                  onBlur={stopTyping}
-                  placeholder={connected ? "Type a message..." : "Connecting..."}
-                  disabled={!connected}
-                  rows={1}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-                  style={{ maxHeight: '120px' }}
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={!connected || !newMessage.trim()}
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-              >
-                <Send className="h-4 w-4" />
-              </button>
-            </form>
+            <UserMentionInput
+              onSendMessage={handleSendMessage}
+              onStartTyping={startTyping}
+              onStopTyping={stopTyping}
+              connected={connected}
+              onlineUsers={onlineUsers}
+            />
           </div>
         </div>
 
