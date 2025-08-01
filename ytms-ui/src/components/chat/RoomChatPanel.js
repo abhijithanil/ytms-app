@@ -13,7 +13,7 @@ import {
   UserPlus,
   Search
 } from 'lucide-react';
-import { useRoomChat } from '../../hook/useRoomChat';
+import { useRoomChat } from '../../hook/useRoomChat'; // Fixed: use named import
 import { useAuth } from '../../context/AuthContext';
 import ChatMessage from './ChatMessage';
 import TypingIndicator from './TypingIndicator';
@@ -57,7 +57,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   };
 
   const getRoomIcon = () => {
-    switch (room.roomType) {
+    switch (room?.roomType) {
       case 'DIRECT_MESSAGE':
         return <User className="h-5 w-5" />;
       case 'GROUP_CHAT':
@@ -72,32 +72,32 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   };
 
   const getRoomTitle = () => {
-    if (room.roomType === 'DIRECT_MESSAGE') {
+    if (room?.roomType === 'DIRECT_MESSAGE') {
       return room.dmParticipantName || room.dmParticipantUsername || 'Direct Message';
     }
-    return room.displayName || room.roomName || 'Unknown Room';
+    return room?.displayName || room?.roomName || 'Unknown Room';
   };
 
   const getRoomSubtitle = () => {
-    if (room.roomType === 'DIRECT_MESSAGE') {
+    if (room?.roomType === 'DIRECT_MESSAGE') {
       const status = room.dmParticipantStatus || 'offline';
       return `@${room.dmParticipantUsername} • ${status}`;
     }
     
-    if (room.roomType === 'GROUP_CHAT') {
+    if (room?.roomType === 'GROUP_CHAT') {
       const memberText = room.memberCount === 1 ? 'member' : 'members';
       return `${room.memberCount || 0} ${memberText}`;
     }
     
-    if (room.roomType === 'TASK_CHAT') {
+    if (room?.roomType === 'TASK_CHAT') {
       return `Task Chat • ${room.taskTitle || `Task #${room.taskId}`}`;
     }
     
-    return room.roomDescription || 'General chat';
+    return room?.roomDescription || 'General chat';
   };
 
   const getStatusIndicator = () => {
-    if (room.roomType === 'DIRECT_MESSAGE' && room.dmParticipantStatus) {
+    if (room?.roomType === 'DIRECT_MESSAGE' && room.dmParticipantStatus) {
       const colors = {
         online: 'bg-green-500',
         away: 'bg-yellow-500',
@@ -153,7 +153,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
 
           <div className="flex items-center space-x-2">
             {/* Room Actions */}
-            {room.roomType === 'DIRECT_MESSAGE' && (
+            {room?.roomType === 'DIRECT_MESSAGE' && (
               <>
                 <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                   <Phone className="h-5 w-5" />
@@ -164,7 +164,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
               </>
             )}
             
-            {room.roomType === 'GROUP_CHAT' && (
+            {room?.roomType === 'GROUP_CHAT' && (
               <button
                 onClick={() => setShowMembersModal(true)}
                 className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -231,13 +231,13 @@ const RoomChatPanel = ({ room, currentUserId }) => {
           <div className="flex flex-col items-center justify-center h-32 text-gray-500">
             {getRoomIcon()}
             <p className="text-lg font-medium mt-2">
-              {room.roomType === 'DIRECT_MESSAGE' 
+              {room?.roomType === 'DIRECT_MESSAGE' 
                 ? `Start a conversation with ${getRoomTitle()}`
                 : `Welcome to ${getRoomTitle()}`
               }
             </p>
             <p className="text-sm">
-              {room.roomType === 'DIRECT_MESSAGE'
+              {room?.roomType === 'DIRECT_MESSAGE'
                 ? 'Send a message to get the conversation started!'
                 : 'This is the beginning of your conversation in this room.'
               }
@@ -273,7 +273,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       </div>
 
       {/* Room Members Modal */}
-      {showMembersModal && room.roomType === 'GROUP_CHAT' && (
+      {showMembersModal && room?.roomType === 'GROUP_CHAT' && (
         <RoomMembersModal
           room={room}
           members={members}
@@ -309,7 +309,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                   </div>
                 </div>
                 
-                {room.roomDescription && (
+                {room?.roomDescription && (
                   <p className="text-sm text-gray-600 mb-4">{room.roomDescription}</p>
                 )}
               </div>
@@ -318,13 +318,13 @@ const RoomChatPanel = ({ room, currentUserId }) => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <div className="text-lg font-semibold text-gray-900">
-                    {room.messageCount || 0}
+                    {room?.messageCount || 0}
                   </div>
                   <div className="text-sm text-gray-500">Messages</div>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <div className="text-lg font-semibold text-gray-900">
-                    {room.memberCount || 0}
+                    {room?.memberCount || 0}
                   </div>
                   <div className="text-sm text-gray-500">Members</div>
                 </div>
@@ -332,7 +332,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
 
               {/* Actions */}
               <div className="space-y-2">
-                {room.roomType === 'GROUP_CHAT' && room.canInviteMembers && (
+                {room?.roomType === 'GROUP_CHAT' && room.canInviteMembers && (
                   <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center">
                     <UserPlus className="h-4 w-4 mr-3" />
                     Add members

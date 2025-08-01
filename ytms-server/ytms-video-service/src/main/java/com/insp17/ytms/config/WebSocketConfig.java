@@ -1,162 +1,55 @@
 package com.insp17.ytms.config;
 
-import com.insp17.ytms.dtos.UserPrincipal;
-import com.insp17.ytms.security.JwtTokenUtil;
-import com.insp17.ytms.service.UserService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
-import org.springframework.messaging.Message;
-import org.springframework.messaging.MessageChannel;
-import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
-import org.springframework.messaging.simp.stomp.StompCommand;
-import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
-import org.springframework.messaging.support.ChannelInterceptor;
-import org.springframework.messaging.support.MessageHeaderAccessor;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
-
-import java.security.Principal;
+import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 
 @Configuration
 @EnableWebSocketMessageBroker
-@Order(Ordered.HIGHEST_PRECEDENCE + 99)
 @Slf4j
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    @Autowired
-    private JwtTokenUtil jwtTokenUtil;
-
-    @Autowired
-    private UserService userService;
-
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        // Enable simple broker for these destinations
-        config.enableSimpleBroker(
-                "/topic",    // For broadcasting to multiple subscribers
-                "/queue",    // For user-specific messages
-                "/user"      // For user-specific destinations
-        );
+        // Enable simple message broker for topics and queues
+        config.enableSimpleBroker("/topic", "/queue")
+                .setHeartbeatValue(new long[]{25000, 25000}) // Heartbeat every 25 seconds
+                .setTaskScheduler(null); // Use default task scheduler
 
-        // Set application destination prefix for messages handled by controllers
+        // Set application destination prefix
         config.setApplicationDestinationPrefixes("/app");
 
-        // Set user destination prefix
+        // Set user destination prefix for personal messages
         config.setUserDestinationPrefix("/user");
 
-        log.info("WebSocket message broker configured with topics: /topic, /queue, /user and app prefix: /app");
+        log.info("Message broker configured with /topic, /queue destinations and /app prefix");
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // Register STOMP endpoint with SockJS fallback
         registry.addEndpoint("/ws")
-                .setAllowedOrigins("http://localhost:3000", "http://127.0.0.1:3000", "http://34.173.178.188:3000")
+                .setAllowedOriginPatterns("*") // Allow all origins in development
                 .withSockJS()
-                .setSessionCookieNeeded(false)
-                .setHeartbeatTime(25000)
-                .setDisconnectDelay(5000)
-                .setStreamBytesLimit(128 * 1024)
-                .setHttpMessageCacheSize(1000);
+                .setHeartbeatTime(25000) // Heartbeat every 25 seconds
+                .setDisconnectDelay(5000) // Disconnect delay 5 seconds
+                .setSessionCookieNeeded(false); // Don't require session cookie
 
-        // Also register without SockJS for native WebSocket support
-        registry.addEndpoint("/ws")
-                .setAllowedOrigins("http://localhost:3000", "http://127.0.0.1:3000", "http://34.173.178.188:3000");
-
-        log.info("WebSocket STOMP endpoint registered at /ws with SockJS support");
+        log.info("STOMP endpoint registered at /ws with SockJS fallback");
     }
 
     @Override
-    public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(new ChannelInterceptor() {
-            @Override
-            public Message<?> preSend(Message<?> message, MessageChannel channel) {
-                StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+    public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
+        // Configure WebSocket transport settings
+        registration.setMessageSizeLimit(64 * 1024) // 64KB message size limit
+                .setSendBufferSizeLimit(512 * 1024) // 512KB send buffer
+                .setSendTimeLimit(20000) // 20 second send timeout
+                .setTimeToFirstMessage(30000); // 30 second time to first message
 
-                if (accessor != null) {
-                    log.debug("WebSocket message: {} from session: {}",
-                            accessor.getCommand(),
-                            accessor.getSessionId());
-
-                    if (StompCommand.CONNECT.equals(accessor.getCommand())) {
-                        // Extract JWT token from headers
-                        String authToken = accessor.getFirstNativeHeader("Authorization");
-                        log.info("WebSocket connection attempt with token: {}", authToken != null ? "present" : "missing");
-
-                        if (authToken != null && authToken.startsWith("Bearer ") && !authToken.equals("Bearer undefined")) {
-                            try {
-                                String token = authToken.substring(7);
-                                String username = jwtTokenUtil.getUsernameFromToken(token);
-
-                                if (username != null) {
-                                    UserPrincipal userPrincipal = userService.getUserPrincipal(username);
-
-                                    if (jwtTokenUtil.validateToken(token, userPrincipal)) {
-                                        Authentication auth = new UsernamePasswordAuthenticationToken(
-                                                userPrincipal,
-                                                null,
-                                                userPrincipal.getAuthorities()
-                                        );
-
-                                        // Set both SecurityContext and message user
-                                        SecurityContextHolder.getContext().setAuthentication(auth);
-                                        accessor.setUser(auth);
-
-                                        log.info("WebSocket authenticated successfully for user: {} with authorities: {}",
-                                                username, userPrincipal.getAuthorities());
-                                    } else {
-                                        log.warn("Invalid JWT token for WebSocket connection from session: {}",
-                                                accessor.getSessionId());
-                                        throw new SecurityException("Invalid token");
-                                    }
-                                } else {
-                                    log.warn("Could not extract username from WebSocket token");
-                                    throw new SecurityException("Invalid token format");
-                                }
-                            } catch (Exception e) {
-                                log.error("WebSocket authentication failed: {}", e.getMessage());
-                                throw new SecurityException("Authentication failed: " + e.getMessage());
-                            }
-                        } else {
-                            log.warn("WebSocket connection attempted without valid authorization header");
-                            throw new SecurityException("Missing or invalid authorization header");
-                        }
-                    } else if (StompCommand.DISCONNECT.equals(accessor.getCommand())) {
-                        Principal user = accessor.getUser();
-                        if (user != null) {
-                            log.info("WebSocket user disconnected: {} from session: {}",
-                                    user.getName(), accessor.getSessionId());
-                        }
-                    }
-                }
-
-                return message;
-            }
-        });
-    }
-
-    @Override
-    public void configureClientOutboundChannel(ChannelRegistration registration) {
-        registration.interceptors(new ChannelInterceptor() {
-            @Override
-            public Message<?> preSend(Message<?> message, MessageChannel channel) {
-                StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
-
-                if (accessor != null && accessor.getCommand() != null) {
-                    log.debug("Outbound WebSocket message: {} to session: {}",
-                            accessor.getCommand(),
-                            accessor.getSessionId());
-                }
-
-                return message;
-            }
-        });
+        log.info("WebSocket transport configured with size and time limits");
     }
 }

@@ -10,7 +10,8 @@ import {
   Globe,
   User,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  RefreshCw
 } from 'lucide-react';
 import { chatAPI } from '../../services/api';
 
@@ -19,7 +20,8 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
     directMessages: [],
     groupChats: [],
     taskChats: [],
-    globalChat: null
+    globalChat: null,
+    totalUnreadCount: 0
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -30,18 +32,54 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
     taskChats: false
   });
 
+  console.log('🎯 ChatRoomsSidebar: Render', {
+    currentUserId,
+    selectedRoomId,
+    loading,
+    error,
+    roomsCount: {
+      directMessages: chatRooms.directMessages?.length || 0,
+      groupChats: chatRooms.groupChats?.length || 0,
+      taskChats: chatRooms.taskChats?.length || 0,
+      globalChat: !!chatRooms.globalChat
+    }
+  });
+
   useEffect(() => {
     loadChatRooms();
   }, []);
 
   const loadChatRooms = async () => {
     try {
+      console.log('🎯 ChatRoomsSidebar: Loading chat rooms...');
       setLoading(true);
+      setError(null);
+      
       const response = await chatAPI.getChatRoomList();
-      setChatRooms(response.data);
+      console.log('🎯 ChatRoomsSidebar: Received chat rooms:', response.data);
+      
+      // Ensure the response has the expected structure
+      const roomsData = {
+        directMessages: response.data?.directMessages || [],
+        groupChats: response.data?.groupChats || [],
+        taskChats: response.data?.taskChats || [],
+        globalChat: response.data?.globalChat || null,
+        totalUnreadCount: response.data?.totalUnreadCount || 0
+      };
+      
+      setChatRooms(roomsData);
     } catch (error) {
-      console.error('Failed to load chat rooms:', error);
+      console.error('🎯 ChatRoomsSidebar: Failed to load chat rooms:', error);
       setError('Failed to load chat rooms');
+      
+      // Set empty state on error
+      setChatRooms({
+        directMessages: [],
+        groupChats: [],
+        taskChats: [],
+        globalChat: null,
+        totalUnreadCount: 0
+      });
     } finally {
       setLoading(false);
     }
@@ -107,19 +145,24 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
       case 'SYSTEM':
         return content;
       default:
-        const preview = content.length > 50 ? content.substring(0, 50) + '...' : content;
+        const preview = content?.length > 50 ? content.substring(0, 50) + '...' : content || '';
         return room.roomType === 'DIRECT_MESSAGE' ? preview : `${senderName}: ${preview}`;
     }
   };
 
   const filterRooms = (rooms) => {
-    if (!searchTerm) return rooms;
+    if (!searchTerm || !Array.isArray(rooms)) return rooms || [];
     
     return rooms.filter(room => 
       room.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       room.roomName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       room.dmParticipantName?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+  };
+
+  // Helper function to check if a room has unread messages
+  const hasUnreadMessages = (room) => {
+    return room.unreadCount && room.unreadCount > 0;
   };
 
   const SectionHeader = ({ title, count, isExpanded, onToggle, children }) => (
@@ -166,8 +209,8 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
         <div className="flex items-center justify-between">
           <span className={`text-sm font-medium truncate ${
             isSelected ? 'text-blue-900' : 'text-gray-900'
-          } ${room.hasUnreadMessages() ? 'font-semibold' : ''}`}>
-            {room.displayName || room.roomName}
+          } ${hasUnreadMessages(room) ? 'font-semibold' : ''}`}>
+            {room.displayName || room.roomName || 'Unknown Room'}
           </span>
           {getUnreadBadge(room.unreadCount)}
         </div>
@@ -184,7 +227,10 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
   if (loading) {
     return (
       <div className="w-80 bg-gray-50 border-r border-gray-200 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="text-sm text-gray-500 mt-2">Loading conversations...</p>
+        </div>
       </div>
     );
   }
@@ -192,13 +238,16 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
   if (error) {
     return (
       <div className="w-80 bg-gray-50 border-r border-gray-200 p-4">
-        <div className="text-red-600 text-sm">{error}</div>
-        <button
-          onClick={loadChatRooms}
-          className="mt-2 text-blue-600 text-sm hover:underline"
-        >
-          Retry
-        </button>
+        <div className="text-center">
+          <div className="text-red-600 text-sm mb-2">{error}</div>
+          <button
+            onClick={loadChatRooms}
+            className="inline-flex items-center text-blue-600 text-sm hover:underline"
+          >
+            <RefreshCw className="h-4 w-4 mr-1" />
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -209,9 +258,18 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
       <div className="p-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-gray-900">Messages</h2>
-          <button className="p-1 hover:bg-gray-100 rounded">
-            <Settings className="h-4 w-4 text-gray-600" />
-          </button>
+          <div className="flex items-center space-x-1">
+            <button 
+              onClick={loadChatRooms}
+              className="p-1 hover:bg-gray-100 rounded"
+              title="Refresh"
+            >
+              <RefreshCw className="h-4 w-4 text-gray-600" />
+            </button>
+            <button className="p-1 hover:bg-gray-100 rounded">
+              <Settings className="h-4 w-4 text-gray-600" />
+            </button>
+          </div>
         </div>
         
         {/* Search */}
@@ -244,7 +302,7 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
         <div className="border-t border-gray-200">
           <SectionHeader
             title="Direct Messages"
-            count={chatRooms.directMessages.length}
+            count={chatRooms.directMessages?.length || 0}
             isExpanded={expandedSections.directMessages}
             onToggle={() => toggleSection('directMessages')}
           >
@@ -274,7 +332,7 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
         <div className="border-t border-gray-200">
           <SectionHeader
             title="Channels"
-            count={chatRooms.groupChats.length}
+            count={chatRooms.groupChats?.length || 0}
             isExpanded={expandedSections.groupChats}
             onToggle={() => toggleSection('groupChats')}
           >
@@ -301,7 +359,7 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
         </div>
 
         {/* Task Chats */}
-        {chatRooms.taskChats.length > 0 && (
+        {chatRooms.taskChats && chatRooms.taskChats.length > 0 && (
           <div className="border-t border-gray-200">
             <SectionHeader
               title="Task Chats"

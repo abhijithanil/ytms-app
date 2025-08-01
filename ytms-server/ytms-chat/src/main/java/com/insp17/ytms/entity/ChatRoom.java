@@ -15,19 +15,23 @@ import jakarta.persistence.Table;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.Objects;
 
 @Entity
 @Table(name = "chat_rooms")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true) // Only use explicitly included fields
 public class ChatRoom {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include // Include ID in equals/hashCode
     private Long id;
 
     @Column(name = "room_name", nullable = false)
@@ -100,5 +104,31 @@ public class ChatRoom {
     // Generate room name for DMs
     public static String generateDMRoomName(String user1, String user2) {
         return user1.compareTo(user2) < 0 ? user1 + "_" + user2 : user2 + "_" + user1;
+    }
+
+    // Custom equals and hashCode to avoid collection access
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof ChatRoom)) return false;
+        ChatRoom chatRoom = (ChatRoom) o;
+        return Objects.equals(id, chatRoom.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+
+    @Override
+    public String toString() {
+        return "ChatRoom{" +
+                "id=" + id +
+                ", roomName='" + roomName + '\'' +
+                ", roomType=" + roomType +
+                ", isPrivate=" + isPrivate +
+                ", createdBy=" + createdBy +
+                ", createdAt=" + createdAt +
+                '}';
     }
 }

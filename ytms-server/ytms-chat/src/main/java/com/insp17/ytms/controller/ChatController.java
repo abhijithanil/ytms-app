@@ -42,6 +42,7 @@ public class ChatController {
     }
 
     @GetMapping("/status")
+
     public String getChatStatus() {
         return "Chat service is running";
     }

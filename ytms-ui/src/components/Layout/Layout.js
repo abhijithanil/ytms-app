@@ -5,7 +5,7 @@ import Header from './Header';
 import ChatWidget from '../chat/ChatWidget';
 import { Menu, X, ChevronDown, Bell, MessageCircle, Users, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useChatRooms } from '../../hook/useRoomChat'; 
+import { useRoomChat } from '../../hook/useRoomChat'; 
 
 const Layout = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -18,7 +18,7 @@ const Layout = ({ children }) => {
   const profileDropdownRef = useRef(null);
 
   // Enhanced chat integration
-  const { rooms, loading: chatLoading } = useChatRooms();
+  const { rooms, loading: chatLoading } = useRoomChat();
   const chatNotificationCount = rooms?.totalUnreadCount || 0;
 
   const toggleSidebar = () => {
@@ -226,97 +226,95 @@ const Layout = ({ children }) => {
           </div>
         </div>
         
-        {/* Desktop Header - FIXED: Now showing properly */}
-        <div className="hidden lg:block bg-white border-b border-gray-200">
-          <div className="px-6 py-4">
-            <div className="flex items-center justify-between">
-              {/* Header Content */}
-              <div className="flex-1">
-                <Header />
-              </div>
+        {/* Desktop Header - FIXED: Clean header with separate chat controls */}
+        <div className="hidden lg:block">
+          <div className="flex bg-white border-b border-gray-200">
+            {/* Main Header Content */}
+            <div className="flex-1">
+              <Header />
+            </div>
 
-              {/* Desktop Chat and Notifications - RESTORED */}
-              <div className="flex items-center space-x-4 ml-6">
-                {/* Chat Toggle Button (only show if not on chat page) */}
-                {!isOnChatPage && (
-                  <button
-                    onClick={toggleChatPanel}
-                    className={`relative p-2 transition-colors rounded-lg ${
-                      isChatPanelOpen 
-                        ? 'text-blue-600 bg-blue-50' 
-                        : 'text-gray-400 hover:text-gray-500 hover:bg-gray-100'
-                    }`}
-                    title={isChatPanelOpen ? "Close Chat Panel" : "Open Chat Panel"}
-                  >
-                    <MessageCircle className="h-5 w-5" />
-                    {chatNotificationCount > 0 && !isChatPanelOpen && (
-                      <span className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center">
-                        {chatNotificationCount > 9 ? '9+' : chatNotificationCount}
-                      </span>
-                    )}
-                  </button>
-                )}
-
-                {/* Full Chat Button */}
+            {/* Chat and User Controls - Separate Section */}
+            <div className="flex items-center px-6 py-4 space-x-4 border-l border-gray-200">
+              {/* Chat Toggle Button (only show if not on chat page) */}
+              {!isOnChatPage && (
                 <button
-                  onClick={openFullChat}
-                  className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                    isOnChatPage
-                      ? 'border-blue-500 text-blue-700 bg-blue-50'
-                      : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                  onClick={toggleChatPanel}
+                  className={`relative p-2 transition-colors rounded-lg ${
+                    isChatPanelOpen 
+                      ? 'text-blue-600 bg-blue-50' 
+                      : 'text-gray-400 hover:text-gray-500 hover:bg-gray-100'
                   }`}
+                  title={isChatPanelOpen ? "Close Chat Panel" : "Open Chat Panel"}
                 >
-                  {isOnChatPage ? (
-                    <>
-                      <MessageCircle className="h-4 w-4 mr-2" />
-                      Chat Active
-                    </>
-                  ) : (
-                    <>
-                      <Users className="h-4 w-4 mr-2" />
-                      Open Chat
-                    </>
-                  )}
-                </button>
-
-                {/* Notification Bell - RESTORED */}
-                <button 
-                  className="relative p-2 text-gray-400 hover:text-gray-500 transition-colors rounded-lg hover:bg-gray-100"
-                  title="Notifications"
-                >
-                  <Bell className="h-5 w-5" />
-                  {notificationCount > 0 && (
-                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                      {notificationCount > 9 ? '9+' : notificationCount}
+                  <MessageCircle className="h-5 w-5" />
+                  {chatNotificationCount > 0 && !isChatPanelOpen && (
+                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center">
+                      {chatNotificationCount > 9 ? '9+' : chatNotificationCount}
                     </span>
                   )}
                 </button>
+              )}
 
-                {/* Desktop Profile Dropdown - RESTORED */}
-                <div className="relative" ref={profileDropdownRef}>
-                  <button
-                    className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors"
-                    onClick={handleProfileDropdownToggle}
-                  >
-                    <div className="flex items-center justify-center w-8 h-8 bg-primary-600 rounded-full text-white text-sm font-medium">
-                      {user?.username?.charAt(0).toUpperCase() || "A"}
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-medium text-gray-900">
-                        {user?.username || "Anonymous"}
-                      </p>
-                      <p className="text-xs text-gray-500 capitalize">
-                        {user?.role?.toLowerCase() || "User"}
-                      </p>
-                    </div>
-                    <ChevronDown
-                      className={`h-4 w-4 text-gray-500 transition-transform ${
-                        isProfileDropdownOpen ? "transform rotate-180" : ""
-                      }`}
-                    />
-                  </button>
-                  {renderProfileDropdown()}
-                </div>
+              {/* Full Chat Button */}
+              <button
+                onClick={openFullChat}
+                className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                  isOnChatPage
+                    ? 'border-blue-500 text-blue-700 bg-blue-50'
+                    : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                }`}
+              >
+                {isOnChatPage ? (
+                  <>
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    Chat Active
+                  </>
+                ) : (
+                  <>
+                    <Users className="h-4 w-4 mr-2" />
+                    Open Chat
+                  </>
+                )}
+              </button>
+
+              {/* Notification Bell */}
+              <button 
+                className="relative p-2 text-gray-400 hover:text-gray-500 transition-colors rounded-lg hover:bg-gray-100"
+                title="Notifications"
+              >
+                <Bell className="h-5 w-5" />
+                {notificationCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                    {notificationCount > 9 ? '9+' : notificationCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Desktop Profile Dropdown */}
+              <div className="relative" ref={profileDropdownRef}>
+                <button
+                  className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors"
+                  onClick={handleProfileDropdownToggle}
+                >
+                  <div className="flex items-center justify-center w-8 h-8 bg-primary-600 rounded-full text-white text-sm font-medium">
+                    {user?.username?.charAt(0).toUpperCase() || "A"}
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-gray-900">
+                      {user?.username || "Anonymous"}
+                    </p>
+                    <p className="text-xs text-gray-500 capitalize">
+                      {user?.role?.toLowerCase() || "User"}
+                    </p>
+                  </div>
+                  <ChevronDown
+                    className={`h-4 w-4 text-gray-500 transition-transform ${
+                      isProfileDropdownOpen ? "transform rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                {renderProfileDropdown()}
               </div>
             </div>
           </div>
