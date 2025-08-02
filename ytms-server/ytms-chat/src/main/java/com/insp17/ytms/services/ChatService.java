@@ -1,5 +1,6 @@
 package com.insp17.ytms.services;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.insp17.ytms.dto.*;
 import com.insp17.ytms.dtos.OnlineUserDTO;
 import com.insp17.ytms.dtos.UserPrincipal;
@@ -44,6 +45,10 @@ public class ChatService {
 
     @Autowired
     private VideoTaskService videoTaskService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
 
     // In-memory storage for online users
     private final Map<String, OnlineUser> onlineUsers = new ConcurrentHashMap<>();

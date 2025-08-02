@@ -1,4 +1,4 @@
-// Updated WebSocketService.js - Fix for duplicate messages
+// Enhanced WebSocketService.js - Add to your existing WebSocketService
 
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
@@ -13,125 +13,15 @@ class WebSocketService {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 1000;
-    this.isConnecting = false; // Add this flag
-    this.messageQueue = []; // Queue for messages while connecting
+    this.isConnecting = false;
+    this.messageQueue = [];
   }
 
-  async connect(token, onSuccess, onError) {
-    console.log('🔌 WebSocketService: Starting connection...');
-    
-    // Prevent multiple simultaneous connections
-    if (this.connected || this.isConnecting) {
-      console.log('🔌 WebSocketService: Already connected or connecting');
-      if (this.connected && onSuccess) onSuccess();
-      return this.connectionPromise;
-    }
-
-    this.isConnecting = true;
-
-    this.connectionPromise = new Promise((resolve, reject) => {
-      try {
-        // Disconnect any existing connection first
-        if (this.client) {
-          this.client.deactivate();
-          this.client = null;
-        }
-
-        const socket = new SockJS(`${process.env.REACT_APP_API_URL || 'http://localhost:8080'}/ws`);
-        
-        this.client = new Client({
-          webSocketFactory: () => socket,
-          connectHeaders: {
-            Authorization: `Bearer ${token}`
-          },
-          debug: (str) => {
-            console.log('🔌 STOMP Debug:', str);
-          },
-          reconnectDelay: this.reconnectDelay,
-          heartbeatIncoming: 4000,
-          heartbeatOutgoing: 4000,
-          onConnect: (frame) => {
-            console.log('🔌 WebSocketService: Connected successfully!', frame);
-            this.connected = true;
-            this.isConnecting = false;
-            this.reconnectAttempts = 0;
-            this.connectionPromise = null;
-
-            // Set up global subscriptions
-            this.setupGlobalSubscriptions();
-
-            // Process queued messages
-            this.processMessageQueue();
-
-            if (onSuccess) onSuccess(frame);
-            resolve(frame);
-          },
-          onStompError: (frame) => {
-            console.error('🔌 WebSocketService: STOMP Error:', frame.headers['message']);
-            console.error('Additional details:', frame.body);
-            this.connected = false;
-            this.isConnecting = false;
-            this.connectionPromise = null;
-            
-            const error = new Error(frame.headers['message'] || 'STOMP connection failed');
-            if (onError) onError(error);
-            reject(error);
-          },
-          onWebSocketError: (event) => {
-            console.error('🔌 WebSocketService: WebSocket Error:', event);
-            this.connected = false;
-            this.isConnecting = false;
-            this.connectionPromise = null;
-            
-            const error = new Error('WebSocket connection failed');
-            if (onError) onError(error);
-            reject(error);
-          },
-          onDisconnect: (frame) => {
-            console.log('🔌 WebSocketService: Disconnected', frame);
-            this.connected = false;
-            this.isConnecting = false;
-            this.clearSubscriptions();
-            
-            // Auto-reconnect with exponential backoff
-            if (this.reconnectAttempts < this.maxReconnectAttempts) {
-              const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
-              console.log(`🔌 WebSocketService: Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1})`);
-              
-              setTimeout(() => {
-                this.reconnectAttempts++;
-                this.connect(token, onSuccess, onError);
-              }, delay);
-            }
-          }
-        });
-
-        this.client.activate();
-        
-      } catch (error) {
-        console.error('🔌 WebSocketService: Connection setup failed:', error);
-        this.isConnecting = false;
-        this.connectionPromise = null;
-        if (onError) onError(error);
-        reject(error);
-      }
-    });
-
-    return this.connectionPromise;
-  }
-
-  // Process queued messages after connection is established
-  processMessageQueue() {
-    while (this.messageQueue.length > 0) {
-      const { destination, payload } = this.messageQueue.shift();
-      this.sendMessage(destination, payload);
-    }
-  }
+  // ... (keep all your existing methods: connect, setupGlobalSubscriptions, etc.)
 
   setupGlobalSubscriptions() {
     console.log('🔌 WebSocketService: Setting up global subscriptions');
 
-    // Clear any existing subscriptions first
     this.clearSubscriptions();
 
     // Global chat messages
@@ -163,172 +53,313 @@ class WebSocketService {
       const handler = this.messageHandlers.get('roomUpdates');
       if (handler) handler(roomUpdate);
     });
+
+    // NEW: Message reactions
+    this.subscribe('/topic/messages/reactions', 'messageReactions', (reactionUpdate) => {
+      const handler = this.messageHandlers.get('messageReactions');
+      if (handler) handler(reactionUpdate);
+    });
+
+    // NEW: Message updates (edits, deletes)
+    this.subscribe('/topic/messages/updates', 'messageUpdates', (messageUpdate) => {
+      const handler = this.messageHandlers.get('messageUpdates');
+      if (handler) handler(messageUpdate);
+    });
+
+    // NEW: User mentions
+    this.subscribe('/topic/mentions', 'mentions', (mention) => {
+      const handler = this.messageHandlers.get('mentions');
+      if (handler) handler(mention);
+    });
   }
 
-  subscribe(destination, subscriptionId, messageHandler) {
-    if (!this.client || !this.connected) {
-      console.warn('🔌 WebSocketService: Cannot subscribe - not connected');
-      return false;
-    }
+  // Enhanced room subscription with reaction support
+  subscribeToRoom(roomId) {
+    if (!this.connected || !roomId) return false;
 
-    // Check if already subscribed
-    if (this.subscriptions.has(subscriptionId)) {
-      console.log(`🔌 WebSocketService: Already subscribed to ${subscriptionId}`);
-      return true;
-    }
+    console.log(`🔌 WebSocketService: Subscribing to room ${roomId} with enhanced features`);
 
-    try {
-      console.log(`🔌 WebSocketService: Subscribing to ${destination} with ID ${subscriptionId}`);
-      
-      const subscription = this.client.subscribe(destination, (message) => {
-        try {
-          const parsedMessage = JSON.parse(message.body);
-          console.log(`🔌 WebSocketService: Received message on ${destination}:`, parsedMessage);
-          messageHandler(parsedMessage);
-        } catch (error) {
-          console.error(`🔌 WebSocketService: Error parsing message from ${destination}:`, error);
-        }
-      });
+    // Room messages
+    this.subscribe(`/topic/chat/room/${roomId}`, `roomChat_${roomId}`, (message) => {
+      const handler = this.messageHandlers.get(`roomChat_${roomId}`);
+      if (handler) handler(message);
+    });
 
-      this.subscriptions.set(subscriptionId, subscription);
-      return true;
-    } catch (error) {
-      console.error(`🔌 WebSocketService: Failed to subscribe to ${destination}:`, error);
-      return false;
-    }
+    // Room typing indicators
+    this.subscribe(`/topic/typing/room/${roomId}`, `roomTyping_${roomId}`, (typingData) => {
+      const handler = this.messageHandlers.get(`roomTyping_${roomId}`);
+      if (handler) handler(typingData);
+    });
+
+    // Room member updates
+    this.subscribe(`/topic/rooms/${roomId}/members`, `roomMembers_${roomId}`, (memberUpdate) => {
+      const handler = this.messageHandlers.get(`roomMembers_${roomId}`);
+      if (handler) handler(memberUpdate);
+    });
+
+    // Room read status updates
+    this.subscribe(`/topic/rooms/${roomId}/read-status`, `roomReadStatus_${roomId}`, (readStatus) => {
+      const handler = this.messageHandlers.get(`roomReadStatus_${roomId}`);
+      if (handler) handler(readStatus);
+    });
+
+    // NEW: Room-specific message reactions
+    this.subscribe(`/topic/rooms/${roomId}/reactions`, `roomReactions_${roomId}`, (reactionUpdate) => {
+      const handler = this.messageHandlers.get(`roomReactions_${roomId}`);
+      if (handler) handler(reactionUpdate);
+    });
+
+    // NEW: Room-specific message updates
+    this.subscribe(`/topic/rooms/${roomId}/message-updates`, `roomMessageUpdates_${roomId}`, (messageUpdate) => {
+      const handler = this.messageHandlers.get(`roomMessageUpdates_${roomId}`);
+      if (handler) handler(messageUpdate);
+    });
+
+    // NEW: Thread updates for room
+    this.subscribe(`/topic/rooms/${roomId}/threads`, `roomThreads_${roomId}`, (threadUpdate) => {
+      const handler = this.messageHandlers.get(`roomThreads_${roomId}`);
+      if (handler) handler(threadUpdate);
+    });
+
+    return true;
   }
 
-  unsubscribe(destination) {
-    // Find subscription by destination
-    for (const [id, subscription] of this.subscriptions.entries()) {
-      if (subscription.destination === destination) {
-        console.log(`🔌 WebSocketService: Unsubscribing from ${destination}`);
-        subscription.unsubscribe();
-        this.subscriptions.delete(id);
-        return true;
-      }
-    }
-    return false;
+  // Unsubscribe from room
+  unsubscribeFromRoom(roomId) {
+    if (!roomId) return;
+
+    console.log(`🔌 WebSocketService: Unsubscribing from room ${roomId}`);
+    
+    this.unsubscribe(`/topic/chat/room/${roomId}`);
+    this.unsubscribe(`/topic/typing/room/${roomId}`);
+    this.unsubscribe(`/topic/rooms/${roomId}/members`);
+    this.unsubscribe(`/topic/rooms/${roomId}/read-status`);
+    this.unsubscribe(`/topic/rooms/${roomId}/reactions`);
+    this.unsubscribe(`/topic/rooms/${roomId}/message-updates`);
+    this.unsubscribe(`/topic/rooms/${roomId}/threads`);
   }
 
-  setMessageHandler(handlerId, handler) {
-    console.log(`🔌 WebSocketService: Setting message handler for ${handlerId}`);
-    this.messageHandlers.set(handlerId, handler);
+  // NEW: Enhanced message sending methods
+
+  // Send message with reaction support metadata
+  sendEnhancedMessage(destination, payload) {
+    const enhancedPayload = {
+      ...payload,
+      messageId: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: new Date().toISOString(),
+      clientVersion: '2.0' // For future compatibility
+    };
+
+    return this.sendMessage(destination, enhancedPayload);
   }
 
-  removeMessageHandler(handlerId) {
-    console.log(`🔌 WebSocketService: Removing message handler for ${handlerId}`);
-    this.messageHandlers.delete(handlerId);
-  }
-
-  // Send messages with deduplication
-  sendMessage(destination, payload) {
-    if (!this.connected) {
-      console.warn('🔌 WebSocketService: Cannot send message - not connected');
-      
-      // Queue message if we're connecting
-      if (this.isConnecting) {
-        console.log('🔌 WebSocketService: Queueing message while connecting');
-        this.messageQueue.push({ destination, payload });
-        return true;
-      }
-      return false;
-    }
-
-    try {
-      console.log(`🔌 WebSocketService: Sending message to ${destination}:`, payload);
-      
-      // Add a unique ID to prevent duplicate processing on server side
-      const messageWithId = {
-        ...payload,
-        messageId: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      };
-
-      this.client.publish({
-        destination: destination,
-        body: JSON.stringify(messageWithId)
-      });
-      return true;
-    } catch (error) {
-      console.error(`🔌 WebSocketService: Failed to send message to ${destination}:`, error);
-      return false;
-    }
-  }
-
-  // Chat-specific methods with deduplication
-  joinChat(payload) {
-    return this.sendMessage('/app/chat/join', payload);
-  }
-
-  sendChatMessage(content, taskId = null) {
-    const destination = taskId ? `/app/chat/task/${taskId}` : '/app/chat/global';
-    return this.sendMessage(destination, { content });
-  }
-
-  sendTypingIndicator(isTyping, taskId = null) {
-    const destination = taskId ? `/app/typing/task/${taskId}` : '/app/typing/global';
-    return this.sendMessage(destination, { isTyping });
-  }
-
-  updateUserStatus(status) {
-    return this.sendMessage('/app/users/status', { status });
-  }
-
-  // Room-specific methods
+  // Send room message with enhanced features
   sendRoomMessage(roomId, payload) {
-    return this.sendMessage(`/app/chat/room/${roomId}`, payload);
+    return this.sendEnhancedMessage(`/app/chat/room/${roomId}`, payload);
   }
 
+  // Send direct message with enhanced features
   sendDirectMessage(recipientId, payload) {
-    return this.sendMessage(`/app/chat/direct/${recipientId}`, payload);
+    return this.sendEnhancedMessage(`/app/chat/direct/${recipientId}`, payload);
   }
 
-  sendRoomTypingIndicator(roomId, isTyping) {
-    return this.sendMessage(`/app/typing/room/${roomId}`, { isTyping });
+  // NEW: Message reaction methods
+  sendReaction(messageId, reactionType, roomId = null) {
+    const destination = roomId 
+      ? `/app/chat/room/${roomId}/react`
+      : '/app/chat/react';
+    
+    return this.sendMessage(destination, {
+      messageId: messageId,
+      reactionType: reactionType,
+      action: 'toggle' // toggle, add, remove
+    });
   }
 
-  joinRoom(roomId) {
-    return this.sendMessage(`/app/rooms/join/${roomId}`, {});
+  removeReaction(messageId, reactionType, roomId = null) {
+    const destination = roomId 
+      ? `/app/chat/room/${roomId}/react`
+      : '/app/chat/react';
+    
+    return this.sendMessage(destination, {
+      messageId: messageId,
+      reactionType: reactionType,
+      action: 'remove'
+    });
+  }
+
+  // NEW: Message action methods
+  editMessage(messageId, newContent, roomId = null) {
+    const destination = roomId 
+      ? `/app/chat/room/${roomId}/edit`
+      : '/app/chat/edit';
+    
+    return this.sendMessage(destination, {
+      messageId: messageId,
+      newContent: newContent
+    });
+  }
+
+  deleteMessage(messageId, roomId = null) {
+    const destination = roomId 
+      ? `/app/chat/room/${roomId}/delete`
+      : '/app/chat/delete';
+    
+    return this.sendMessage(destination, {
+      messageId: messageId
+    });
+  }
+
+  pinMessage(messageId, roomId) {
+    return this.sendMessage(`/app/chat/room/${roomId}/pin`, {
+      messageId: messageId,
+      action: 'pin'
+    });
+  }
+
+  unpinMessage(messageId, roomId) {
+    return this.sendMessage(`/app/chat/room/${roomId}/pin`, {
+      messageId: messageId,
+      action: 'unpin'
+    });
+  }
+
+  // NEW: Thread/reply methods
+  sendReply(parentMessageId, content, roomId) {
+    return this.sendMessage(`/app/chat/room/${roomId}/reply`, {
+      parentMessageId: parentMessageId,
+      content: content
+    });
+  }
+
+  // NEW: Enhanced typing indicators with context
+  sendEnhancedTyping(isTyping, roomId = null, context = {}) {
+    const destination = roomId 
+      ? `/app/typing/room/${roomId}`
+      : '/app/typing/global';
+    
+    return this.sendMessage(destination, {
+      isTyping: isTyping,
+      context: context, // Can include reply context, etc.
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  // NEW: Presence and status methods
+  updatePresence(status, statusMessage = null) {
+    return this.sendMessage('/app/presence/update', {
+      status: status,
+      statusMessage: statusMessage,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  // NEW: Notification acknowledgment
+  acknowledgeNotification(notificationId) {
+    return this.sendMessage('/app/notifications/ack', {
+      notificationId: notificationId
+    });
+  }
+
+  // NEW: Room management via WebSocket
+  createRoom(roomData) {
+    return this.sendMessage('/app/rooms/create', roomData);
+  }
+
+  updateRoom(roomId, updateData) {
+    return this.sendMessage(`/app/rooms/${roomId}/update`, updateData);
+  }
+
+  inviteToRoom(roomId, userIds) {
+    return this.sendMessage(`/app/rooms/${roomId}/invite`, {
+      userIds: userIds
+    });
   }
 
   leaveRoom(roomId) {
-    return this.sendMessage(`/app/rooms/leave/${roomId}`, {});
+    return this.sendMessage(`/app/rooms/${roomId}/leave`, {});
   }
 
-  // Connection management
-  disconnect() {
-    console.log('🔌 WebSocketService: Disconnecting...');
-    this.connected = false;
-    this.isConnecting = false;
-    this.connectionPromise = null;
-    this.messageQueue = [];
-    this.clearSubscriptions();
-    this.messageHandlers.clear();
-    
-    if (this.client) {
-      this.client.deactivate();
-      this.client = null;
-    }
-  }
-
-  clearSubscriptions() {
-    console.log('🔌 WebSocketService: Clearing all subscriptions');
-    this.subscriptions.forEach((subscription, id) => {
-      try {
-        subscription.unsubscribe();
-      } catch (error) {
-        console.warn(`🔌 WebSocketService: Error unsubscribing ${id}:`, error);
-      }
+  // NEW: Enhanced subscription management
+  subscribeToUserUpdates(userId) {
+    return this.subscribe(`/user/${userId}/queue/updates`, `userUpdates_${userId}`, (update) => {
+      const handler = this.messageHandlers.get(`userUpdates_${userId}`);
+      if (handler) handler(update);
     });
-    this.subscriptions.clear();
   }
 
-  isConnected() {
-    return this.connected && this.client && this.client.connected;
+  subscribeToMentions(userId) {
+    return this.subscribe(`/user/${userId}/queue/mentions`, `userMentions_${userId}`, (mention) => {
+      const handler = this.messageHandlers.get(`userMentions_${userId}`);
+      if (handler) handler(mention);
+    });
   }
 
-  // Utility methods for debugging
-  getConnectionState() {
+  subscribeToNotifications(userId) {
+    return this.subscribe(`/user/${userId}/queue/notifications`, `userNotifications_${userId}`, (notification) => {
+      const handler = this.messageHandlers.get(`userNotifications_${userId}`);
+      if (handler) handler(notification);
+    });
+  }
+
+  // NEW: Batch operations
+  sendBatchReactions(reactions) {
+    return this.sendMessage('/app/chat/reactions/batch', {
+      reactions: reactions
+    });
+  }
+
+  markMultipleAsRead(messageIds, roomId) {
+    return this.sendMessage(`/app/chat/room/${roomId}/read-batch`, {
+      messageIds: messageIds
+    });
+  }
+
+  // NEW: File sharing via WebSocket
+  notifyFileUpload(roomId, fileInfo) {
+    return this.sendMessage(`/app/chat/room/${roomId}/file-upload`, {
+      fileName: fileInfo.name,
+      fileSize: fileInfo.size,
+      fileType: fileInfo.type,
+      uploadStatus: 'started'
+    });
+  }
+
+  notifyFileUploadComplete(roomId, fileInfo, fileUrl) {
+    return this.sendMessage(`/app/chat/room/${roomId}/file-upload`, {
+      fileName: fileInfo.name,
+      fileUrl: fileUrl,
+      uploadStatus: 'completed'
+    });
+  }
+
+  // NEW: Voice message support
+  sendVoiceMessage(roomId, audioBlob, duration) {
+    // This would typically upload the audio first, then send the message
+    return this.sendMessage(`/app/chat/room/${roomId}/voice`, {
+      audioUrl: audioBlob, // This would be a URL after upload
+      duration: duration,
+      type: 'voice_message'
+    });
+  }
+
+  // NEW: Screen sharing notifications
+  startScreenShare(roomId, shareId) {
+    return this.sendMessage(`/app/chat/room/${roomId}/screen-share`, {
+      action: 'start',
+      shareId: shareId
+    });
+  }
+
+  stopScreenShare(roomId, shareId) {
+    return this.sendMessage(`/app/chat/room/${roomId}/screen-share`, {
+      action: 'stop',
+      shareId: shareId
+    });
+  }
+
+  // Enhanced connection state with more details
+  getEnhancedConnectionState() {
     return {
       connected: this.connected,
       isConnecting: this.isConnecting,
@@ -336,21 +367,41 @@ class WebSocketService {
       subscriptionsCount: this.subscriptions.size,
       handlersCount: this.messageHandlers.size,
       reconnectAttempts: this.reconnectAttempts,
-      queuedMessages: this.messageQueue.length
+      queuedMessages: this.messageQueue.length,
+      lastHeartbeat: this.client?.lastHeartbeat || null,
+      connectionUptime: this.connected ? Date.now() - this.connectionStartTime : 0
     };
   }
 
-  listSubscriptions() {
-    const subs = {};
+  // Enhanced debugging methods
+  listActiveSubscriptions() {
+    const subscriptions = {};
     this.subscriptions.forEach((subscription, id) => {
-      subs[id] = subscription.destination;
+      subscriptions[id] = {
+        destination: subscription.destination,
+        active: subscription.active,
+        id: subscription.id
+      };
     });
-    return subs;
+    return subscriptions;
   }
 
-  listHandlers() {
-    return Array.from(this.messageHandlers.keys());
+  getSubscriptionStats() {
+    const stats = {
+      total: this.subscriptions.size,
+      byType: {},
+      handlers: this.messageHandlers.size
+    };
+
+    this.subscriptions.forEach((subscription, id) => {
+      const type = id.split('_')[0];
+      stats.byType[type] = (stats.byType[type] || 0) + 1;
+    });
+
+    return stats;
   }
+
+  // ... (keep all other existing methods: disconnect, clearSubscriptions, etc.)
 }
 
 // Create singleton instance

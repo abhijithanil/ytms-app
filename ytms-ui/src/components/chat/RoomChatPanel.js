@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect,useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   MessageCircle, 
   Users, 
@@ -17,7 +17,10 @@ import {
   ChevronDown,
   Filter,
   Calendar,
-  FileText
+  FileText,
+  ArrowDown,
+  Loader,
+  Reply
 } from 'lucide-react';
 import { useRoomChat } from '../../hook/useRoomChat';
 import { useAuth } from '../../context/AuthContext';
@@ -25,7 +28,9 @@ import ChatMessage from './ChatMessage';
 import TypingIndicator from './TypingIndicator';
 import UserMentionInput from './UserMentionInput';
 import RoomMembersModal from './RoomMembersModal';
+import ReplyModal from './ReplyModal';
 import { chatAPI } from '../../services/api';
+import toast from 'react-hot-toast';
 
 const RoomChatPanel = ({ room, currentUserId }) => {
   const { user } = useAuth();
@@ -48,6 +53,8 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showRoomInfo, setShowRoomInfo] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
   
   // Search State
   const [showSearch, setShowSearch] = useState(false);
@@ -66,6 +73,11 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [page, setPage] = useState(0);
+  const [showNewMessageAlert, setShowNewMessageAlert] = useState(false);
+  
+  // Reply State
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [showReplyModal, setShowReplyModal] = useState(false);
   
   // Refs
   const messagesEndRef = useRef(null);
@@ -74,112 +86,171 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   const searchTimeout = useRef(null);
   const lastMessageCount = useRef(0);
   const shouldAutoScroll = useRef(true);
+  const observerRef = useRef(null);
+  const topObserverRef = useRef(null);
+  const loadingMoreRef = useRef(false);
 
   // Smooth scroll to bottom function
-  const scrollToBottom = useCallback((force = false) => {
-    if (messagesEndRef.current && (shouldAutoScroll.current || force)) {
+  const scrollToBottom = useCallback((behavior = 'smooth') => {
+    if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ 
-        behavior: 'smooth', 
+        behavior: behavior,
         block: 'end',
         inline: 'nearest'
       });
     }
   }, []);
 
-  // Check if user is at bottom of messages
-  const checkIfUserAtBottom = useCallback(() => {
+  // Check if user is near bottom of messages
+  const checkScrollPosition = useCallback(() => {
     const container = messagesContainerRef.current;
-    if (!container) return true;
+    if (!container) return;
 
     const { scrollTop, scrollHeight, clientHeight } = container;
-    const threshold = 100; // pixels from bottom
-    const isAtBottom = scrollHeight - scrollTop - clientHeight < threshold;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const threshold = 100;
     
-    setShowScrollToBottom(!isAtBottom);
-    shouldAutoScroll.current = isAtBottom;
+    const nearBottom = distanceFromBottom < threshold;
+    setIsNearBottom(nearBottom);
+    setShowScrollToBottom(!nearBottom && scrollHeight > clientHeight);
+    shouldAutoScroll.current = nearBottom;
     
-    return isAtBottom;
+    // Hide new message alert if user scrolls to bottom
+    if (nearBottom) {
+      setShowNewMessageAlert(false);
+      setUnreadCount(0);
+    }
   }, []);
 
   // Auto-scroll when new messages arrive
   useEffect(() => {
     const hasNewMessages = messages.length > lastMessageCount.current;
+    const newMessagesCount = messages.length - lastMessageCount.current;
     lastMessageCount.current = messages.length;
 
-    if (hasNewMessages && messages.length > 0) {
-      // Small delay to ensure DOM is updated
-      setTimeout(() => {
-        if (shouldAutoScroll.current) {
-          scrollToBottom();
-        }
-      }, 50);
+    if (hasNewMessages && newMessagesCount > 0) {
+      // Check if the new messages are from current user
+      const latestMessages = messages.slice(-newMessagesCount);
+      const hasOwnMessage = latestMessages.some(msg => msg.senderId === currentUserId);
+      
+      if (shouldAutoScroll.current || hasOwnMessage) {
+        // Auto scroll for own messages or when user is at bottom
+        setTimeout(() => scrollToBottom(), 100);
+      } else {
+        // Show new message indicator for others' messages
+        setShowNewMessageAlert(true);
+        setUnreadCount(prev => prev + newMessagesCount);
+      }
     }
-  }, [messages, scrollToBottom]);
+  }, [messages, currentUserId, scrollToBottom]);
 
-  // Scroll to bottom when component first loads with messages
+  // Initial scroll to bottom
   useEffect(() => {
     if (messages.length > 0 && !loading) {
-      setTimeout(() => {
-        scrollToBottom(true); // Force scroll on initial load
-      }, 100);
+      setTimeout(() => scrollToBottom('auto'), 200);
     }
-  }, [messages.length, loading, scrollToBottom]);
+  }, [messages.length, loading, room?.id, scrollToBottom]);
 
-  // Handle scroll events
+  // Set up intersection observers for infinite scroll
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
+    // Observer for scroll position detection
+    const bottomObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            setIsNearBottom(true);
+            setShowScrollToBottom(false);
+            setShowNewMessageAlert(false);
+            setUnreadCount(0);
+            shouldAutoScroll.current = true;
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    // Observer for loading more messages
+    const topObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && !loadingMoreRef.current && hasMoreMessages && connected) {
+            loadOlderMessages();
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    if (messagesEndRef.current) {
+      bottomObserver.observe(messagesEndRef.current);
+    }
+    
+    if (topObserverRef.current) {
+      topObserver.observe(topObserverRef.current);
+    }
+
+    // Handle scroll events
     const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      
-      // Show scroll to bottom button if user has scrolled up
-      setShowScrollToBottom(distanceFromBottom > 100);
-      shouldAutoScroll.current = distanceFromBottom < 100;
-      
-      // Load more messages when scrolling to top
-      if (scrollTop < 100 && !isLoadingMore && hasMoreMessages && connected) {
-        loadOlderMessages();
-      }
+      checkScrollPosition();
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, [isLoadingMore, hasMoreMessages, connected]);
 
-  // Mark room as read when room changes or messages are received
+    return () => {
+      bottomObserver.disconnect();
+      topObserver.disconnect();
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, [hasMoreMessages, connected, checkScrollPosition]);
+
+  // Mark room as read when user is at bottom and new messages arrive
   useEffect(() => {
-    if (room?.id && connected && messages.length > 0) {
+    if (room?.id && connected && isNearBottom && messages.length > 0) {
       markAsRead();
     }
-  }, [room?.id, connected, messages.length, markAsRead]);
+  }, [room?.id, connected, isNearBottom, messages.length, markAsRead]);
 
-  // Focus search input when search is opened
+  // Focus search input when opened
   useEffect(() => {
     if (showSearch && searchInputRef.current) {
       searchInputRef.current.focus();
     }
   }, [showSearch]);
 
-
-
   const loadOlderMessages = async () => {
-    if (isLoadingMore || !hasMoreMessages) return;
+    if (loadingMoreRef.current || !hasMoreMessages || loading) return;
     
     try {
+      loadingMoreRef.current = true;
       setIsLoadingMore(true);
+      
       const nextPage = page + 1;
+      const container = messagesContainerRef.current;
+      const prevScrollHeight = container.scrollHeight;
+      const prevScrollTop = container.scrollTop;
+      
       const loadedCount = await loadMoreMessages(nextPage);
       
       if (loadedCount > 0) {
         setPage(nextPage);
+        
+        // Maintain scroll position after loading new messages
+        requestAnimationFrame(() => {
+          const newScrollHeight = container.scrollHeight;
+          const heightDiff = newScrollHeight - prevScrollHeight;
+          container.scrollTop = prevScrollTop + heightDiff;
+        });
       } else {
         setHasMoreMessages(false);
       }
     } catch (error) {
       console.error('Failed to load more messages:', error);
+      toast.error('Failed to load older messages');
     } finally {
+      loadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
   };
@@ -216,6 +287,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       }
     } catch (error) {
       console.error('Search failed:', error);
+      toast.error('Search failed');
       setSearchResults([]);
       setCurrentSearchIndex(-1);
     } finally {
@@ -227,7 +299,6 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     const query = e.target.value;
     setSearchQuery(query);
     
-    // Debounce search
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
     }
@@ -254,11 +325,13 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   const scrollToMessage = (messageId) => {
     const messageElement = document.getElementById(`message-${messageId}`);
     if (messageElement) {
+      shouldAutoScroll.current = false;
       messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
       // Highlight message briefly
-      messageElement.classList.add('bg-yellow-100');
+      messageElement.classList.add('bg-yellow-100', 'border', 'border-yellow-300');
       setTimeout(() => {
-        messageElement.classList.remove('bg-yellow-100');
+        messageElement.classList.remove('bg-yellow-100', 'border', 'border-yellow-300');
       }, 2000);
     }
   };
@@ -276,7 +349,81 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   };
 
   const handleSendMessage = (content) => {
-    return sendMessage(content);
+    let messageContent = content;
+    
+    // Add reply reference if replying
+    if (replyingTo) {
+      messageContent = {
+        content: content,
+        parentMessageId: replyingTo.id
+      };
+    }
+    
+    const success = sendMessage(messageContent);
+    
+    if (success && replyingTo) {
+      setReplyingTo(null);
+      setShowReplyModal(false);
+    }
+    
+    return success;
+  };
+
+  // Message action handlers
+  const handleReactToMessage = async (messageId, reactionType) => {
+    try {
+      // Implement message reaction API call
+      await chatAPI.reactToMessage(messageId, reactionType);
+      // The reaction will be updated via WebSocket
+    } catch (error) {
+      console.error('Failed to react to message:', error);
+      toast.error('Failed to add reaction');
+    }
+  };
+
+  const handleReplyToMessage = (message) => {
+    setReplyingTo(message);
+    setShowReplyModal(true);
+  };
+
+  const handleEditMessage = async (messageId, newContent) => {
+    try {
+      await chatAPI.editMessage(messageId, newContent);
+      toast.success('Message updated');
+    } catch (error) {
+      console.error('Failed to edit message:', error);
+      toast.error('Failed to edit message');
+      throw error;
+    }
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    try {
+      await chatAPI.deleteMessage(messageId);
+      toast.success('Message deleted');
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+      toast.error('Failed to delete message');
+      throw error;
+    }
+  };
+
+  const handlePinMessage = async (messageId) => {
+    try {
+      await chatAPI.pinMessage(messageId);
+      toast.success('Message pinned');
+    } catch (error) {
+      console.error('Failed to pin message:', error);
+      toast.error('Failed to pin message');
+      throw error;
+    }
+  };
+
+  const handleScrollToBottomClick = () => {
+    shouldAutoScroll.current = true;
+    setShowNewMessageAlert(false);
+    setUnreadCount(0);
+    scrollToBottom();
   };
 
   const getRoomIcon = () => {
@@ -433,7 +580,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                 />
                 {searchLoading && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <Loader className="w-4 h-4 animate-spin text-blue-500" />
                   </div>
                 )}
               </div>
@@ -499,7 +646,20 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                 placeholder="To date"
               />
               
-              {(searchQuery || searchFilters.dateFrom || searchFilters.dateTo) && (
+              <select
+                value={searchFilters.sender}
+                onChange={(e) => setSearchFilters(prev => ({ ...prev, sender: e.target.value }))}
+                className="px-2 py-1 border border-gray-300 rounded text-xs"
+              >
+                <option value="">All Users</option>
+                {members.map(member => (
+                  <option key={member.userId} value={member.userId}>
+                    {member.displayName || member.username}
+                  </option>
+                ))}
+              </select>
+              
+              {(searchQuery || searchFilters.dateFrom || searchFilters.dateTo || searchFilters.sender) && (
                 <button
                   onClick={clearSearch}
                   className="px-2 py-1 text-xs text-gray-600 hover:text-gray-800"
@@ -516,7 +676,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
           <div className="mt-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <div className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></div>
+                <div className="w-2 h-2 bg-yellow-500 rounded-full mr-2 animate-pulse"></div>
                 <span className="text-sm text-yellow-800">Reconnecting...</span>
               </div>
               <button
@@ -533,25 +693,31 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       {/* Messages Area */}
       <div 
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto p-6 bg-gray-50 relative"
+        className="flex-1 overflow-y-auto bg-gray-50 relative"
         style={{ scrollBehavior: 'smooth' }}
       >
-        {/* Load More Messages Indicator */}
+        {/* Load More Messages Indicator (at top) */}
+        {hasMoreMessages && (
+          <div ref={topObserverRef} className="h-1" />
+        )}
+        
         {isLoadingMore && (
           <div className="flex justify-center items-center py-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-            <span className="ml-2 text-sm text-gray-600">Loading older messages...</span>
+            <Loader className="animate-spin h-5 w-5 text-blue-500 mr-2" />
+            <span className="text-sm text-gray-600">Loading older messages...</span>
           </div>
         )}
         
-        {!hasMoreMessages && messages.length > 0 && (
+        {!hasMoreMessages && messages.length > 20 && (
           <div className="flex justify-center py-4">
-            <span className="text-sm text-gray-500">No more messages to load</span>
+            <span className="text-sm text-gray-500 bg-gray-200 px-3 py-1 rounded-full">
+              Beginning of conversation
+            </span>
           </div>
         )}
 
         {error && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-200 rounded-lg text-red-700 text-sm">
+          <div className="mx-4 my-4 p-3 bg-red-100 border border-red-200 rounded-lg text-red-700 text-sm">
             {error}
             {!connected && (
               <button
@@ -566,11 +732,11 @@ const RoomChatPanel = ({ room, currentUserId }) => {
 
         {loading && messages.length === 0 ? (
           <div className="flex justify-center items-center h-32">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            <span className="ml-2 text-gray-600">Loading messages...</span>
+            <Loader className="animate-spin h-8 w-8 text-blue-500 mr-2" />
+            <span className="text-gray-600">Loading messages...</span>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-gray-500">
+          <div className="flex flex-col items-center justify-center h-32 text-gray-500 p-6">
             {getRoomIcon()}
             <p className="text-lg font-medium mt-2">
               {room?.roomType === 'DIRECT_MESSAGE' 
@@ -586,23 +752,36 @@ const RoomChatPanel = ({ room, currentUserId }) => {
             </p>
           </div>
         ) : (
-          <div className="space-y-1">
-            {messages.map((message, index) => (
-              <div
-                key={`${message.id}-${message.createdAt}-${index}`}
-                id={`message-${message.id}`}
-                className={`transition-colors duration-300 ${
-                  searchResults.some(result => result.id === message.id) ? 'search-highlight' : ''
-                }`}
-              >
-                <ChatMessage
-                  message={message}
-                  isOwn={message.senderId === currentUserId}
-                  currentUserId={currentUserId}
-                  onlineUsers={members}
-                />
-              </div>
-            ))}
+          <div className="space-y-0">
+            {messages.map((message, index) => {
+              const parentMessage = message.parentMessageId 
+                ? messages.find(m => m.id === message.parentMessageId)
+                : null;
+              
+              return (
+                <div
+                  key={`${message.id}-${message.createdAt}-${index}`}
+                  id={`message-${message.id}`}
+                  className={`transition-colors duration-300 ${
+                    searchResults.some(result => result.id === message.id) ? 'search-highlight' : ''
+                  }`}
+                >
+                  <ChatMessage
+                    message={message}
+                    isOwn={message.senderId === currentUserId}
+                    currentUserId={currentUserId}
+                    onlineUsers={members}
+                    onReactToMessage={handleReactToMessage}
+                    onReplyToMessage={handleReplyToMessage}
+                    onEditMessage={handleEditMessage}
+                    onDeleteMessage={handleDeleteMessage}
+                    onPinMessage={handlePinMessage}
+                    parentMessage={parentMessage}
+                    isSearchResult={searchResults.some(result => result.id === message.id)}
+                  />
+                </div>
+              );
+            })}
             <TypingIndicator users={typingUsers} />
             {/* This div acts as the scroll anchor */}
             <div ref={messagesEndRef} className="h-1"></div>
@@ -610,18 +789,51 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         )}
       </div>
 
+      {/* New Message Alert */}
+      {showNewMessageAlert && unreadCount > 0 && (
+        <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-20">
+          <button
+            onClick={handleScrollToBottomClick}
+            className="bg-blue-500 text-white px-4 py-2 rounded-full shadow-lg hover:bg-blue-600 transition-colors flex items-center space-x-2"
+          >
+            <span>{unreadCount} new message{unreadCount !== 1 ? 's' : ''}</span>
+            <ArrowDown className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Scroll to Bottom Button */}
-      {showScrollToBottom && (
+      {showScrollToBottom && !showNewMessageAlert && (
         <button
-          onClick={() => {
-            shouldAutoScroll.current = true;
-            scrollToBottom(true);
-          }}
-          className="absolute bottom-20 right-6 bg-blue-500 text-white p-3 rounded-full shadow-lg hover:bg-blue-600 transition-colors z-10"
+          onClick={handleScrollToBottomClick}
+          className="absolute bottom-20 right-6 bg-gray-600 text-white p-3 rounded-full shadow-lg hover:bg-gray-700 transition-colors z-10"
           title="Scroll to bottom"
         >
-          <ChevronDown className="h-5 w-5" />
+          <ArrowDown className="h-5 w-5" />
         </button>
+      )}
+
+      {/* Reply indicator */}
+      {replyingTo && !showReplyModal && (
+        <div className="px-4 py-2 bg-blue-50 border-t border-blue-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Reply className="h-4 w-4 text-blue-600" />
+              <span className="text-sm text-blue-800">
+                Replying to {replyingTo.senderName}
+              </span>
+              <span className="text-xs text-blue-600 max-w-xs truncate">
+                {replyingTo.content}
+              </span>
+            </div>
+            <button
+              onClick={() => setReplyingTo(null)}
+              className="text-blue-600 hover:text-blue-800"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Message Input */}
@@ -632,17 +844,34 @@ const RoomChatPanel = ({ room, currentUserId }) => {
           onStopTyping={stopTyping}
           connected={connected}
           onlineUsers={members}
-          placeholder={`Message ${getRoomTitle()}...`}
+          placeholder={
+            replyingTo 
+              ? `Reply to ${replyingTo.senderName}...`
+              : `Message ${getRoomTitle()}...`
+          }
+          replyingTo={replyingTo}
+          onCancelReply={() => setReplyingTo(null)}
         />
       </div>
 
-      {/* Room Members Modal */}
+      {/* Modals */}
       {showMembersModal && room?.roomType === 'GROUP_CHAT' && (
         <RoomMembersModal
           room={room}
           members={members}
           currentUserId={currentUserId}
           onClose={() => setShowMembersModal(false)}
+        />
+      )}
+
+      {showReplyModal && replyingTo && (
+        <ReplyModal
+          message={replyingTo}
+          onClose={() => {
+            setShowReplyModal(false);
+            setReplyingTo(null);
+          }}
+          onSend={handleSendMessage}
         />
       )}
 
@@ -704,7 +933,10 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                 )}
                 
                 <button 
-                  onClick={() => setShowSearch(true)}
+                  onClick={() => {
+                    setShowSearch(true);
+                    setShowRoomInfo(false);
+                  }}
                   className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center"
                 >
                   <Search className="h-4 w-4 mr-3" />

@@ -18,6 +18,7 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
 import java.time.LocalDateTime;
@@ -699,6 +700,363 @@ public class ChatController {
         } catch (Exception e) {
             log.error("Error getting message context for message {}: {}", messageId, e.getMessage(), e);
             return ResponseEntity.status(500).build();
+        }
+    }
+
+
+    // Message Reaction Endpoints
+    @PostMapping("/messages/{messageId}/reactions")
+    public ResponseEntity<Void> addReaction(@PathVariable Long messageId,
+                                            @RequestBody MessageReactionRequest request,
+                                            Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Adding reaction {} to message {} by user: {}",
+                    request.getReactionType(), messageId, userPrincipal.getUsername());
+
+            chatService.addReactionToMessage(messageId, request.getReactionType(), userPrincipal.getId());
+            return ResponseEntity.ok().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error adding reaction to message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @DeleteMapping("/messages/{messageId}/reactions/{reactionType}")
+    public ResponseEntity<Void> removeReaction(@PathVariable Long messageId,
+                                               @PathVariable String reactionType,
+                                               Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Removing reaction {} from message {} by user: {}",
+                    reactionType, messageId, userPrincipal.getUsername());
+
+            chatService.removeReactionFromMessage(messageId, reactionType, userPrincipal.getId());
+            return ResponseEntity.ok().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error removing reaction from message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @GetMapping("/messages/{messageId}/reactions")
+    public ResponseEntity<Map<String, MessageReactionDTO>> getMessageReactions(@PathVariable Long messageId,
+                                                                               Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            Map<String, MessageReactionDTO> reactions = chatService.getMessageReactions(messageId, userPrincipal.getId());
+            return ResponseEntity.ok(reactions);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error getting reactions for message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    // Message Edit/Delete Endpoints
+    @PutMapping("/messages/{messageId}")
+    public ResponseEntity<ChatMessageDTO> editMessage(@PathVariable Long messageId,
+                                                      @RequestBody EditMessageRequest request,
+                                                      Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Editing message {} by user: {}", messageId, userPrincipal.getUsername());
+
+            ChatMessageDTO updatedMessage = chatService.editMessage(messageId, request.getContent(), userPrincipal.getId());
+            return ResponseEntity.ok(updatedMessage);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error editing message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @DeleteMapping("/messages/{messageId}")
+    public ResponseEntity<Void> deleteMessage(@PathVariable Long messageId, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Deleting message {} by user: {}", messageId, userPrincipal.getUsername());
+
+            chatService.deleteMessage(messageId, userPrincipal.getId());
+            return ResponseEntity.ok().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error deleting message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    // Message Pin Endpoints
+    @PostMapping("/messages/{messageId}/pin")
+    public ResponseEntity<Void> pinMessage(@PathVariable Long messageId, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Pinning message {} by user: {}", messageId, userPrincipal.getUsername());
+
+            chatService.pinMessage(messageId, userPrincipal.getId());
+            return ResponseEntity.ok().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error pinning message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @DeleteMapping("/messages/{messageId}/pin")
+    public ResponseEntity<Void> unpinMessage(@PathVariable Long messageId, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Unpinning message {} by user: {}", messageId, userPrincipal.getUsername());
+
+            chatService.unpinMessage(messageId, userPrincipal.getId());
+            return ResponseEntity.ok().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error unpinning message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    // Thread/Reply Endpoints
+    @GetMapping("/messages/{messageId}/replies")
+    public ResponseEntity<List<ChatMessageDTO>> getThreadReplies(@PathVariable Long messageId,
+                                                                 @RequestParam(defaultValue = "0") int page,
+                                                                 @RequestParam(defaultValue = "20") int size,
+                                                                 Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.debug("Getting thread replies for message {} by user: {}", messageId, userPrincipal.getUsername());
+
+            List<ChatMessageDTO> replies = chatService.getThreadReplies(messageId, page, size, userPrincipal.getId());
+            return ResponseEntity.ok(replies);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error getting thread replies for message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @PostMapping("/messages/reply")
+    public ResponseEntity<ChatMessageDTO> sendReply(@RequestBody SendReplyRequest request, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Sending reply to message {} by user: {}", request.getParentMessageId(), userPrincipal.getUsername());
+
+            ChatMessageDTO reply = chatService.sendReply(request, userPrincipal.getId());
+            return ResponseEntity.ok(reply);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error sending reply: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    // File Upload Endpoint for Chat Attachments
+    @PostMapping("/attachments/upload")
+    public ResponseEntity<AttachmentUploadResponse> uploadAttachment(@RequestParam("file") MultipartFile file,
+                                                                     @RequestParam("roomId") Long roomId,
+                                                                     Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            // Verify user has access to room
+            if (!chatRoomMemberRepository.existsByChatRoomIdAndUserId(roomId, userPrincipal.getId())) {
+                return ResponseEntity.status(403).build();
+            }
+
+            log.info("Uploading attachment {} for room {} by user: {}", file.getOriginalFilename(), roomId, userPrincipal.getUsername());
+
+            AttachmentUploadResponse response = chatService.uploadAttachment(file, roomId, userPrincipal.getId());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error uploading attachment: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    // Mentions Endpoints
+    @GetMapping("/mentions")
+    public ResponseEntity<List<ChatMessageDTO>> getUserMentions(@RequestParam(defaultValue = "0") int page,
+                                                                @RequestParam(defaultValue = "20") int size,
+                                                                Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.debug("Getting mentions for user: {}", userPrincipal.getUsername());
+
+            List<ChatMessageDTO> mentions = chatService.getUserMentions(userPrincipal.getId(), page, size);
+            return ResponseEntity.ok(mentions);
+        } catch (Exception e) {
+            log.error("Error getting user mentions: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @PostMapping("/mentions/{messageId}/read")
+    public ResponseEntity<Void> markMentionAsRead(@PathVariable Long messageId, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.debug("Marking mention as read for message {} by user: {}", messageId, userPrincipal.getUsername());
+
+            chatService.markMentionAsRead(messageId, userPrincipal.getId());
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            log.error("Error marking mention as read: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+// WebSocket Message Handlers for Enhanced Features
+
+    @MessageMapping("/chat/room/{roomId}/react")
+    public void handleReaction(@DestinationVariable Long roomId, Map<String, Object> payload, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                Long messageId = Long.valueOf(payload.get("messageId").toString());
+                String reactionType = (String) payload.get("reactionType");
+                String action = (String) payload.get("action");
+
+                if ("remove".equals(action)) {
+                    chatService.removeReactionFromMessage(messageId, reactionType, userPrincipal.getId());
+                } else {
+                    chatService.addReactionToMessage(messageId, reactionType, userPrincipal.getId());
+                }
+
+                log.debug("Processed reaction {} for message {} by user: {}", reactionType, messageId, userPrincipal.getUsername());
+            }
+        } catch (Exception e) {
+            log.error("Error handling reaction for room {}: {}", roomId, e.getMessage(), e);
+        }
+    }
+
+    @MessageMapping("/chat/room/{roomId}/edit")
+    public void handleMessageEdit(@DestinationVariable Long roomId, Map<String, Object> payload, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                Long messageId = Long.valueOf(payload.get("messageId").toString());
+                String newContent = (String) payload.get("newContent");
+
+                chatService.editMessage(messageId, newContent, userPrincipal.getId());
+                log.debug("Edited message {} by user: {}", messageId, userPrincipal.getUsername());
+            }
+        } catch (Exception e) {
+            log.error("Error handling message edit for room {}: {}", roomId, e.getMessage(), e);
+        }
+    }
+
+    @MessageMapping("/chat/room/{roomId}/delete")
+    public void handleMessageDelete(@DestinationVariable Long roomId, Map<String, Object> payload, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                Long messageId = Long.valueOf(payload.get("messageId").toString());
+
+                chatService.deleteMessage(messageId, userPrincipal.getId());
+                log.debug("Deleted message {} by user: {}", messageId, userPrincipal.getUsername());
+            }
+        } catch (Exception e) {
+            log.error("Error handling message delete for room {}: {}", roomId, e.getMessage(), e);
+        }
+    }
+
+    @MessageMapping("/chat/room/{roomId}/pin")
+    public void handleMessagePin(@DestinationVariable Long roomId, Map<String, Object> payload, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                Long messageId = Long.valueOf(payload.get("messageId").toString());
+                String action = (String) payload.get("action");
+
+                if ("unpin".equals(action)) {
+                    chatService.unpinMessage(messageId, userPrincipal.getId());
+                } else {
+                    chatService.pinMessage(messageId, userPrincipal.getId());
+                }
+
+                log.debug("Processed pin action {} for message {} by user: {}", action, messageId, userPrincipal.getUsername());
+            }
+        } catch (Exception e) {
+            log.error("Error handling message pin for room {}: {}", roomId, e.getMessage(), e);
+        }
+    }
+
+    @MessageMapping("/chat/room/{roomId}/reply")
+    public void handleReply(@DestinationVariable Long roomId, Map<String, Object> payload, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                Long parentMessageId = Long.valueOf(payload.get("parentMessageId").toString());
+                String content = (String) payload.get("content");
+
+                SendReplyRequest request = new SendReplyRequest();
+                request.setParentMessageId(parentMessageId);
+                request.setContent(content);
+                request.setChatRoomId(roomId);
+
+                chatService.sendReply(request, userPrincipal.getId());
+                log.debug("Sent reply to message {} by user: {}", parentMessageId, userPrincipal.getUsername());
+            }
+        } catch (Exception e) {
+            log.error("Error handling reply for room {}: {}", roomId, e.getMessage(), e);
         }
     }
 }

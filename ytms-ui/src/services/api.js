@@ -987,8 +987,10 @@ export const youtubeOAuthAPI = {
     });
   },
 };
+
+
 export const chatAPI = {
-  // Existing methods...
+  // Existing methods... (keep all your current methods)
   getChatHistory: (taskId, page = 0, size = 50) => {
     const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
     if (taskId) params.append('taskId', taskId.toString());
@@ -997,25 +999,17 @@ export const chatAPI = {
 
   getOnlineUsers: () => api.get('/chat/online-users'),
 
-  // New room-based methods
-  
-  // Get list of all chat rooms for current user
   getChatRoomList: () => api.get('/chat/rooms'),
   
-  // Get details of a specific room
   getRoomDetails: (roomId) => api.get(`/chat/rooms/${roomId}`),
   
-  // Create a new chat room
   createChatRoom: (request) => api.post('/chat/rooms', request),
   
-  // Get or create direct message room
   createOrGetDirectMessage: (recipientId) => 
     api.post(`/chat/direct-messages?recipientId=${recipientId}`),
   
-  // Send direct message
   sendDirectMessage: (request) => api.post('/chat/direct-messages/send', request),
   
-  // Get messages for a specific room
   getRoomMessages: (roomId, page = 0, size = 50) => {
     const params = new URLSearchParams({ 
       page: page.toString(), 
@@ -1024,25 +1018,201 @@ export const chatAPI = {
     return api.get(`/chat/rooms/${roomId}/messages?${params}`);
   },
   
-  // Mark room as read
   markRoomAsRead: (roomId) => api.post(`/chat/rooms/${roomId}/read`),
   
-  // Search messages
   searchMessages: (request) => api.post('/chat/search', request),
   
-  // Room member management
   addMembersToRoom: (roomId, request) => 
     api.post(`/chat/rooms/${roomId}/members`, request),
   
   removeMemberFromRoom: (roomId, userId) => 
     api.delete(`/chat/rooms/${roomId}/members/${userId}`),
   
-  // Update room settings
   updateRoom: (roomId, request) => api.put(`/chat/rooms/${roomId}`, request),
-  
-  // Archive/unarchive room
-  archiveRoom: (roomId) => api.patch(`/chat/rooms/${roomId}/archive`),
-  unarchiveRoom: (roomId) => api.patch(`/chat/rooms/${roomId}/unarchive`),
+
+  // NEW: Message reaction methods
+  reactToMessage: (messageId, reactionType) => {
+    console.log(`Adding ${reactionType} reaction to message ${messageId}`);
+    return api.post(`/chat/messages/${messageId}/reactions`, {
+      reactionType: reactionType
+    });
+  },
+
+  removeReaction: (messageId, reactionType) => {
+    console.log(`Removing ${reactionType} reaction from message ${messageId}`);
+    return api.delete(`/chat/messages/${messageId}/reactions/${reactionType}`);
+  },
+
+  getMessageReactions: (messageId) => {
+    console.log(`Getting reactions for message ${messageId}`);
+    return api.get(`/chat/messages/${messageId}/reactions`);
+  },
+
+  // NEW: Message action methods
+  editMessage: (messageId, newContent) => {
+    console.log(`Editing message ${messageId} with new content`);
+    return api.put(`/chat/messages/${messageId}`, {
+      content: newContent
+    });
+  },
+
+  deleteMessage: (messageId) => {
+    console.log(`Deleting message ${messageId}`);
+    return api.delete(`/chat/messages/${messageId}`);
+  },
+
+  pinMessage: (messageId) => {
+    console.log(`Pinning message ${messageId}`);
+    return api.post(`/chat/messages/${messageId}/pin`);
+  },
+
+  unpinMessage: (messageId) => {
+    console.log(`Unpinning message ${messageId}`);
+    return api.delete(`/chat/messages/${messageId}/pin`);
+  },
+
+  // NEW: Thread/reply methods
+  getThreadReplies: (messageId, page = 0, size = 20) => {
+    console.log(`Getting thread replies for message ${messageId}`);
+    const params = new URLSearchParams({ 
+      page: page.toString(), 
+      size: size.toString() 
+    });
+    return api.get(`/chat/messages/${messageId}/replies?${params}`);
+  },
+
+  sendReply: (parentMessageId, content, attachments = null) => {
+    console.log(`Sending reply to message ${parentMessageId}`);
+    const payload = {
+      content: content,
+      parentMessageId: parentMessageId
+    };
+    
+    if (attachments) {
+      payload.attachmentUrl = attachments.url;
+      payload.attachmentName = attachments.name;
+      payload.attachmentType = attachments.type;
+    }
+    
+    return api.post('/chat/messages/reply', payload);
+  },
+
+  // NEW: Advanced search methods
+  advancedSearchMessages: (request) => {
+    console.log('Performing advanced message search:', request);
+    return api.post('/chat/search/advanced', request);
+  },
+
+  getMessageContext: (messageId, beforeCount = 10, afterCount = 10) => {
+    console.log(`Getting context for message ${messageId}`);
+    const params = new URLSearchParams({
+      beforeCount: beforeCount.toString(),
+      afterCount: afterCount.toString()
+    });
+    return api.get(`/chat/messages/${messageId}/context?${params}`);
+  },
+
+  // NEW: Message history with date range
+  getMessagesByDateRange: (roomId, fromDate, toDate, page = 0, size = 50) => {
+    console.log(`Getting messages for room ${roomId} from ${fromDate} to ${toDate}`);
+    const params = new URLSearchParams({
+      fromDate: fromDate,
+      toDate: toDate,
+      page: page.toString(),
+      size: size.toString()
+    });
+    return api.get(`/chat/rooms/${roomId}/messages/date-range?${params}`);
+  },
+
+  // NEW: File upload for chat attachments
+  uploadChatAttachment: async (file, roomId) => {
+    console.log(`Uploading attachment for room ${roomId}`);
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('roomId', roomId.toString());
+    
+    return api.post('/chat/attachments/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      timeout: 5 * 60 * 1000 // 5 minutes for file upload
+    });
+  },
+
+  // NEW: Get chat statistics
+  getChatStats: (roomId) => {
+    console.log(`Getting chat statistics for room ${roomId}`);
+    return api.get(`/chat/rooms/${roomId}/stats`);
+  },
+
+  // NEW: Export chat history
+  exportChatHistory: (roomId, format = 'json', fromDate = null, toDate = null) => {
+    console.log(`Exporting chat history for room ${roomId} in ${format} format`);
+    const params = new URLSearchParams({
+      format: format
+    });
+    
+    if (fromDate) params.append('fromDate', fromDate);
+    if (toDate) params.append('toDate', toDate);
+    
+    return api.get(`/chat/rooms/${roomId}/export?${params}`, {
+      responseType: 'blob'
+    });
+  },
+
+  // NEW: Mention methods
+  getMentions: (page = 0, size = 20) => {
+    console.log('Getting user mentions');
+    const params = new URLSearchParams({ 
+      page: page.toString(), 
+      size: size.toString() 
+    });
+    return api.get(`/chat/mentions?${params}`);
+  },
+
+  markMentionAsRead: (messageId) => {
+    console.log(`Marking mention as read for message ${messageId}`);
+    return api.post(`/chat/mentions/${messageId}/read`);
+  },
+
+  // NEW: Notification preferences
+  updateNotificationSettings: (roomId, settings) => {
+    console.log(`Updating notification settings for room ${roomId}`, settings);
+    return api.put(`/chat/rooms/${roomId}/notifications`, settings);
+  },
+
+  getUserNotificationSettings: () => {
+    console.log('Getting user notification settings');
+    return api.get('/chat/notifications/settings');
+  },
+
+  updateGlobalNotificationSettings: (settings) => {
+    console.log('Updating global notification settings', settings);
+    return api.put('/chat/notifications/settings', settings);
+  },
+
+  // NEW: Presence and status methods
+  updateUserPresence: (status, statusMessage = null) => {
+    console.log(`Updating user presence to ${status}`);
+    return api.post('/chat/presence', {
+      status: status,
+      statusMessage: statusMessage
+    });
+  },
+
+  getUserPresence: (userId) => {
+    console.log(`Getting presence for user ${userId}`);
+    return api.get(`/chat/presence/${userId}`);
+  },
+
+  // NEW: Typing indicators (for REST fallback)
+  sendTypingIndicator: (roomId, isTyping) => {
+    console.log(`Sending typing indicator for room ${roomId}: ${isTyping}`);
+    return api.post(`/chat/rooms/${roomId}/typing`, {
+      isTyping: isTyping
+    });
+  }
 };
 
 
