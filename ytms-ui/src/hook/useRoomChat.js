@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import WebSocketService from '../services/WebSocketService ';
+import WebSocketService from '../services/WebSocketService';
 import { chatAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -144,8 +144,12 @@ export const useRoomChat = (roomId) => {
         clearTimeout(reconnectTimeoutRef.current);
       }
       
-      processedMessageIds.current.clear();
-      pendingMessages.current.clear();
+      // Capture refs to avoid stale closure warnings
+      const processedIds = processedMessageIds.current;
+      const pendingMsgs = pendingMessages.current;
+      
+      processedIds.clear();
+      pendingMsgs.clear();
       cleanupRoomSubscriptions();
     };
   }, []);

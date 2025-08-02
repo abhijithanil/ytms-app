@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import ChatRoomsSidebar from '../components/chat/ChatRoomsSidebar';
 import RoomChatPanel from '../components/chat/RoomChatPanel';
-import CreateDirectMessageModal from '../components/chat/CreateDirectMessageModal ';
-import CreateGroupChatModal from '../components/chat/CreateGroupChatModal ';
+import CreateDirectMessageModal from '../components/chat/CreateDirectMessageModal';
+import CreateGroupChatModal from '../components/chat/CreateGroupChatModal';
 import { MessageCircle, Users, Plus } from 'lucide-react';
 
 const Chat = () => {

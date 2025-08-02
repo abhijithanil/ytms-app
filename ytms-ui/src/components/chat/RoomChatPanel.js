@@ -146,7 +146,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [isLoadingMore, hasMoreMessages, connected]);
+  }, [isLoadingMore, hasMoreMessages, connected, loadOlderMessages]);
 
   // Mark room as read when room changes or messages are received
   useEffect(() => {
@@ -164,7 +164,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
 
 
 
-  const loadOlderMessages = async () => {
+  const loadOlderMessages = useCallback(async () => {
     if (isLoadingMore || !hasMoreMessages) return;
     
     try {
@@ -182,7 +182,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     } finally {
       setIsLoadingMore(false);
     }
-  };
+  }, [isLoadingMore, hasMoreMessages, page, loadMoreMessages]);
 
   // Search functionality
   const performSearch = async (query, filters = searchFilters) => {

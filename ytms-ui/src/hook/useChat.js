@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import WebSocketService from '../services/WebSocketService ';
+import WebSocketService from '../services/WebSocketService';
 import toast from 'react-hot-toast';
 import { chatAPI } from '../services/api';
 
@@ -90,7 +90,7 @@ export const useChat = (taskId = null) => {
     return () => {
       console.log('🎯 useChat: Effect cleanup');
     };
-  }, [user, token]);
+  }, [user, token, loadChatHistory, connectToChat]);
 
   // Separate cleanup effect that only runs on actual unmount
   useEffect(() => {
@@ -98,7 +98,11 @@ export const useChat = (taskId = null) => {
       console.log('🎯 useChat: Component unmounting - disconnecting WebSocket');
       mountedRef.current = false;
       connectionAttemptedRef.current = false;
-      processedMessageIds.current.clear();
+      
+      // Capture ref to avoid stale closure warnings
+      const processedIds = processedMessageIds.current;
+      processedIds.clear();
+      
       WebSocketService.disconnect();
     };
   }, []); // Empty dependency array - only runs on mount/unmount
@@ -187,7 +191,7 @@ export const useChat = (taskId = null) => {
     }
   }, [connected, taskId, addMessageSafely]);
 
-  const connectToChat = async () => {
+  const connectToChat = useCallback(async () => {
     try {
       console.log('🎯 connectToChat: Starting connection process');
       setLoading(true);
@@ -235,9 +239,9 @@ export const useChat = (taskId = null) => {
         toast.error('Failed to connect to chat');
       }
     }
-  };
+  }, [token, user]);
 
-  const loadChatHistory = async () => {
+  const loadChatHistory = useCallback(async () => {
     try {
       console.log('🎯 loadChatHistory: Loading history for taskId:', taskId);
       const response = await chatAPI.getChatHistory(taskId, 0, 50);
@@ -245,7 +249,8 @@ export const useChat = (taskId = null) => {
       
       if (mountedRef.current) {
         // Clear processed message IDs when loading fresh history
-        processedMessageIds.current.clear();
+        const processedIds = processedMessageIds.current;
+        processedIds.clear();
         
         // Remove duplicates and sort messages by createdAt to ensure chronological order (oldest first)
         const uniqueMessages = response.data.filter((message, index, self) => 
@@ -259,7 +264,7 @@ export const useChat = (taskId = null) => {
         // Add all messages to processed set
         sortedMessages.forEach(msg => {
           const messageKey = `${msg.id}_${msg.createdAt}`;
-          processedMessageIds.current.add(messageKey);
+          processedIds.add(messageKey);
         });
         
         console.log('🎯 loadChatHistory: Messages deduplicated and sorted chronologically (oldest first)');
@@ -271,7 +276,7 @@ export const useChat = (taskId = null) => {
         toast.error('Failed to load chat history');
       }
     }
-  };
+  }, [taskId]);
 
   const loadOnlineUsers = async () => {
     try {

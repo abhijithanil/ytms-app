@@ -1,6 +1,5 @@
 import React from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import MessageWithMentions from './MessageWithMentions';
 
 const ChatMessage = ({ message, isOwn = false, currentUserId, onlineUsers = [] }) => {
   const getInitials = (name, username) => {
@@ -43,7 +42,43 @@ const ChatMessage = ({ message, isOwn = false, currentUserId, onlineUsers = [] }
   }
 
   return (
-    "ww"
+    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} mb-4`} id={`message-${message.id}`}>
+      <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+        isOwn 
+          ? 'bg-blue-500 text-white' 
+          : userMentioned 
+            ? 'bg-yellow-100 border border-yellow-300' 
+            : 'bg-gray-200 text-gray-900'
+      }`}>
+        {!isOwn && (
+          <div className="flex items-center mb-1">
+            <div className="w-6 h-6 bg-gray-400 rounded-full flex items-center justify-center text-xs text-white mr-2">
+              {getInitials(message.senderName, message.senderUsername)}
+            </div>
+            <span className="text-sm font-medium">{message.senderName || message.senderUsername}</span>
+          </div>
+        )}
+        
+        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+        
+        {message.attachmentUrl && (
+          <div className="mt-2">
+            <a 
+              href={message.attachmentUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-400 underline text-sm"
+            >
+              {message.attachmentName || 'Download'}
+            </a>
+          </div>
+        )}
+        
+        <div className="text-xs opacity-75 mt-1">
+          {formatTime(message.createdAt)}
+        </div>
+      </div>
+    </div>
   );
 };
 
