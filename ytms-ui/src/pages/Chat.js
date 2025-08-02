@@ -5,6 +5,7 @@ import RoomChatPanel from '../components/chat/RoomChatPanel';
 import CreateDirectMessageModal from '../components/chat/CreateDirectMessageModal';
 import CreateGroupChatModal from '../components/chat/CreateGroupChatModal';
 import { MessageCircle, Users, Plus } from 'lucide-react';
+import '../components/chat/chat-enhancements.css';
 
 const Chat = () => {
   const { user } = useAuth();

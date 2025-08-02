@@ -14,6 +14,8 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { chatAPI } from '../../services/api';
+import UserPresenceIndicator from './UserPresenceIndicator';
+import EnhancedUnreadBadge from './EnhancedUnreadBadge';
 
 const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
   const [chatRooms, setChatRooms] = useState({
@@ -92,27 +94,15 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
     }));
   };
 
-  const getUnreadBadge = (unreadCount) => {
+  const getUnreadBadge = (unreadCount, hasMentions = false) => {
     if (!unreadCount || unreadCount === 0) return null;
     
-    return (
-      <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full min-w-[1.25rem] h-5 flex items-center justify-center">
-        {unreadCount > 99 ? '99+' : unreadCount}
-      </span>
-    );
+    const variant = hasMentions ? 'mention' : 'default';
+    return <EnhancedUnreadBadge count={unreadCount} variant={variant} className="ml-auto" />;
   };
 
   const getStatusIndicator = (status) => {
-    const colors = {
-      online: 'bg-green-500',
-      away: 'bg-yellow-500',
-      busy: 'bg-red-500',
-      offline: 'bg-gray-400'
-    };
-    
-    return (
-      <div className={`w-2 h-2 rounded-full ${colors[status] || colors.offline}`} />
-    );
+    return <UserPresenceIndicator status={status} size="sm" />;
   };
 
   const getRoomIcon = (room) => {
@@ -212,7 +202,7 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
           } ${hasUnreadMessages(room) ? 'font-semibold' : ''}`}>
             {room.displayName || room.roomName || 'Unknown Room'}
           </span>
-          {getUnreadBadge(room.unreadCount)}
+          {getUnreadBadge(room.unreadCount, room.hasMentions)}
         </div>
         
         {room.lastMessage && (

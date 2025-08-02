@@ -21,10 +21,12 @@ import {
 } from 'lucide-react';
 import { useRoomChat } from '../../hook/useRoomChat';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../hook/useNotifications';
 import ChatMessage from './ChatMessage';
 import TypingIndicator from './TypingIndicator';
 import UserMentionInput from './UserMentionInput';
 import RoomMembersModal from './RoomMembersModal';
+import UserPresenceIndicator from './UserPresenceIndicator';
 import { chatAPI } from '../../services/api';
 
 const RoomChatPanel = ({ room, currentUserId }) => {
@@ -43,6 +45,9 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     reconnect,
     loadMoreMessages
   } = useRoomChat(room?.id);
+
+  // Enable desktop notifications
+  useNotifications(room, messages, members);
 
   // UI State
   const [showMembersModal, setShowMembersModal] = useState(false);
@@ -321,16 +326,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
 
   const getStatusIndicator = () => {
     if (room?.roomType === 'DIRECT_MESSAGE' && room.dmParticipantStatus) {
-      const colors = {
-        online: 'bg-green-500',
-        away: 'bg-yellow-500',
-        busy: 'bg-red-500',
-        offline: 'bg-gray-400'
-      };
-      
-      return (
-        <div className={`w-3 h-3 rounded-full ${colors[room.dmParticipantStatus] || colors.offline}`} />
-      );
+      return <UserPresenceIndicator status={room.dmParticipantStatus} size="md" />;
     }
     return null;
   };
@@ -600,6 +596,26 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                   isOwn={message.senderId === currentUserId}
                   currentUserId={currentUserId}
                   onlineUsers={members}
+                  onReply={(message) => {
+                    // Handle reply functionality
+                    console.log('Reply to message:', message.id);
+                  }}
+                  onEdit={(message) => {
+                    // Handle edit functionality
+                    console.log('Edit message:', message.id);
+                  }}
+                  onDelete={(message) => {
+                    // Handle delete functionality
+                    console.log('Delete message:', message.id);
+                  }}
+                  onAddReaction={(messageId, emoji) => {
+                    // Handle add reaction functionality
+                    console.log('Add reaction:', emoji, 'to message:', messageId);
+                  }}
+                  onRemoveReaction={(messageId, emoji) => {
+                    // Handle remove reaction functionality
+                    console.log('Remove reaction:', emoji, 'from message:', messageId);
+                  }}
                 />
               </div>
             ))}

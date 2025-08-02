@@ -1,0 +1,240 @@
+/* Additional CSS for Slack-like chat enhancements */
+
+/* Smooth animations */
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced message hover effects */
+.message-hover {
+  transition: all 0.2s ease-in-out;
+}
+
+.message-hover:hover {
+  background-color: rgba(249, 250, 251, 0.8);
+  border-radius: 8px;
+}
+
+/* Search highlight animation */
+.search-highlight {
+  background-color: rgba(255, 235, 59, 0.3);
+  animation: highlightPulse 2s ease-in-out;
+}
+
+@keyframes highlightPulse {
+  0%, 100% {
+    background-color: rgba(255, 235, 59, 0.3);
+  }
+  50% {
+    background-color: rgba(255, 235, 59, 0.6);
+  }
+}
+
+/* Typing indicator bouncing dots */
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+.animate-bounce {
+  animation: bounce 1.4s infinite ease-in-out;
+}
+
+/* Mention highlight */
+.mention-highlight {
+  background-color: rgba(255, 235, 59, 0.2);
+  border-left: 4px solid #fbbf24;
+  padding-left: 12px;
+  margin-left: -16px;
+  border-radius: 0 8px 8px 0;
+}
+
+/* User status indicators with glow effect */
+.status-online {
+  background-color: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.status-away {
+  background-color: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.status-busy {
+  background-color: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+.status-offline {
+  background-color: #9ca3af;
+}
+
+/* Improved scrollbar styling */
+.chat-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Message reactions hover effect */
+.reaction-button {
+  transition: all 0.2s ease-in-out;
+  transform: scale(1);
+}
+
+.reaction-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Enhanced unread badge with pulse */
+.unread-badge-pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Improved focus states */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+  border-color: #3b82f6;
+}
+
+/* Slack-like message threading */
+.thread-reply {
+  border-left: 2px solid #e5e7eb;
+  margin-left: 20px;
+  padding-left: 12px;
+  background-color: rgba(249, 250, 251, 0.5);
+}
+
+/* Enhanced room list item hover */
+.room-item {
+  transition: all 0.15s ease-in-out;
+}
+
+.room-item:hover {
+  background-color: rgba(59, 130, 246, 0.05);
+  border-radius: 6px;
+}
+
+.room-item.selected {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-right: 3px solid #3b82f6;
+}
+
+/* Better emoji picker styling */
+.emoji-picker {
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Loading state improvements */
+.loading-dots {
+  display: inline-flex;
+  align-items: center;
+}
+
+.loading-dots::after {
+  content: '';
+  animation: loadingDots 1.4s infinite;
+}
+
+@keyframes loadingDots {
+  0%, 80%, 100% {
+    content: '.';
+  }
+  20% {
+    content: '..';
+  }
+  40% {
+    content: '...';
+  }
+  60% {
+    content: '....';
+  }
+}
+
+/* Enhanced message input styling */
+.message-input {
+  transition: all 0.2s ease-in-out;
+  border: 1px solid #e5e7eb;
+}
+
+.message-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Better notification styling */
+.notification-toast {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+  .chat-sidebar {
+    position: fixed;
+    left: -100%;
+    transition: left 0.3s ease-in-out;
+    z-index: 1000;
+  }
+  
+  .chat-sidebar.open {
+    left: 0;
+  }
+  
+  .chat-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+  }
+}
