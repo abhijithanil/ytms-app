@@ -1,5 +1,7 @@
 package com.insp17.ytms.dtos;
 
+import com.insp17.ytms.entity.User;
+
 public class UserSummary {
     private Long id;
     private String username;
@@ -11,6 +13,13 @@ public class UserSummary {
         this.username = username;
         this.email = email;
         this.role = role;
+    }
+
+    public UserSummary(User user) {
+        this.id = user.getId();
+        this.username = user.getUsername();
+        this.email = user.getEmail();
+        this.role = user.getRole() != null ? user.getRole().toString() : null;
     }
 
     // Getters and setters
