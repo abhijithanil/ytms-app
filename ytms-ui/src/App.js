@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { authAPI } from "./services/api";
 
 import Chat from './pages/Chat'; // Enhanced Chat page
+import ChatDemo from './pages/ChatDemo'; // Chat demo page
 import Layout from "./components/Layout/Layout";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -179,6 +180,9 @@ function AppContent() {
         
         {/* UPDATED: Chat route with Layout */}
         <Route path="/chat" element={<ProtectedRoute><Layout><Chat /></Layout></ProtectedRoute>} />
+        
+        {/* Chat Demo Route - Public for testing */}
+        <Route path="/chat-demo" element={<ChatDemo />} />
 
         {/* Default route */}
         <Route path="/" element={<Navigate to="/dashboard" />} />
