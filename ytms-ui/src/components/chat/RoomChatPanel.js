@@ -279,6 +279,41 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     return sendMessage(content);
   };
 
+  // Enhanced message interaction handlers
+  const handleMessageReaction = async (messageId, emoji) => {
+    try {
+      // TODO: Implement API call for message reactions
+      console.log('Adding reaction:', { messageId, emoji });
+      // await chatAPI.addReaction(messageId, emoji);
+    } catch (error) {
+      console.error('Failed to add reaction:', error);
+    }
+  };
+
+  const handleEditMessage = (message) => {
+    // TODO: Implement message editing functionality
+    console.log('Editing message:', message);
+    // You would typically open an edit modal or inline editor here
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    try {
+      if (window.confirm('Are you sure you want to delete this message?')) {
+        // TODO: Implement API call for message deletion
+        console.log('Deleting message:', messageId);
+        // await chatAPI.deleteMessage(messageId);
+      }
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+    }
+  };
+
+  const handleReplyToMessage = (message) => {
+    // TODO: Implement message reply functionality
+    console.log('Replying to message:', message);
+    // You would typically set the message as a reply context
+  };
+
   const getRoomIcon = () => {
     switch (room?.roomType) {
       case 'DIRECT_MESSAGE':
@@ -600,6 +635,10 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                   isOwn={message.senderId === currentUserId}
                   currentUserId={currentUserId}
                   onlineUsers={members}
+                  onReaction={(messageId, emoji) => handleMessageReaction(messageId, emoji)}
+                  onEdit={(message) => handleEditMessage(message)}
+                  onDelete={(messageId) => handleDeleteMessage(messageId)}
+                  onReply={(message) => handleReplyToMessage(message)}
                 />
               </div>
             ))}

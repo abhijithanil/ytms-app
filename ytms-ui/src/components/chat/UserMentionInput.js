@@ -1,7 +1,8 @@
 // Updated UserMentionInput.js - Fix for duplicate sends
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Smile, Paperclip } from 'lucide-react';
+import FormattingHelp from './FormattingHelp';
 
 const UserMentionInput = ({ 
   onSendMessage, 
@@ -251,38 +252,67 @@ const UserMentionInput = ({
       )}
 
       {/* Message Input */}
-      <form onSubmit={handleFormSubmit} className="flex items-end space-x-2 p-4 bg-white border-t border-gray-200">
-        <div className="flex-1 min-w-0">
-          <textarea
-            ref={textareaRef}
-            value={message}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            onBlur={handleBlur}
-            placeholder={connected ? placeholder : "Connecting..."}
-            disabled={!connected || isSending}
-            rows={1}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm leading-5 overflow-hidden ${
-              (!connected || isSending) ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
-            style={{ 
-              minHeight: '40px',
-              maxHeight: '150px'
-            }}
-          />
+      <div className="bg-white border-t border-gray-200">
+        {/* Formatting Toolbar */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              className="p-1.5 text-gray-400 hover:text-gray-600 rounded transition-colors"
+              title="Add emoji"
+            >
+              <Smile className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="p-1.5 text-gray-400 hover:text-gray-600 rounded transition-colors"
+              title="Attach file"
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <FormattingHelp />
+            <span className="text-xs text-gray-400">
+              Shift + Enter for new line
+            </span>
+          </div>
         </div>
-        <button
-          type="submit"
-          disabled={!connected || !message.trim() || isSending}
-          className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0 h-[40px] flex items-center justify-center"
-        >
-          {isSending ? (
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </button>
-      </form>
+        
+        <form onSubmit={handleFormSubmit} className="flex items-end space-x-2 p-4">
+          <div className="flex-1 min-w-0">
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onBlur={handleBlur}
+              placeholder={connected ? placeholder : "Connecting..."}
+              disabled={!connected || isSending}
+              rows={1}
+              className={`w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm leading-5 overflow-hidden ${
+                (!connected || isSending) ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
+              style={{ 
+                minHeight: '40px',
+                maxHeight: '150px'
+              }}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={!connected || !message.trim() || isSending}
+            className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0 h-[40px] flex items-center justify-center"
+          >
+            {isSending ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </button>
+        </form>
+      </div>
     </div>
   );
 };
