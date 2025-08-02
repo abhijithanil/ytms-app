@@ -9,6 +9,7 @@ import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.codec.RedisCodec;
 import io.lettuce.core.codec.StringCodec;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -16,6 +17,7 @@ import java.time.Duration;
 import java.util.function.Supplier;
 
 @Configuration
+@ConditionalOnProperty(name = "spring.cache.type", havingValue = "redis")
 public class RateLimiterConfig {
     @Bean
     public ProxyManager<String>

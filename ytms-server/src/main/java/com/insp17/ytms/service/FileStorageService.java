@@ -52,6 +52,11 @@ public class FileStorageService {
 
     @PostConstruct
     public void initGCPStorage() throws IOException {
+        if (!"GCP".equals(deploymentType)) {
+            System.out.println("Not running on GCP, skipping GCP storage initialization");
+            return;
+        }
+        
         if (gcpBucketName == null && gcpPublicBucketName == null) {
             System.err.println("Bucket name is not confugured properly");
             System.exit(1);
