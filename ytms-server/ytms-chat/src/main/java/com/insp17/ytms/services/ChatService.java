@@ -966,4 +966,140 @@ public class ChatService {
                 targetMessage.getChatRoom().getRoomName()
         );
     }
+
+    /**
+     * Toggle reaction on a message (add if not present, remove if present)
+     */
+    public void toggleMessageReaction(Long messageId, String emoji, Long userId) {
+        ChatMessage message = chatMessageRepository.findById(messageId)
+                .orElseThrow(() -> new RuntimeException("Message not found"));
+
+        // Verify user has access to the message room
+        if (!chatRoomMemberRepository.existsByChatRoomIdAndUserId(message.getChatRoom().getId(), userId)) {
+            throw new SecurityException("User does not have access to this message");
+        }
+
+        // Parse current reactions
+        Map<String, List<Long>> reactions = parseReactions(message.getReactions());
+
+        // Toggle user reaction
+        List<Long> userList = reactions.getOrDefault(emoji, new ArrayList<>());
+        if (userList.contains(userId)) {
+            userList.remove(userId);
+            if (userList.isEmpty()) {
+                reactions.remove(emoji);
+            }
+        } else {
+            userList.add(userId);
+            reactions.put(emoji, userList);
+        }
+
+        // Update message reactions
+        message.setReactions(serializeReactions(reactions));
+        chatMessageRepository.save(message);
+
+        // Broadcast reaction update
+        broadcastReactionUpdate(messageId, message.getChatRoom().getId(), emoji, reactions.get(emoji), userId);
+
+        log.debug("Reaction {} toggled on message {} by user {}", emoji, messageId, userId);
+    }
+
+    private Map<String, List<Long>> parseReactions(String reactionsJson) {
+        Map<String, List<Long>> reactions = new HashMap<>();
+        if (reactionsJson == null || reactionsJson.equals("{}")) {
+            return reactions;
+        }
+
+        try {
+            // Simple JSON parsing for reactions
+            String json = reactionsJson.trim();
+            if (json.startsWith("{") && json.endsWith("}")) {
+                json = json.substring(1, json.length() - 1);
+                if (!json.isEmpty()) {
+                    String[] pairs = json.split(",");
+                    for (String pair : pairs) {
+                        String[] keyValue = pair.split(":");
+                        if (keyValue.length == 2) {
+                            String emoji = keyValue[0].trim().replace("\"", "");
+                            String value = keyValue[1].trim();
+                            
+                            List<Long> userIds = new ArrayList<>();
+                            if (value.startsWith("[") && value.endsWith("]")) {
+                                // Array format
+                                value = value.substring(1, value.length() - 1);
+                                if (!value.isEmpty()) {
+                                    String[] ids = value.split(",");
+                                    for (String id : ids) {
+                                        try {
+                                            userIds.add(Long.parseLong(id.trim()));
+                                        } catch (NumberFormatException e) {
+                                            log.warn("Invalid user ID in reactions: {}", id);
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Single value format
+                                try {
+                                    userIds.add(Long.parseLong(value));
+                                } catch (NumberFormatException e) {
+                                    log.warn("Invalid user ID in reactions: {}", value);
+                                }
+                            }
+                            reactions.put(emoji, userIds);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse reactions JSON: {}", e.getMessage());
+        }
+
+        return reactions;
+    }
+
+    private String serializeReactions(Map<String, List<Long>> reactions) {
+        if (reactions.isEmpty()) {
+            return "{}";
+        }
+
+        StringBuilder json = new StringBuilder("{");
+        boolean first = true;
+        for (Map.Entry<String, List<Long>> entry : reactions.entrySet()) {
+            if (!first) {
+                json.append(",");
+            }
+            first = false;
+
+            json.append("\"").append(entry.getKey()).append("\":");
+            
+            List<Long> userIds = entry.getValue();
+            if (userIds.size() == 1) {
+                json.append(userIds.get(0));
+            } else {
+                json.append("[");
+                for (int i = 0; i < userIds.size(); i++) {
+                    if (i > 0) json.append(",");
+                    json.append(userIds.get(i));
+                }
+                json.append("]");
+            }
+        }
+        json.append("}");
+
+        return json.toString();
+    }
+
+    private void broadcastReactionUpdate(Long messageId, Long roomId, String emoji, List<Long> userIds, Long userId) {
+        Map<String, Object> reactionUpdate = new HashMap<>();
+        reactionUpdate.put("messageId", messageId);
+        reactionUpdate.put("emoji", emoji);
+        reactionUpdate.put("userIds", userIds != null ? userIds : new ArrayList<>());
+        reactionUpdate.put("userId", userId);
+        reactionUpdate.put("timestamp", LocalDateTime.now());
+
+        // Broadcast to room members
+        messagingTemplate.convertAndSend("/topic/chat/room/" + roomId + "/reactions", reactionUpdate);
+
+        log.debug("Broadcasted reaction update for message {} in room {}", messageId, roomId);
+    }
 }

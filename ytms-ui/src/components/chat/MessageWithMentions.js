@@ -1,6 +1,7 @@
 import React from 'react';
+import MarkdownRenderer from './MarkdownRenderer';
 
-const MessageWithMentions = ({ content, currentUserId, onlineUsers = [] }) => {
+const MessageWithMentions = ({ content, currentUserId, onlineUsers = [], className = '' }) => {
   // Safety checks
   if (!content) {
     return <span></span>;
@@ -60,7 +61,7 @@ const MessageWithMentions = ({ content, currentUserId, onlineUsers = [] }) => {
   const messageParts = parseMessageContent(content);
 
   return (
-    <span className="whitespace-pre-wrap break-words">
+    <div className={`whitespace-pre-wrap break-words ${className}`}>
       {messageParts.map((part, index) => {
         if (part.type === 'mention') {
           return (
@@ -87,12 +88,14 @@ const MessageWithMentions = ({ content, currentUserId, onlineUsers = [] }) => {
         }
         
         return (
-          <span key={index}>
-            {part.content}
-          </span>
+          <MarkdownRenderer 
+            key={index}
+            content={part.content}
+            className="inline"
+          />
         );
       })}
-    </span>
+    </div>
   );
 };
 

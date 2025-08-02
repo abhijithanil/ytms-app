@@ -701,4 +701,40 @@ public class ChatController {
             return ResponseEntity.status(500).build();
         }
     }
+
+    // MESSAGE REACTIONS
+
+    @PostMapping("/messages/{messageId}/reactions")
+    public ResponseEntity<Void> addReaction(@PathVariable Long messageId, 
+                                          @RequestBody AddReactionRequest request, 
+                                          Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            chatService.toggleMessageReaction(messageId, request.getEmoji(), userPrincipal.getId());
+            return ResponseEntity.ok().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error adding reaction to message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @MessageMapping("/reactions/add")
+    public void addReactionViaWebSocket(AddReactionRequest request, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal != null) {
+                chatService.toggleMessageReaction(request.getMessageId(), request.getEmoji(), userPrincipal.getId());
+                log.debug("Reaction {} added to message {} by user: {}", 
+                         request.getEmoji(), request.getMessageId(), userPrincipal.getUsername());
+            }
+        } catch (Exception e) {
+            log.error("Error handling reaction via WebSocket: {}", e.getMessage(), e);
+        }
+    }
 }
