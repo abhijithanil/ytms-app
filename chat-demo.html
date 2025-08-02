@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTMS Enhanced Chat Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 0.25rem; }
+        .message-bubble { max-width: 70%; }
+        .typing-dots { animation: typing 1.4s infinite; }
+        @keyframes typing {
+            0%, 60%, 100% { opacity: 0.3; }
+            30% { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="h-screen flex">
+        <!-- Sidebar -->
+        <div class="w-80 bg-white border-r border-gray-200">
+            <!-- Header -->
+            <div class="p-4 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h1 class="text-xl font-semibold text-gray-900">YTMS Chat</h1>
+                    <div class="relative">
+                        <button class="p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+                            🔔
+                        </button>
+                        <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">3</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Room List -->
+            <div class="p-2">
+                <div class="space-y-1">
+                    <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="font-medium text-gray-900">🏠 General</div>
+                                <div class="text-sm text-gray-500">5 members</div>
+                            </div>
+                            <span class="bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">2</span>
+                        </div>
+                    </div>
+                    
+                    <div class="p-3 hover:bg-gray-50 rounded-lg cursor-pointer">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="font-medium text-gray-900">📋 Video Project</div>
+                                <div class="text-sm text-gray-500">3 members</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="p-3 hover:bg-gray-50 rounded-lg cursor-pointer">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="font-medium text-gray-900">💬 Jane Smith</div>
+                                <div class="text-sm text-gray-500">Direct message</div>
+                            </div>
+                            <span class="bg-green-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">1</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="flex-1 flex flex-col">
+            <!-- Chat Header -->
+            <div class="p-4 border-b border-gray-200 bg-white">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900">🏠 General</h2>
+                        <div class="text-sm text-gray-500">5 members • General team discussion</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                <!-- Message 1 -->
+                <div class="flex">
+                    <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium mr-3">
+                        JD
+                    </div>
+                    <div class="message-bubble">
+                        <div class="bg-gray-100 rounded-lg p-3">
+                            <div class="text-xs font-semibold mb-1 text-gray-600">John Doe</div>
+                            <div>Hello team! How is the <strong>video editing</strong> going?</div>
+                            <div class="flex gap-1 mt-2">
+                                <span class="bg-white px-2 py-1 rounded-full text-xs border">👍 2</span>
+                                <span class="bg-white px-2 py-1 rounded-full text-xs border">❤️ 1</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">2 hours ago</div>
+                    </div>
+                </div>
+
+                <!-- Message 2 -->
+                <div class="flex">
+                    <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white text-sm font-medium mr-3">
+                        MW
+                    </div>
+                    <div class="message-bubble">
+                        <div class="bg-gray-100 rounded-lg p-3">
+                            <div class="text-xs font-semibold mb-1 text-gray-600">Mike Wilson</div>
+                            <div>Great progress! The <code class="bg-gray-200 px-1 py-0.5 rounded text-sm">final cut</code> looks amazing. <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded">@jane_smith</span> what do you think?</div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">1 hour ago</div>
+                    </div>
+                </div>
+
+                <!-- Message 3 with attachment -->
+                <div class="flex justify-end">
+                    <div class="message-bubble">
+                        <div class="bg-blue-500 text-white rounded-lg p-3">
+                            <div>I agree! The transitions are <em>smooth</em> and the color grading is perfect. 🎨</div>
+                            <div class="mt-2 p-2 bg-white bg-opacity-20 rounded">
+                                <a href="#" class="text-sm underline">📎 final_edit_v2.mp4</a>
+                            </div>
+                            <div class="flex gap-1 mt-2">
+                                <span class="bg-white bg-opacity-20 px-2 py-1 rounded-full text-xs">🎨 2</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1 text-right">30 minutes ago</div>
+                    </div>
+                    <div class="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white text-sm font-medium ml-3">
+                        JS
+                    </div>
+                </div>
+
+                <!-- Typing indicator -->
+                <div class="flex">
+                    <div class="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white text-sm font-medium mr-3">
+                        AL
+                    </div>
+                    <div class="bg-gray-100 rounded-lg p-3">
+                        <div class="text-xs font-semibold mb-1 text-gray-600">Alex Lee</div>
+                        <div class="flex space-x-1">
+                            <div class="w-2 h-2 bg-gray-400 rounded-full typing-dots"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full typing-dots" style="animation-delay: 0.2s;"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full typing-dots" style="animation-delay: 0.4s;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rich Text Editor -->
+            <div class="p-4 border-t border-gray-200 bg-white">
+                <div class="border border-gray-300 rounded-lg overflow-hidden">
+                    <!-- Formatting toolbar -->
+                    <div class="flex items-center justify-between bg-gray-50 px-3 py-2 border-b border-gray-200">
+                        <div class="flex items-center space-x-1">
+                            <button class="p-2 text-gray-600 hover:bg-gray-200 rounded" title="Bold">
+                                <strong>B</strong>
+                            </button>
+                            <button class="p-2 text-gray-600 hover:bg-gray-200 rounded" title="Italic">
+                                <em>I</em>
+                            </button>
+                            <button class="p-2 text-gray-600 hover:bg-gray-200 rounded" title="Code">
+                                <code>&lt;/&gt;</code>
+                            </button>
+                        </div>
+                        <div class="text-xs text-gray-500">
+                            **bold** *italic* `code` Ctrl+Enter to send
+                        </div>
+                    </div>
+
+                    <!-- Text area -->
+                    <div class="relative">
+                        <textarea 
+                            class="w-full p-3 resize-none border-0 focus:ring-0 focus:outline-none" 
+                            rows="3" 
+                            placeholder="Type your message here... Try **bold**, *italic*, or `code`"
+                        ></textarea>
+                        
+                        <!-- Bottom toolbar -->
+                        <div class="flex items-center justify-between p-2 bg-gray-50">
+                            <div class="flex items-center space-x-2">
+                                <!-- Emoji button -->
+                                <div class="relative">
+                                    <button class="p-2 text-gray-500 hover:text-gray-700">😊</button>
+                                    <!-- Emoji picker preview -->
+                                    <div class="absolute bottom-full mb-2 left-0 bg-white border border-gray-200 rounded-lg shadow-lg w-80 p-2" style="display: none;">
+                                        <div class="flex border-b mb-2">
+                                            <button class="px-3 py-1 text-sm bg-blue-100 text-blue-600 border-b-2 border-blue-500">Smileys</button>
+                                            <button class="px-3 py-1 text-sm text-gray-600">Gestures</button>
+                                            <button class="px-3 py-1 text-sm text-gray-600">Hearts</button>
+                                        </div>
+                                        <div class="emoji-grid">
+                                            <button class="p-2 text-xl hover:bg-gray-100 rounded">😀</button>
+                                            <button class="p-2 text-xl hover:bg-gray-100 rounded">😃</button>
+                                            <button class="p-2 text-xl hover:bg-gray-100 rounded">😄</button>
+                                            <button class="p-2 text-xl hover:bg-gray-100 rounded">😁</button>
+                                            <button class="p-2 text-xl hover:bg-gray-100 rounded">😅</button>
+                                            <button class="p-2 text-xl hover:bg-gray-100 rounded">😂</button>
+                                            <button class="p-2 text-xl hover:bg-gray-100 rounded">🤣</button>
+                                            <button class="p-2 text-xl hover:bg-gray-100 rounded">😊</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- File upload -->
+                                <button class="p-2 text-gray-500 hover:text-gray-700">📎</button>
+                            </div>
+                            
+                            <button class="flex items-center space-x-1 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                                <span>Send</span>
+                                <span>➤</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tips -->
+                <div class="flex items-center justify-between mt-2">
+                    <div class="text-xs text-gray-500">
+                        <span class="font-medium">Tip:</span> Use **bold**, *italic*, `code` formatting
+                    </div>
+                    <div class="text-xs text-gray-400">
+                        Press Ctrl+Enter to send
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Demo info badge -->
+    <div class="fixed bottom-4 right-4 bg-blue-500 text-white p-4 rounded-lg shadow-lg max-w-sm">
+        <h3 class="font-semibold mb-2">🚀 Enhanced Chat Features</h3>
+        <ul class="text-sm space-y-1">
+            <li>• Rich text with **bold**, *italic*, `code`</li>
+            <li>• Emoji reactions 👍❤️🎨</li>
+            <li>• File attachments 📎</li>
+            <li>• @mentions with notifications</li>
+            <li>• Real-time typing indicators</li>
+            <li>• WebSocket integration</li>
+        </ul>
+    </div>
+</body>
+</html>
