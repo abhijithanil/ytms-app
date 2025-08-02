@@ -428,4 +428,63 @@ export const fileUtils = {
   },
 };
 
+// Chat API
+export const chatAPI = {
+  // Channel operations
+  createChannel: (channelData) => {
+    console.log("Creating channel:", channelData);
+    return api.post("/chat/channels", channelData);
+  },
+  getUserChannels: () => {
+    console.log("Fetching user channels");
+    return api.get("/chat/channels");
+  },
+  getPublicChannels: () => {
+    console.log("Fetching public channels");
+    return api.get("/chat/channels/public");
+  },
+  joinChannel: (channelId) => {
+    console.log(`Joining channel ${channelId}`);
+    return api.post(`/chat/channels/${channelId}/join`);
+  },
+  leaveChannel: (channelId) => {
+    console.log(`Leaving channel ${channelId}`);
+    return api.post(`/chat/channels/${channelId}/leave`);
+  },
+  getChannelMembers: (channelId) => {
+    console.log(`Fetching members for channel ${channelId}`);
+    return api.get(`/chat/channels/${channelId}/members`);
+  },
+
+  // Message operations
+  sendMessage: (channelId, messageData) => {
+    console.log(`Sending message to channel ${channelId}:`, messageData);
+    return api.post(`/chat/channels/${channelId}/messages`, messageData);
+  },
+  getMessages: (channelId, limit = 50) => {
+    console.log(`Fetching messages for channel ${channelId}, limit: ${limit}`);
+    return api.get(`/chat/channels/${channelId}/messages?limit=${limit}`);
+  },
+  getMessagesPageable: (channelId, page = 0, size = 20) => {
+    console.log(`Fetching messages for channel ${channelId}, page: ${page}, size: ${size}`);
+    return api.get(`/chat/channels/${channelId}/messages/pageable?page=${page}&size=${size}`);
+  },
+  editMessage: (messageId, content) => {
+    console.log(`Editing message ${messageId}:`, content);
+    return api.put(`/chat/messages/${messageId}`, { content });
+  },
+  deleteMessage: (messageId) => {
+    console.log(`Deleting message ${messageId}`);
+    return api.delete(`/chat/messages/${messageId}`);
+  },
+  searchMessages: (channelId, query) => {
+    console.log(`Searching messages in channel ${channelId}:`, query);
+    return api.get(`/chat/channels/${channelId}/messages/search?query=${encodeURIComponent(query)}`);
+  },
+  getMessageReplies: (messageId) => {
+    console.log(`Fetching replies for message ${messageId}`);
+    return api.get(`/chat/messages/${messageId}/replies`);
+  },
+};
+
 export default api;

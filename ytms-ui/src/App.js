@@ -19,6 +19,7 @@ import TaskDetails from "./pages/TaskDetails";
 import UploadVideo from "./pages/UploadVideo";
 import Settings from "./pages/Settings";
 import Team from "./pages/Team";
+import Chat from "./pages/Chat";
 import MfaSetup from "./pages/MfaSetup"; // Import the new MFA setup component
 import "./App.css";
 
@@ -108,6 +109,7 @@ function App() {
             <Route path="/tasks" element={<ProtectedRoute><Layout><TaskBoard /></Layout></ProtectedRoute>} />
             <Route path="/tasks/:id" element={<ProtectedRoute><Layout><TaskDetails /></Layout></ProtectedRoute>} />
             <Route path="/upload" element={<ProtectedRoute><Layout><UploadVideo /></Layout></ProtectedRoute>} />
+            <Route path="/chat" element={<ProtectedRoute><Layout><Chat /></Layout></ProtectedRoute>} />
             <Route path="/team" element={<ProtectedRoute><Layout><Team /></Layout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
 

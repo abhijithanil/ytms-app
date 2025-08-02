@@ -8,7 +8,8 @@ import {
   Video,
   TrendingUp,
   Clock,
-  CheckCircle
+  CheckCircle,
+  MessageCircle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -34,6 +35,12 @@ const Sidebar = () => {
       href: '/upload',
       icon: Upload,
       current: location.pathname === '/upload'
+    },
+    {
+      name: 'Chat',
+      href: '/chat',
+      icon: MessageCircle,
+      current: location.pathname === '/chat'
     },
     {
       name: 'Team',
