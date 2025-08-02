@@ -49,7 +49,7 @@ public class ChatService {
     private final Map<String, OnlineUser> onlineUsers = new ConcurrentHashMap<>();
     private final Map<Long, String> userSessions = new ConcurrentHashMap<>();
 
-    //  CHAT ROOMS MANAGEMENT 
+    //  CHAT ROOMS MANAGEMENT
 
     public ChatRoomDTO createChatRoom(CreateChatRoomRequest request, Long creatorId) {
         log.info("Creating chat room: {} by user: {}", request.getRoomName(), creatorId);
@@ -302,7 +302,7 @@ public class ChatService {
 
         return dto;
     }
-    //  MESSAGING 
+    //  MESSAGING
 
     public ChatMessageDTO sendMessageToRoom(SendMessageRequest request, Long senderId) {
         log.debug("Sending message to room {} by user: {}", request.getChatRoomId(), senderId);
@@ -377,7 +377,7 @@ public class ChatService {
         return sendMessageToRoom(messageRequest, senderId);
     }
 
-    //  MEMBER MANAGEMENT 
+    //  MEMBER MANAGEMENT
 
     public void addMembersToRoom(Long roomId, List<Long> userIds, ChatRoomMember.MemberRole defaultRole, Long requesterId) {
         log.info("Adding {} members to room {} by user: {}", userIds.size(), roomId, requesterId);
@@ -481,7 +481,7 @@ public class ChatService {
         return role == ChatRoomMember.MemberRole.OWNER || role == ChatRoomMember.MemberRole.ADMIN;
     }
 
-    //  MESSAGE HISTORY 
+    //  MESSAGE HISTORY
 
     public List<ChatMessageDTO> getChatHistory(Long taskId, int page, int size) {
         log.debug("Fetching chat history for taskId: {}, page: {}, size: {}", taskId, page, size);
@@ -529,7 +529,7 @@ public class ChatService {
                 .collect(Collectors.toList());
     }
 
-    //  READ STATUS 
+    //  READ STATUS
 
     public void markRoomAsRead(Long roomId, Long userId) {
         log.debug("Marking room {} as read by user: {}", roomId, userId);
@@ -547,7 +547,7 @@ public class ChatService {
         }
     }
 
-    //  SEARCH 
+    //  SEARCH
 
     public List<ChatMessageDTO> searchMessages(MessageSearchRequest request, Long userId) {
         log.debug("Searching messages with query: '{}' by user: {}", request.getQuery(), userId);
@@ -593,7 +593,7 @@ public class ChatService {
                 .collect(Collectors.toList());
     }
 
-    //  TYPING INDICATORS 
+    //  TYPING INDICATORS
 
     public void broadcastRoomTypingIndicator(Long roomId, TypingIndicatorDTO typingIndicator) {
         String destination = "/topic/typing/room/" + roomId;
@@ -601,7 +601,7 @@ public class ChatService {
         log.debug("Broadcasted typing indicator to {}", destination);
     }
 
-    //  UTILITIES 
+    //  UTILITIES
 
     private void sendSystemMessage(ChatRoom room, String content, ChatMessage.MessageType type) {
         ChatMessage systemMessage = new ChatMessage();
@@ -676,7 +676,7 @@ public class ChatService {
         messagingTemplate.convertAndSend("/topic/rooms/" + roomId + "/read-status", readStatus);
     }
 
-    //  BACKWARD COMPATIBILITY METHODS 
+    //  BACKWARD COMPATIBILITY METHODS
 
     public ChatMessageDTO sendMessage(String content, User sender, Long taskId) {
         log.debug("Sending backward compatibility message by user: {} for task: {}", sender.getUsername(), taskId);
@@ -738,7 +738,7 @@ public class ChatService {
         return chatRoomRepository.findById(roomDTO.getId()).orElseThrow();
     }
 
-    //  ONLINE USERS MANAGEMENT 
+    //  ONLINE USERS MANAGEMENT
 
     public List<OnlineUserDTO> getOnlineUsers() {
         return onlineUsers.values().stream()
@@ -839,5 +839,131 @@ public class ChatService {
             log.debug("No authentication context available: {}", e.getMessage());
         }
         return null;
+    }
+
+    // Add these methods to your ChatService.java class
+
+    public MessageSearchResponse advancedSearchMessages(MessageSearchRequest request, Long userId) {
+        log.debug("Advanced search with query: '{}' by user: {}", request.getQuery(), userId);
+
+        // Build the query conditions
+        List<ChatRoom> userRooms = chatRoomRepository.findUserChatRooms(userId);
+        List<Long> roomIds = userRooms.stream().map(ChatRoom::getId).collect(Collectors.toList());
+
+        if (roomIds.isEmpty()) {
+            return new MessageSearchResponse(new ArrayList<>(), 0, request.getPage(), request.getSize(), false, request.getQuery(), 0L);
+        }
+
+        // Calculate pagination
+        PageRequest pageRequest = PageRequest.of(request.getPage(), request.getSize());
+
+        // Perform search based on criteria
+        List<ChatMessage> messages = searchMessagesWithCriteria(request, roomIds, pageRequest);
+
+        // Count total results for pagination
+        long totalResults = countSearchResults(request, roomIds);
+        long totalPages = (totalResults + request.getSize() - 1) / request.getSize();
+        boolean hasMore = request.getPage() < totalPages - 1;
+
+        List<ChatMessageDTO> messageDTOs = messages.stream()
+                .map(ChatMessageDTO::new)
+                .collect(Collectors.toList());
+
+        return new MessageSearchResponse(
+                messageDTOs,
+                (int) totalResults,
+                request.getPage(),
+                request.getSize(),
+                hasMore,
+                request.getQuery(),
+                totalPages
+        );
+    }
+
+    private List<ChatMessage> searchMessagesWithCriteria(MessageSearchRequest request, List<Long> roomIds, PageRequest pageRequest) {
+        // If specific room is requested, filter to that room
+        if (request.getChatRoomId() != null) {
+            roomIds = roomIds.stream()
+                    .filter(id -> id.equals(request.getChatRoomId()))
+                    .collect(Collectors.toList());
+        }
+
+        if (roomIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // Use repository method with enhanced criteria
+        return chatMessageRepository.searchMessagesWithCriteria(
+                roomIds,
+                request.getQuery(),
+                request.getSenderId(),
+                request.getMessageType(),
+                request.getFromDate(),
+                request.getToDate(),
+                pageRequest
+        );
+    }
+
+    private long countSearchResults(MessageSearchRequest request, List<Long> roomIds) {
+        if (request.getChatRoomId() != null) {
+            roomIds = roomIds.stream()
+                    .filter(id -> id.equals(request.getChatRoomId()))
+                    .collect(Collectors.toList());
+        }
+
+        if (roomIds.isEmpty()) {
+            return 0;
+        }
+
+        return chatMessageRepository.countSearchResults(
+                roomIds,
+                request.getQuery(),
+                request.getSenderId(),
+                request.getMessageType(),
+                request.getFromDate(),
+                request.getToDate()
+        );
+    }
+
+    public MessageContextResponse getMessageContext(Long messageId, int beforeCount, int afterCount, Long userId) {
+        // Find the target message
+        ChatMessage targetMessage = chatMessageRepository.findById(messageId)
+                .orElseThrow(() -> new RuntimeException("Message not found"));
+
+        // Verify user has access to the room
+        if (!chatRoomMemberRepository.existsByChatRoomIdAndUserId(targetMessage.getChatRoom().getId(), userId)) {
+            throw new SecurityException("User does not have access to this message");
+        }
+
+        // Get messages before
+        List<ChatMessage> messagesBefore = chatMessageRepository.findMessagesBeforeMessage(
+                targetMessage.getChatRoom().getId(),
+                targetMessage.getCreatedAt(),
+                PageRequest.of(0, beforeCount)
+        );
+
+        // Get messages after
+        List<ChatMessage> messagesAfter = chatMessageRepository.findMessagesAfterMessage(
+                targetMessage.getChatRoom().getId(),
+                targetMessage.getCreatedAt(),
+                PageRequest.of(0, afterCount)
+        );
+
+        // Convert to DTOs
+        List<ChatMessageDTO> beforeDTOs = messagesBefore.stream()
+                .map(ChatMessageDTO::new)
+                .collect(Collectors.toList());
+
+        List<ChatMessageDTO> afterDTOs = messagesAfter.stream()
+                .map(ChatMessageDTO::new)
+                .collect(Collectors.toList());
+
+        return new MessageContextResponse(
+                new ChatMessageDTO(targetMessage),
+                beforeDTOs,
+                afterDTOs,
+                targetMessage.getChatRoom().getId(),
+                targetMessage.getChatRoom().getRoomName()
+        );
     }
 }

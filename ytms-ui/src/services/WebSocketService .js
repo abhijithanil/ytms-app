@@ -1,3 +1,5 @@
+// Updated WebSocketService.js - Fix for duplicate messages
+
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
@@ -11,24 +13,30 @@ class WebSocketService {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 1000;
+    this.isConnecting = false; // Add this flag
+    this.messageQueue = []; // Queue for messages while connecting
   }
 
   async connect(token, onSuccess, onError) {
     console.log('🔌 WebSocketService: Starting connection...');
     
-    if (this.connected) {
-      console.log('🔌 WebSocketService: Already connected');
-      if (onSuccess) onSuccess();
-      return;
-    }
-
-    if (this.connectionPromise) {
-      console.log('🔌 WebSocketService: Connection already in progress');
+    // Prevent multiple simultaneous connections
+    if (this.connected || this.isConnecting) {
+      console.log('🔌 WebSocketService: Already connected or connecting');
+      if (this.connected && onSuccess) onSuccess();
       return this.connectionPromise;
     }
 
+    this.isConnecting = true;
+
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
+        // Disconnect any existing connection first
+        if (this.client) {
+          this.client.deactivate();
+          this.client = null;
+        }
+
         const socket = new SockJS(`${process.env.REACT_APP_API_URL || 'http://localhost:8080'}/ws`);
         
         this.client = new Client({
@@ -45,11 +53,15 @@ class WebSocketService {
           onConnect: (frame) => {
             console.log('🔌 WebSocketService: Connected successfully!', frame);
             this.connected = true;
+            this.isConnecting = false;
             this.reconnectAttempts = 0;
             this.connectionPromise = null;
 
             // Set up global subscriptions
             this.setupGlobalSubscriptions();
+
+            // Process queued messages
+            this.processMessageQueue();
 
             if (onSuccess) onSuccess(frame);
             resolve(frame);
@@ -58,6 +70,7 @@ class WebSocketService {
             console.error('🔌 WebSocketService: STOMP Error:', frame.headers['message']);
             console.error('Additional details:', frame.body);
             this.connected = false;
+            this.isConnecting = false;
             this.connectionPromise = null;
             
             const error = new Error(frame.headers['message'] || 'STOMP connection failed');
@@ -67,6 +80,7 @@ class WebSocketService {
           onWebSocketError: (event) => {
             console.error('🔌 WebSocketService: WebSocket Error:', event);
             this.connected = false;
+            this.isConnecting = false;
             this.connectionPromise = null;
             
             const error = new Error('WebSocket connection failed');
@@ -76,6 +90,7 @@ class WebSocketService {
           onDisconnect: (frame) => {
             console.log('🔌 WebSocketService: Disconnected', frame);
             this.connected = false;
+            this.isConnecting = false;
             this.clearSubscriptions();
             
             // Auto-reconnect with exponential backoff
@@ -95,6 +110,7 @@ class WebSocketService {
         
       } catch (error) {
         console.error('🔌 WebSocketService: Connection setup failed:', error);
+        this.isConnecting = false;
         this.connectionPromise = null;
         if (onError) onError(error);
         reject(error);
@@ -104,8 +120,19 @@ class WebSocketService {
     return this.connectionPromise;
   }
 
+  // Process queued messages after connection is established
+  processMessageQueue() {
+    while (this.messageQueue.length > 0) {
+      const { destination, payload } = this.messageQueue.shift();
+      this.sendMessage(destination, payload);
+    }
+  }
+
   setupGlobalSubscriptions() {
     console.log('🔌 WebSocketService: Setting up global subscriptions');
+
+    // Clear any existing subscriptions first
+    this.clearSubscriptions();
 
     // Global chat messages
     this.subscribe('/topic/chat/global', 'globalChat', (message) => {
@@ -142,6 +169,12 @@ class WebSocketService {
     if (!this.client || !this.connected) {
       console.warn('🔌 WebSocketService: Cannot subscribe - not connected');
       return false;
+    }
+
+    // Check if already subscribed
+    if (this.subscriptions.has(subscriptionId)) {
+      console.log(`🔌 WebSocketService: Already subscribed to ${subscriptionId}`);
+      return true;
     }
 
     try {
@@ -188,18 +221,32 @@ class WebSocketService {
     this.messageHandlers.delete(handlerId);
   }
 
-  // Send messages
+  // Send messages with deduplication
   sendMessage(destination, payload) {
-    if (!this.client || !this.connected) {
+    if (!this.connected) {
       console.warn('🔌 WebSocketService: Cannot send message - not connected');
+      
+      // Queue message if we're connecting
+      if (this.isConnecting) {
+        console.log('🔌 WebSocketService: Queueing message while connecting');
+        this.messageQueue.push({ destination, payload });
+        return true;
+      }
       return false;
     }
 
     try {
       console.log(`🔌 WebSocketService: Sending message to ${destination}:`, payload);
+      
+      // Add a unique ID to prevent duplicate processing on server side
+      const messageWithId = {
+        ...payload,
+        messageId: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      };
+
       this.client.publish({
         destination: destination,
-        body: JSON.stringify(payload)
+        body: JSON.stringify(messageWithId)
       });
       return true;
     } catch (error) {
@@ -208,7 +255,7 @@ class WebSocketService {
     }
   }
 
-  // Chat-specific methods
+  // Chat-specific methods with deduplication
   joinChat(payload) {
     return this.sendMessage('/app/chat/join', payload);
   }
@@ -252,7 +299,9 @@ class WebSocketService {
   disconnect() {
     console.log('🔌 WebSocketService: Disconnecting...');
     this.connected = false;
+    this.isConnecting = false;
     this.connectionPromise = null;
+    this.messageQueue = [];
     this.clearSubscriptions();
     this.messageHandlers.clear();
     
@@ -282,10 +331,12 @@ class WebSocketService {
   getConnectionState() {
     return {
       connected: this.connected,
+      isConnecting: this.isConnecting,
       clientConnected: this.client?.connected || false,
       subscriptionsCount: this.subscriptions.size,
       handlersCount: this.messageHandlers.size,
-      reconnectAttempts: this.reconnectAttempts
+      reconnectAttempts: this.reconnectAttempts,
+      queuedMessages: this.messageQueue.length
     };
   }
 

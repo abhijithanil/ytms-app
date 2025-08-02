@@ -1,3 +1,5 @@
+// Updated UserMentionInput.js - Fix for duplicate sends
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Send } from 'lucide-react';
 
@@ -6,15 +8,19 @@ const UserMentionInput = ({
   onStartTyping, 
   onStopTyping, 
   connected, 
-  onlineUsers = [] 
+  onlineUsers = [],
+  placeholder = "Type a message..."
 }) => {
   const [message, setMessage] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
   const [mentionStart, setMentionStart] = useState(-1);
+  const [isSending, setIsSending] = useState(false); // Prevent duplicate sends
+  
   const textareaRef = useRef(null);
   const suggestionsRef = useRef(null);
+  const sendTimeoutRef = useRef(null);
 
   // Auto-resize function
   const resizeTextarea = (textarea) => {
@@ -118,27 +124,51 @@ const UserMentionInput = ({
     }, 0);
   };
 
-  // Handle sending message
+  // Handle sending message with duplicate prevention
   const handleSendMessage = () => {
-    if (!message.trim() || !connected) return;
+    if (!message.trim() || !connected || isSending) {
+      console.log('Cannot send message:', { 
+        hasMessage: !!message.trim(), 
+        connected, 
+        isSending 
+      });
+      return;
+    }
 
-    if (onSendMessage) {
-      const success = onSendMessage(message);
-      if (success !== false) {
-        setMessage('');
-        if (onStopTyping) onStopTyping();
-        // Reset textarea height
-        if (textareaRef.current) {
-          textareaRef.current.style.height = 'auto';
-          textareaRef.current.style.overflowY = 'hidden';
+    // Prevent rapid duplicate sends
+    setIsSending(true);
+    
+    // Clear any existing timeout
+    if (sendTimeoutRef.current) {
+      clearTimeout(sendTimeoutRef.current);
+    }
+
+    // Debounce the send operation
+    sendTimeoutRef.current = setTimeout(() => {
+      if (onSendMessage) {
+        const success = onSendMessage(message);
+        if (success !== false) {
+          setMessage('');
+          if (onStopTyping) onStopTyping();
+          // Reset textarea height
+          if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.overflowY = 'hidden';
+          }
         }
       }
-    }
+      
+      // Re-enable sending after a short delay
+      setTimeout(() => {
+        setIsSending(false);
+      }, 500);
+    }, 100);
   };
 
   // Handle form submission
   const handleFormSubmit = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     handleSendMessage();
   };
 
@@ -167,6 +197,15 @@ const UserMentionInput = ({
     if (textareaRef.current) {
       resizeTextarea(textareaRef.current);
     }
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (sendTimeoutRef.current) {
+        clearTimeout(sendTimeoutRef.current);
+      }
+    };
   }, []);
 
   return (
@@ -212,7 +251,7 @@ const UserMentionInput = ({
       )}
 
       {/* Message Input */}
-      <div className="flex items-end space-x-2 space-y-2 p-2 bg-white border-t border-gray-200">
+      <form onSubmit={handleFormSubmit} className="flex items-end space-x-2 p-4 bg-white border-t border-gray-200">
         <div className="flex-1 min-w-0">
           <textarea
             ref={textareaRef}
@@ -220,24 +259,30 @@ const UserMentionInput = ({
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
-            placeholder={connected ? "Type a message... (use @ to mention users)" : "Connecting..."}
-            disabled={!connected}
+            placeholder={connected ? placeholder : "Connecting..."}
+            disabled={!connected || isSending}
             rows={1}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed text-sm leading-5 overflow-hidden"
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm leading-5 overflow-hidden ${
+              (!connected || isSending) ? 'bg-gray-100 cursor-not-allowed' : ''
+            }`}
             style={{ 
-              minHeight: '48px',
+              minHeight: '40px',
               maxHeight: '150px'
             }}
           />
         </div>
         <button
-          onClick={handleSendMessage}
-          disabled={!connected || !message.trim()}
-          className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0 h-[48px] flex items-center justify-center"
+          type="submit"
+          disabled={!connected || !message.trim() || isSending}
+          className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0 h-[40px] flex items-center justify-center"
         >
-          <Send className="h-4 w-4" />
+          {isSending ? (
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
         </button>
-      </div>
+      </form>
     </div>
   );
 };

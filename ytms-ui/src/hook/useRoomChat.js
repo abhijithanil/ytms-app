@@ -1,3 +1,5 @@
+// Updated useRoomChat.js - Fix for sender seeing duplicate messages
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import WebSocketService from '../services/WebSocketService ';
@@ -20,6 +22,12 @@ export const useRoomChat = (roomId) => {
   const reconnectTimeoutRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 5;
+  
+  // Track processed messages to prevent duplicates
+  const processedMessageIds = useRef(new Set());
+  
+  // Track pending messages (messages being sent)
+  const pendingMessages = useRef(new Map());
 
   console.log('🎯 useRoomChat: Render', { 
     roomId,
@@ -45,6 +53,8 @@ export const useRoomChat = (roomId) => {
       setMembers([]);
       setTypingUsers([]);
       setRoomDetails(null);
+      processedMessageIds.current.clear();
+      pendingMessages.current.clear();
     }
   }, [roomId]);
 
@@ -59,15 +69,25 @@ export const useRoomChat = (roomId) => {
       return;
     }
 
+    const messageKey = `${newMessage.id}_${newMessage.createdAt}`;
+    
+    // Check if message was already processed
+    if (processedMessageIds.current.has(messageKey)) {
+      console.log('🎯 useRoomChat: Message already processed, skipping duplicate:', messageKey);
+      return;
+    }
+
+    processedMessageIds.current.add(messageKey);
+
     setMessages(prev => {
-      // Check if message already exists
+      // Check if message already exists in state (double safety check)
       const messageExists = prev.some(msg => 
         msg.id === newMessage.id || 
         (msg.tempId && msg.tempId === newMessage.tempId)
       );
       
       if (messageExists) {
-        console.log('🎯 useRoomChat: Message already exists, updating if needed');
+        console.log('🎯 useRoomChat: Message already exists in state, updating if needed');
         // Update message if it was a temporary message
         return prev.map(msg => 
           (msg.id === newMessage.id || msg.tempId === newMessage.tempId)
@@ -124,7 +144,8 @@ export const useRoomChat = (roomId) => {
         clearTimeout(reconnectTimeoutRef.current);
       }
       
-      // Don't disconnect WebSocket here as other components might be using it
+      processedMessageIds.current.clear();
+      pendingMessages.current.clear();
       cleanupRoomSubscriptions();
     };
   }, []);
@@ -156,8 +177,6 @@ export const useRoomChat = (roomId) => {
             setConnected(false);
             setLoading(false);
             setError('Failed to connect to chat: ' + error.message);
-            
-            // Attempt to reconnect
             handleReconnect();
           }
         }
@@ -203,6 +222,12 @@ export const useRoomChat = (roomId) => {
       (message) => {
         console.log('🎯 useRoomChat: Received room message:', message);
         if (mountedRef.current) {
+          // Remove from pending messages if it exists
+          if (message.tempId && pendingMessages.current.has(message.tempId)) {
+            pendingMessages.current.delete(message.tempId);
+            console.log('🎯 useRoomChat: Removed pending message:', message.tempId);
+          }
+          
           addMessageSafely(message);
         }
       }
@@ -285,6 +310,14 @@ export const useRoomChat = (roomId) => {
         const sortedMessages = messagesResponse.data.sort((a, b) => 
           new Date(a.createdAt) - new Date(b.createdAt)
         );
+        
+        // Clear processed messages and add all loaded messages to processed set
+        processedMessageIds.current.clear();
+        sortedMessages.forEach(msg => {
+          const messageKey = `${msg.id}_${msg.createdAt}`;
+          processedMessageIds.current.add(messageKey);
+        });
+        
         setMessages(sortedMessages);
         
         console.log('🎯 useRoomChat: Loaded room data:', {
@@ -367,6 +400,7 @@ export const useRoomChat = (roomId) => {
     });
   };
 
+  // FIXED: Removed optimistic updates that were causing duplicates
   const sendMessage = useCallback((content, options = {}) => {
     console.log('🎯 useRoomChat: Attempting to send message to room', roomId);
     if (!content.trim() || !connected || !roomId) {
@@ -376,26 +410,7 @@ export const useRoomChat = (roomId) => {
     }
 
     try {
-      // Generate temporary ID for optimistic update
-      const tempId = `temp_${Date.now()}_${Math.random()}`;
-      const tempMessage = {
-        id: tempId,
-        tempId,
-        content: content.trim(),
-        senderId: user.id,
-        senderUsername: user.username,
-        senderName: user.firstName || user.username,
-        chatRoomId: roomId,
-        type: 'CHAT',
-        createdAt: new Date().toISOString(),
-        isOptimistic: true,
-        ...options
-      };
-
-      // Add optimistic message
-      addMessageSafely(tempMessage);
-
-      // Send message via WebSocket to room
+      // Send message via WebSocket to room WITHOUT optimistic update
       const messageData = {
         content: content.trim(),
         ...options
@@ -406,8 +421,6 @@ export const useRoomChat = (roomId) => {
         WebSocketService.sendMessage(`/app/chat/room/${roomId}`, messageData);
       
       if (!success) {
-        // Remove optimistic message on failure
-        setMessages(prev => prev.filter(msg => msg.tempId !== tempId));
         toast.error('Failed to send message');
       }
       
@@ -417,7 +430,7 @@ export const useRoomChat = (roomId) => {
       toast.error('Failed to send message');
       return false;
     }
-  }, [connected, roomId, user, addMessageSafely]);
+  }, [connected, roomId, user]);
 
   const typingTimeoutRef = useRef(null);
   const lastTypingRef = useRef(0);

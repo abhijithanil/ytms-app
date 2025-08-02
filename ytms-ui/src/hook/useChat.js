@@ -1,8 +1,10 @@
+// Updated useChat.js - Fix for duplicate messages
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import WebSocketService from '../services/WebSocketService ';
 import toast from 'react-hot-toast';
-import {chatAPI} from '../services/api'
+import { chatAPI } from '../services/api';
 
 export const useChat = (taskId = null) => {
   const { user, token } = useAuth();
@@ -15,14 +17,27 @@ export const useChat = (taskId = null) => {
   
   const mountedRef = useRef(true);
   const connectionAttemptedRef = useRef(false);
+  const processedMessageIds = useRef(new Set()); // Track processed messages
 
   // Helper function to add a message safely (prevents duplicates)
   const addMessageSafely = useCallback((newMessage) => {
+    // Check if message was already processed
+    const messageKey = `${newMessage.id}_${newMessage.createdAt}`;
+    if (processedMessageIds.current.has(messageKey)) {
+      console.log('🎯 useChat: Message already processed, skipping duplicate:', messageKey);
+      return;
+    }
+
+    processedMessageIds.current.add(messageKey);
+    
     setMessages(prev => {
-      // Check if message already exists
-      const messageExists = prev.some(msg => msg.id === newMessage.id);
+      // Double-check for duplicates in state
+      const messageExists = prev.some(msg => 
+        msg.id === newMessage.id && msg.createdAt === newMessage.createdAt
+      );
+      
       if (messageExists) {
-        console.log('🎯 useChat: Message already exists, skipping duplicate ID:', newMessage.id);
+        console.log('🎯 useChat: Message already exists in state, skipping duplicate ID:', newMessage.id);
         return prev;
       }
       
@@ -71,11 +86,11 @@ export const useChat = (taskId = null) => {
       setLoading(false);
     }
 
-    // Don't set mountedRef to false in cleanup - let the component handle that
+    // Cleanup function
     return () => {
-      console.log('🎯 useChat: Effect cleanup - but keeping mountedRef true');
+      console.log('🎯 useChat: Effect cleanup');
     };
-  }, [user, token]); // Remove dependency on connectionAttemptedRef to prevent re-runs
+  }, [user, token]);
 
   // Separate cleanup effect that only runs on actual unmount
   useEffect(() => {
@@ -83,14 +98,13 @@ export const useChat = (taskId = null) => {
       console.log('🎯 useChat: Component unmounting - disconnecting WebSocket');
       mountedRef.current = false;
       connectionAttemptedRef.current = false;
+      processedMessageIds.current.clear();
       WebSocketService.disconnect();
     };
   }, []); // Empty dependency array - only runs on mount/unmount
 
-  // Set up message handlers
-  useEffect(() => {
-    console.log('🎯 useChat: Setting up message handlers for taskId:', taskId);
-    
+  // Set up message handlers - memoized to prevent duplicate registrations
+  const messageHandlers = useCallback(() => {
     const handleGlobalChatMessage = (message) => {
       console.log('🎯 useChat: Received global chat message:', message);
       if (!taskId && mountedRef.current) {
@@ -116,12 +130,26 @@ export const useChat = (taskId = null) => {
       }
     };
 
+    return {
+      handleGlobalChatMessage,
+      handleOnlineUsersUpdate,
+      handleUserStatusChange,
+      handleTypingIndicator
+    };
+  }, [taskId, addMessageSafely]);
+
+  // Set up message handlers
+  useEffect(() => {
+    console.log('🎯 useChat: Setting up message handlers for taskId:', taskId);
+    
+    const handlers = messageHandlers();
+
     // Register handlers
     console.log('🎯 useChat: Registering message handlers');
-    WebSocketService.setMessageHandler('globalChat', handleGlobalChatMessage);
-    WebSocketService.setMessageHandler('onlineUsers', handleOnlineUsersUpdate);
-    WebSocketService.setMessageHandler('userStatus', handleUserStatusChange);
-    WebSocketService.setMessageHandler('globalTyping', handleTypingIndicator);
+    WebSocketService.setMessageHandler('globalChat', handlers.handleGlobalChatMessage);
+    WebSocketService.setMessageHandler('onlineUsers', handlers.handleOnlineUsersUpdate);
+    WebSocketService.setMessageHandler('userStatus', handlers.handleUserStatusChange);
+    WebSocketService.setMessageHandler('globalTyping', handlers.handleTypingIndicator);
 
     return () => {
       console.log('🎯 useChat: Removing message handlers');
@@ -130,7 +158,7 @@ export const useChat = (taskId = null) => {
       WebSocketService.removeMessageHandler('userStatus');
       WebSocketService.removeMessageHandler('globalTyping');
     };
-  }, [taskId]);
+  }, [taskId, messageHandlers]);
 
   // Task-specific chat subscription
   useEffect(() => {
@@ -157,7 +185,7 @@ export const useChat = (taskId = null) => {
         WebSocketService.unsubscribe(`/topic/typing/task/${taskId}`);
       };
     }
-  }, [connected, taskId]);
+  }, [connected, taskId, addMessageSafely]);
 
   const connectToChat = async () => {
     try {
@@ -170,25 +198,23 @@ export const useChat = (taskId = null) => {
       }
 
       console.log('🎯 connectToChat: Token validated, calling WebSocketService.connect');
-      console.log('🎯 connectToChat: mountedRef.current before connect:', mountedRef.current);
 
       await WebSocketService.connect(
         token,
         (frame) => {
           console.log('🎯 connectToChat: SUCCESS CALLBACK TRIGGERED!');
-          console.log('🎯 connectToChat: mountedRef.current in callback:', mountedRef.current);
           
-          // Always update state regardless of mountedRef for debugging
-          console.log('🎯 connectToChat: Setting connected=true, loading=false (forced)');
-          setConnected(true);
-          setLoading(false);
-          setError(null);
-          
-          console.log('🎯 connectToChat: Calling joinChat');
-          WebSocketService.joinChat({ userId: user.id });
-          
-          // Don't reload chat history here since it's already loaded in the main effect
-          console.log('🎯 connectToChat: WebSocket connected, chat history already loaded');
+          if (mountedRef.current) {
+            console.log('🎯 connectToChat: Setting connected=true, loading=false');
+            setConnected(true);
+            setLoading(false);
+            setError(null);
+            
+            console.log('🎯 connectToChat: Calling joinChat');
+            WebSocketService.joinChat({ userId: user.id });
+            
+            console.log('🎯 connectToChat: WebSocket connected, chat history already loaded');
+          }
         },
         (error) => {
           console.error('🎯 connectToChat: ERROR CALLBACK TRIGGERED:', error);
@@ -218,6 +244,9 @@ export const useChat = (taskId = null) => {
       console.log('🎯 loadChatHistory: Received', response.data.length, 'messages');
       
       if (mountedRef.current) {
+        // Clear processed message IDs when loading fresh history
+        processedMessageIds.current.clear();
+        
         // Remove duplicates and sort messages by createdAt to ensure chronological order (oldest first)
         const uniqueMessages = response.data.filter((message, index, self) => 
           index === self.findIndex(m => m.id === message.id)
@@ -225,6 +254,12 @@ export const useChat = (taskId = null) => {
         
         const sortedMessages = uniqueMessages.sort((a, b) => {
           return new Date(a.createdAt) - new Date(b.createdAt);
+        });
+        
+        // Add all messages to processed set
+        sortedMessages.forEach(msg => {
+          const messageKey = `${msg.id}_${msg.createdAt}`;
+          processedMessageIds.current.add(messageKey);
         });
         
         console.log('🎯 loadChatHistory: Messages deduplicated and sorted chronologically (oldest first)');
@@ -282,18 +317,45 @@ export const useChat = (taskId = null) => {
     }
   };
 
+  // Debounced send message to prevent rapid duplicates
+  const sendMessageTimeoutRef = useRef(null);
+  const lastSentMessageRef = useRef('');
+
   const sendMessage = useCallback((content) => {
     console.log('🎯 sendMessage: Attempting to send:', content);
+    
     if (!content.trim() || !connected) {
       console.log('🎯 sendMessage: Cannot send - content empty or not connected');
       return false;
     }
 
-    const success = WebSocketService.sendChatMessage(content.trim(), taskId);
-    if (!success) {
-      toast.error('Failed to send message');
+    // Prevent duplicate rapid sends of same message
+    if (lastSentMessageRef.current === content.trim()) {
+      console.log('🎯 sendMessage: Preventing duplicate send of same message');
+      return false;
     }
-    return success;
+
+    // Clear any pending send timeout
+    if (sendMessageTimeoutRef.current) {
+      clearTimeout(sendMessageTimeoutRef.current);
+    }
+
+    // Debounce message sending
+    sendMessageTimeoutRef.current = setTimeout(() => {
+      lastSentMessageRef.current = content.trim();
+      const success = WebSocketService.sendChatMessage(content.trim(), taskId);
+      
+      if (!success) {
+        toast.error('Failed to send message');
+      }
+
+      // Clear the last sent message after a short delay
+      setTimeout(() => {
+        lastSentMessageRef.current = '';
+      }, 1000);
+    }, 100); // 100ms debounce
+
+    return true;
   }, [connected, taskId]);
 
   const typingTimeoutRef = useRef(null);
@@ -329,23 +391,6 @@ export const useChat = (taskId = null) => {
     console.log('🎯 updateUserStatus: Called with:', status);
     WebSocketService.updateUserStatus(status);
   }, []);
-
-  // Debug timer to check state periodically
-  useEffect(() => {
-    const timer = setInterval(() => {
-      console.log('🎯 useChat: Periodic state check', {
-        connected,
-        loading,
-        error,
-        messagesCount: messages.length,
-        onlineUsersCount: onlineUsers.length,
-        webSocketConnected: WebSocketService.isConnected(),
-        mountedRef: mountedRef.current
-      });
-    }, 3000);
-
-    return () => clearInterval(timer);
-  }, [connected, loading, error, messages.length, onlineUsers.length]);
 
   return {
     messages,
