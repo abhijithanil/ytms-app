@@ -12,7 +12,10 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/users")
@@ -252,30 +255,6 @@ public class UserController {
         }
     }
 
-    /**
-     * Get current user's profile for chat
-     */
-    @GetMapping("/me")
-    public ResponseEntity<UserDTO> getCurrentUser(Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                log.warn("Unauthorized request to get current user");
-                return ResponseEntity.status(401).build();
-            }
-
-            log.debug("Fetching current user profile for: {}", userPrincipal.getUsername());
-            UserDTO user = userService.getCurrentUserAsDTO(userPrincipal.getId());
-
-            return ResponseEntity.ok(user);
-        } catch (RuntimeException e) {
-            log.warn("Current user not found");
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            log.error("Error fetching current user profile: {}", e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
 
     /**
      * Update user status for chat presence
@@ -330,20 +309,6 @@ public class UserController {
     }
 
     /**
-     * Check if username exists (for validation)
-     */
-    @GetMapping("/check/username/{username}")
-    public ResponseEntity<Boolean> checkUsernameExists(@PathVariable String username) {
-        try {
-            boolean exists = userService.existsByUsername(username);
-            return ResponseEntity.ok(exists);
-        } catch (Exception e) {
-            log.error("Error checking username existence: {}", e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    /**
      * Check if email exists (for validation)
      */
     @GetMapping("/check/email/{email}")
@@ -365,7 +330,8 @@ public class UserController {
     public static class UpdateUserStatusRequest {
         private String status;
 
-        public UpdateUserStatusRequest() {}
+        public UpdateUserStatusRequest() {
+        }
 
         public UpdateUserStatusRequest(String status) {
             this.status = status;
@@ -378,5 +344,83 @@ public class UserController {
         public void setStatus(String status) {
             this.status = status;
         }
+    }
+
+//    /**
+//     * Get all users for chat purposes (add this endpoint)
+//     */
+//    @GetMapping("/all")
+//    public ResponseEntity<List<Map<String, Object>>> getAllUsersForChat() {
+//        try {
+//            List<User> users = userService.getAllUsersForChat();
+//            List<Map<String, Object>> userDTOs = users.stream()
+//                    .map(this::convertUserToChatDTO)
+//                    .collect(Collectors.toList());
+//
+//            return ResponseEntity.ok(userDTOs);
+//        } catch (Exception e) {
+//            log.error("Error fetching all users for chat: {}", e.getMessage());
+//            return ResponseEntity.status(500).build();
+//        }
+//    }
+
+    /**
+     * Get current user profile for chat (add this endpoint if not already present)
+     */
+    @GetMapping("/me")
+    public ResponseEntity<Map<String, Object>> getCurrentUserProfile(Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            User user = userService.getUserForChat(userPrincipal.getId());
+            if (user != null) {
+                return ResponseEntity.ok(convertUserToChatDTO(user));
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            log.error("Error getting current user profile: {}", e.getMessage());
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+
+    /**
+     * Check if username exists (add this endpoint)
+     */
+    @GetMapping("/check/username/{username}")
+    public ResponseEntity<Map<String, Boolean>> checkUsernameExists(@PathVariable String username) {
+        try {
+            boolean exists = userService.existsByUsername(username);
+            Map<String, Boolean> response = new HashMap<>();
+            response.put("exists", exists);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error checking username {}: {}", username, e.getMessage());
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    /**
+     * Convert User entity to DTO for chat frontend (add this helper method)
+     */
+    private Map<String, Object> convertUserToChatDTO(User user) {
+        Map<String, Object> dto = new HashMap<>();
+        dto.put("id", user.getId());
+        dto.put("username", user.getUsername());
+        dto.put("email", user.getEmail());
+        dto.put("firstName", user.getFirstName());
+        dto.put("lastName", user.getLastName());
+        dto.put("displayName", userService.getDisplayName(user));
+        dto.put("role", user.getRole());
+        dto.put("active", user.getUserStatus());
+        dto.put("createdAt", user.getCreatedAt());
+        dto.put("updatedAt", user.getLastUpdateAt());
+
+        // Add any additional fields needed for chat
+        return dto;
     }
 }

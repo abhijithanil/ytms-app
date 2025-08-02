@@ -24,11 +24,9 @@ import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-// Add these imports to your ChatController.java
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-
 
 @RestController
 @RequestMapping("/api/chat")
@@ -63,7 +61,6 @@ public class ChatController {
     }
 
     @GetMapping("/status")
-
     public String getChatStatus() {
         return "Chat service is running";
     }
@@ -324,6 +321,358 @@ public class ChatController {
         }
     }
 
+    //  MESSAGE REACTIONS
+
+    @PostMapping("/messages/{messageId}/reactions")
+    public ResponseEntity<Void> addReaction(@PathVariable Long messageId,
+                                            @RequestBody MessageReactionRequest request,
+                                            Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Adding reaction {} to message {} by user: {}",
+                    request.getReactionType(), messageId, userPrincipal.getUsername());
+
+            chatService.addReactionToMessage(messageId, request.getReactionType(), userPrincipal.getId());
+            return ResponseEntity.ok().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error adding reaction to message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @DeleteMapping("/messages/{messageId}/reactions/{reactionType}")
+    public ResponseEntity<Void> removeReaction(@PathVariable Long messageId,
+                                               @PathVariable String reactionType,
+                                               Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Removing reaction {} from message {} by user: {}",
+                    reactionType, messageId, userPrincipal.getUsername());
+
+            chatService.removeReactionFromMessage(messageId, reactionType, userPrincipal.getId());
+            return ResponseEntity.ok().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error removing reaction from message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @GetMapping("/messages/{messageId}/reactions")
+    public ResponseEntity<Map<String, MessageReactionDTO>> getMessageReactions(@PathVariable Long messageId,
+                                                                               Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            Map<String, MessageReactionDTO> reactions = chatService.getMessageReactions(messageId, userPrincipal.getId());
+            return ResponseEntity.ok(reactions);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error getting reactions for message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    //  MESSAGE EDIT/DELETE
+
+    @PutMapping("/messages/{messageId}")
+    public ResponseEntity<ChatMessageDTO> editMessage(@PathVariable Long messageId,
+                                                      @RequestBody EditMessageRequest request,
+                                                      Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Editing message {} by user: {}", messageId, userPrincipal.getUsername());
+
+            ChatMessageDTO updatedMessage = chatService.editMessage(messageId, request.getContent(), userPrincipal.getId());
+            return ResponseEntity.ok(updatedMessage);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error editing message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @DeleteMapping("/messages/{messageId}")
+    public ResponseEntity<Void> deleteMessage(@PathVariable Long messageId, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Deleting message {} by user: {}", messageId, userPrincipal.getUsername());
+
+            chatService.deleteMessage(messageId, userPrincipal.getId());
+            return ResponseEntity.ok().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error deleting message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    //  MESSAGE PIN
+
+    @PostMapping("/messages/{messageId}/pin")
+    public ResponseEntity<Void> pinMessage(@PathVariable Long messageId, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Pinning message {} by user: {}", messageId, userPrincipal.getUsername());
+
+            chatService.pinMessage(messageId, userPrincipal.getId());
+            return ResponseEntity.ok().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error pinning message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @DeleteMapping("/messages/{messageId}/pin")
+    public ResponseEntity<Void> unpinMessage(@PathVariable Long messageId, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Unpinning message {} by user: {}", messageId, userPrincipal.getUsername());
+
+            chatService.unpinMessage(messageId, userPrincipal.getId());
+            return ResponseEntity.ok().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error unpinning message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    //  THREAD/REPLY
+
+    @GetMapping("/messages/{messageId}/replies")
+    public ResponseEntity<List<ChatMessageDTO>> getThreadReplies(@PathVariable Long messageId,
+                                                                 @RequestParam(defaultValue = "0") int page,
+                                                                 @RequestParam(defaultValue = "20") int size,
+                                                                 Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.debug("Getting thread replies for message {} by user: {}", messageId, userPrincipal.getUsername());
+
+            List<ChatMessageDTO> replies = chatService.getThreadReplies(messageId, page, size, userPrincipal.getId());
+            return ResponseEntity.ok(replies);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error getting thread replies for message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @PostMapping("/messages/reply")
+    public ResponseEntity<ChatMessageDTO> sendReply(@RequestBody SendReplyRequest request, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Sending reply to message {} by user: {}", request.getParentMessageId(), userPrincipal.getUsername());
+
+            ChatMessageDTO reply = chatService.sendReply(request, userPrincipal.getId());
+            return ResponseEntity.ok(reply);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error sending reply: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    //  FILE UPLOADS
+
+    @PostMapping("/attachments/upload")
+    public ResponseEntity<AttachmentUploadResponse> uploadAttachment(@RequestParam("file") MultipartFile file,
+                                                                     @RequestParam("roomId") Long roomId,
+                                                                     Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            // Verify user has access to room
+            if (!chatRoomMemberRepository.existsByChatRoomIdAndUserId(roomId, userPrincipal.getId())) {
+                return ResponseEntity.status(403).build();
+            }
+
+            log.info("Uploading attachment {} for room {} by user: {}", file.getOriginalFilename(), roomId, userPrincipal.getUsername());
+
+            AttachmentUploadResponse response = chatService.uploadAttachment(file, roomId, userPrincipal.getId());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error uploading attachment: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    //  MENTIONS
+
+    @GetMapping("/mentions")
+    public ResponseEntity<List<ChatMessageDTO>> getUserMentions(@RequestParam(defaultValue = "0") int page,
+                                                                @RequestParam(defaultValue = "20") int size,
+                                                                Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.debug("Getting mentions for user: {}", userPrincipal.getUsername());
+
+            List<ChatMessageDTO> mentions = chatService.getUserMentions(userPrincipal.getId(), page, size);
+            return ResponseEntity.ok(mentions);
+        } catch (Exception e) {
+            log.error("Error getting user mentions: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @PostMapping("/mentions/{messageId}/read")
+    public ResponseEntity<Void> markMentionAsRead(@PathVariable Long messageId, Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.debug("Marking mention as read for message {} by user: {}", messageId, userPrincipal.getUsername());
+
+            chatService.markMentionAsRead(messageId, userPrincipal.getId());
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            log.error("Error marking mention as read: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    //  ADVANCED SEARCH
+
+    @PostMapping("/search/advanced")
+    public ResponseEntity<MessageSearchResponse> advancedSearchMessages(
+            @RequestBody MessageSearchRequest request,
+            Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.debug("Advanced search with query: '{}' by user: {}", request.getQuery(), userPrincipal.getUsername());
+
+            MessageSearchResponse response = chatService.advancedSearchMessages(request, userPrincipal.getId());
+            return ResponseEntity.ok(response);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error in advanced search: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    //  MESSAGE CONTEXT
+
+    @GetMapping("/messages/{messageId}/context")
+    public ResponseEntity<MessageContextResponse> getMessageContext(
+            @PathVariable Long messageId,
+            @RequestParam(defaultValue = "10") int beforeCount,
+            @RequestParam(defaultValue = "10") int afterCount,
+            Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            MessageContextResponse context = chatService.getMessageContext(messageId, beforeCount, afterCount, userPrincipal.getId());
+            return ResponseEntity.ok(context);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error getting message context for message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    //  DATE RANGE MESSAGES
+
+    @GetMapping("/rooms/{roomId}/messages/date-range")
+    public ResponseEntity<List<ChatMessageDTO>> getMessagesByDateRange(
+            @PathVariable Long roomId,
+            @RequestParam String fromDate,
+            @RequestParam String toDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            // Verify user has access to room
+            if (!chatRoomMemberRepository.existsByChatRoomIdAndUserId(roomId, userPrincipal.getId())) {
+                return ResponseEntity.status(403).build();
+            }
+
+            LocalDateTime from = LocalDateTime.parse(fromDate);
+            LocalDateTime to = LocalDateTime.parse(toDate);
+
+            PageRequest pageRequest = PageRequest.of(page, size);
+            List<ChatMessage> messages = chatMessageRepository.findByChatRoomIdAndCreatedAtBetween(
+                    roomId, from, to, pageRequest);
+
+            List<ChatMessageDTO> messageDTOs = messages.stream()
+                    .map(ChatMessageDTO::new)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(messageDTOs);
+        } catch (Exception e) {
+            log.error("Error fetching messages by date range for room {}: {}", roomId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
     //  WEBSOCKET MESSAGE HANDLERS
 
     @MessageMapping("/chat/join")
@@ -428,7 +777,6 @@ public class ChatController {
 
     //  BACKWARD COMPATIBILITY WEBSOCKET HANDLERS
 
-
     @MessageMapping("/typing/global")
     public void handleGlobalTyping(Map<String, Object> payload, Principal principal) {
         try {
@@ -493,11 +841,9 @@ public class ChatController {
         }
     }
 
-
-    // Add this method to your ChatController class
+    // Duplicate message prevention
     private boolean isDuplicateMessage(String messageId, String content) {
         if (messageId == null) {
-            // Generate a simple hash for messages without ID
             messageId = content.hashCode() + "_" + System.currentTimeMillis();
         }
 
@@ -518,7 +864,7 @@ public class ChatController {
         return false;
     }
 
-    // Update your sendRoomMessage method
+    // Room message sending via WebSocket
     @MessageMapping("/chat/room/{roomId}")
     public void sendRoomMessage(@DestinationVariable Long roomId, Map<String, Object> payload, Principal principal) {
         try {
@@ -561,7 +907,7 @@ public class ChatController {
         }
     }
 
-    // Update your sendGlobalMessage method
+    // Global message sending via WebSocket
     @MessageMapping("/chat/global")
     public void sendGlobalMessage(Map<String, Object> payload, Principal principal) {
         try {
@@ -589,7 +935,7 @@ public class ChatController {
         }
     }
 
-    // Update your sendTaskMessage method similarly
+    // Task message sending via WebSocket
     @MessageMapping("/chat/task/{taskId}")
     public void sendTaskMessage(@DestinationVariable Long taskId, Map<String, Object> payload, Principal principal) {
         try {
@@ -617,353 +963,7 @@ public class ChatController {
         }
     }
 
-
-    // Enhanced search endpoint with filters
-    @PostMapping("/search/advanced")
-    public ResponseEntity<MessageSearchResponse> advancedSearchMessages(
-            @RequestBody MessageSearchRequest request,
-            Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            log.debug("Advanced search with query: '{}' by user: {}", request.getQuery(), userPrincipal.getUsername());
-
-            // Enhanced search with metadata
-            MessageSearchResponse response = chatService.advancedSearchMessages(request, userPrincipal.getId());
-            return ResponseEntity.ok(response);
-        } catch (SecurityException e) {
-            return ResponseEntity.status(403).build();
-        } catch (Exception e) {
-            log.error("Error in advanced search: {}", e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    // Search within specific date range
-    @GetMapping("/rooms/{roomId}/messages/date-range")
-    public ResponseEntity<List<ChatMessageDTO>> getMessagesByDateRange(
-            @PathVariable Long roomId,
-            @RequestParam String fromDate,
-            @RequestParam String toDate,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size,
-            Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            // Verify user has access to room
-            if (!chatRoomMemberRepository.existsByChatRoomIdAndUserId(roomId, userPrincipal.getId())) {
-                return ResponseEntity.status(403).build();
-            }
-
-            LocalDateTime from = LocalDateTime.parse(fromDate);
-            LocalDateTime to = LocalDateTime.parse(toDate);
-
-            PageRequest pageRequest = PageRequest.of(page, size);
-            List<ChatMessage> messages = chatMessageRepository.findByChatRoomIdAndCreatedAtBetween(
-                    roomId, from, to, pageRequest);
-
-            List<ChatMessageDTO> messageDTOs = messages.stream()
-                    .map(ChatMessageDTO::new)
-                    .collect(Collectors.toList());
-
-            return ResponseEntity.ok(messageDTOs);
-        } catch (Exception e) {
-            log.error("Error fetching messages by date range for room {}: {}", roomId, e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    // Get message context (messages around a specific message)
-    @GetMapping("/messages/{messageId}/context")
-    public ResponseEntity<MessageContextResponse> getMessageContext(
-            @PathVariable Long messageId,
-            @RequestParam(defaultValue = "10") int beforeCount,
-            @RequestParam(defaultValue = "10") int afterCount,
-            Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            MessageContextResponse context = chatService.getMessageContext(messageId, beforeCount, afterCount, userPrincipal.getId());
-            return ResponseEntity.ok(context);
-        } catch (SecurityException e) {
-            return ResponseEntity.status(403).build();
-        } catch (Exception e) {
-            log.error("Error getting message context for message {}: {}", messageId, e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-
-    // Message Reaction Endpoints
-    @PostMapping("/messages/{messageId}/reactions")
-    public ResponseEntity<Void> addReaction(@PathVariable Long messageId,
-                                            @RequestBody MessageReactionRequest request,
-                                            Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            log.info("Adding reaction {} to message {} by user: {}",
-                    request.getReactionType(), messageId, userPrincipal.getUsername());
-
-            chatService.addReactionToMessage(messageId, request.getReactionType(), userPrincipal.getId());
-            return ResponseEntity.ok().build();
-        } catch (SecurityException e) {
-            return ResponseEntity.status(403).build();
-        } catch (Exception e) {
-            log.error("Error adding reaction to message {}: {}", messageId, e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    @DeleteMapping("/messages/{messageId}/reactions/{reactionType}")
-    public ResponseEntity<Void> removeReaction(@PathVariable Long messageId,
-                                               @PathVariable String reactionType,
-                                               Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            log.info("Removing reaction {} from message {} by user: {}",
-                    reactionType, messageId, userPrincipal.getUsername());
-
-            chatService.removeReactionFromMessage(messageId, reactionType, userPrincipal.getId());
-            return ResponseEntity.ok().build();
-        } catch (SecurityException e) {
-            return ResponseEntity.status(403).build();
-        } catch (Exception e) {
-            log.error("Error removing reaction from message {}: {}", messageId, e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    @GetMapping("/messages/{messageId}/reactions")
-    public ResponseEntity<Map<String, MessageReactionDTO>> getMessageReactions(@PathVariable Long messageId,
-                                                                               Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            Map<String, MessageReactionDTO> reactions = chatService.getMessageReactions(messageId, userPrincipal.getId());
-            return ResponseEntity.ok(reactions);
-        } catch (SecurityException e) {
-            return ResponseEntity.status(403).build();
-        } catch (Exception e) {
-            log.error("Error getting reactions for message {}: {}", messageId, e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    // Message Edit/Delete Endpoints
-    @PutMapping("/messages/{messageId}")
-    public ResponseEntity<ChatMessageDTO> editMessage(@PathVariable Long messageId,
-                                                      @RequestBody EditMessageRequest request,
-                                                      Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            log.info("Editing message {} by user: {}", messageId, userPrincipal.getUsername());
-
-            ChatMessageDTO updatedMessage = chatService.editMessage(messageId, request.getContent(), userPrincipal.getId());
-            return ResponseEntity.ok(updatedMessage);
-        } catch (SecurityException e) {
-            return ResponseEntity.status(403).build();
-        } catch (Exception e) {
-            log.error("Error editing message {}: {}", messageId, e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    @DeleteMapping("/messages/{messageId}")
-    public ResponseEntity<Void> deleteMessage(@PathVariable Long messageId, Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            log.info("Deleting message {} by user: {}", messageId, userPrincipal.getUsername());
-
-            chatService.deleteMessage(messageId, userPrincipal.getId());
-            return ResponseEntity.ok().build();
-        } catch (SecurityException e) {
-            return ResponseEntity.status(403).build();
-        } catch (Exception e) {
-            log.error("Error deleting message {}: {}", messageId, e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    // Message Pin Endpoints
-    @PostMapping("/messages/{messageId}/pin")
-    public ResponseEntity<Void> pinMessage(@PathVariable Long messageId, Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            log.info("Pinning message {} by user: {}", messageId, userPrincipal.getUsername());
-
-            chatService.pinMessage(messageId, userPrincipal.getId());
-            return ResponseEntity.ok().build();
-        } catch (SecurityException e) {
-            return ResponseEntity.status(403).build();
-        } catch (Exception e) {
-            log.error("Error pinning message {}: {}", messageId, e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    @DeleteMapping("/messages/{messageId}/pin")
-    public ResponseEntity<Void> unpinMessage(@PathVariable Long messageId, Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            log.info("Unpinning message {} by user: {}", messageId, userPrincipal.getUsername());
-
-            chatService.unpinMessage(messageId, userPrincipal.getId());
-            return ResponseEntity.ok().build();
-        } catch (SecurityException e) {
-            return ResponseEntity.status(403).build();
-        } catch (Exception e) {
-            log.error("Error unpinning message {}: {}", messageId, e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    // Thread/Reply Endpoints
-    @GetMapping("/messages/{messageId}/replies")
-    public ResponseEntity<List<ChatMessageDTO>> getThreadReplies(@PathVariable Long messageId,
-                                                                 @RequestParam(defaultValue = "0") int page,
-                                                                 @RequestParam(defaultValue = "20") int size,
-                                                                 Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            log.debug("Getting thread replies for message {} by user: {}", messageId, userPrincipal.getUsername());
-
-            List<ChatMessageDTO> replies = chatService.getThreadReplies(messageId, page, size, userPrincipal.getId());
-            return ResponseEntity.ok(replies);
-        } catch (SecurityException e) {
-            return ResponseEntity.status(403).build();
-        } catch (Exception e) {
-            log.error("Error getting thread replies for message {}: {}", messageId, e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    @PostMapping("/messages/reply")
-    public ResponseEntity<ChatMessageDTO> sendReply(@RequestBody SendReplyRequest request, Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            log.info("Sending reply to message {} by user: {}", request.getParentMessageId(), userPrincipal.getUsername());
-
-            ChatMessageDTO reply = chatService.sendReply(request, userPrincipal.getId());
-            return ResponseEntity.ok(reply);
-        } catch (SecurityException e) {
-            return ResponseEntity.status(403).build();
-        } catch (Exception e) {
-            log.error("Error sending reply: {}", e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    // File Upload Endpoint for Chat Attachments
-    @PostMapping("/attachments/upload")
-    public ResponseEntity<AttachmentUploadResponse> uploadAttachment(@RequestParam("file") MultipartFile file,
-                                                                     @RequestParam("roomId") Long roomId,
-                                                                     Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            // Verify user has access to room
-            if (!chatRoomMemberRepository.existsByChatRoomIdAndUserId(roomId, userPrincipal.getId())) {
-                return ResponseEntity.status(403).build();
-            }
-
-            log.info("Uploading attachment {} for room {} by user: {}", file.getOriginalFilename(), roomId, userPrincipal.getUsername());
-
-            AttachmentUploadResponse response = chatService.uploadAttachment(file, roomId, userPrincipal.getId());
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Error uploading attachment: {}", e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    // Mentions Endpoints
-    @GetMapping("/mentions")
-    public ResponseEntity<List<ChatMessageDTO>> getUserMentions(@RequestParam(defaultValue = "0") int page,
-                                                                @RequestParam(defaultValue = "20") int size,
-                                                                Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            log.debug("Getting mentions for user: {}", userPrincipal.getUsername());
-
-            List<ChatMessageDTO> mentions = chatService.getUserMentions(userPrincipal.getId(), page, size);
-            return ResponseEntity.ok(mentions);
-        } catch (Exception e) {
-            log.error("Error getting user mentions: {}", e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-    @PostMapping("/mentions/{messageId}/read")
-    public ResponseEntity<Void> markMentionAsRead(@PathVariable Long messageId, Principal principal) {
-        try {
-            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
-            if (userPrincipal == null) {
-                return ResponseEntity.status(401).build();
-            }
-
-            log.debug("Marking mention as read for message {} by user: {}", messageId, userPrincipal.getUsername());
-
-            chatService.markMentionAsRead(messageId, userPrincipal.getId());
-            return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            log.error("Error marking mention as read: {}", e.getMessage(), e);
-            return ResponseEntity.status(500).build();
-        }
-    }
-
-// WebSocket Message Handlers for Enhanced Features
+    // WebSocket Message Handlers for Enhanced Features
 
     @MessageMapping("/chat/room/{roomId}/react")
     public void handleReaction(@DestinationVariable Long roomId, Map<String, Object> payload, Principal principal) {

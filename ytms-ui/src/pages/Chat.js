@@ -12,6 +12,13 @@ const Chat = () => {
   const [showCreateDMModal, setShowCreateDMModal] = useState(false);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
 
+  console.log('🎯 Chat: Render', {
+    currentUserId: user?.id,
+    selectedRoomId: selectedRoom?.id,
+    loading: false,
+    error: null,
+  });
+
   const handleRoomSelect = (room) => {
     console.log('Selected room:', room);
     setSelectedRoom(room);
@@ -36,9 +43,9 @@ const Chat = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-white">
-      {/* Header */}
-      <div className="flex-shrink-0 px-6 py-4 bg-white border-b border-gray-200">
+    <div className="h-screen flex flex-col bg-white overflow-hidden chat-main-container">
+      {/* Header - Fixed height */}
+      <div className="flex-shrink-0 px-6 py-4 bg-white border-b border-gray-200 chat-header">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
@@ -65,17 +72,19 @@ const Chat = () => {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <ChatRoomsSidebar
-          selectedRoomId={selectedRoom?.id}
-          onRoomSelect={handleRoomSelect}
-          currentUserId={user?.id}
-        />
+      {/* Main Content - Flexible height with proper overflow handling */}
+      <div className="flex-1 flex overflow-hidden min-h-0 chat-content-area">
+        {/* Sidebar - Fixed width, full height with internal scroll */}
+        <div className="flex-shrink-0">
+          <ChatRoomsSidebar
+            selectedRoomId={selectedRoom?.id}
+            onRoomSelect={handleRoomSelect}
+            currentUserId={user?.id}
+          />
+        </div>
 
-        {/* Chat Area */}
-        <div className="flex-1 flex flex-col">
+        {/* Chat Area - Flexible width, full height with internal scroll */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {selectedRoom ? (
             <RoomChatPanel
               room={selectedRoom}

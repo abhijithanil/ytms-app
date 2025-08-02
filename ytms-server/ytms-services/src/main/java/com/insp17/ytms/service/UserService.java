@@ -10,7 +10,9 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -381,5 +383,109 @@ public class UserService {
         log.debug("Status update request for user {} to status: {}", userId, status);
         // Currently handled in-memory by ChatService
         // You can implement persistent status storage here if needed
+    }
+
+
+    /**
+     * Get all users with chat-friendly information
+     *
+     * @return List of users with basic chat info
+     */
+    public List<User> getAllUsersForChat() {
+        try {
+            List<User> users = userRepository.findAll();
+            log.info("Retrieved {} users for chat", users.size());
+            return users;
+        } catch (Exception e) {
+            log.error("Error retrieving users for chat: {}", e.getMessage());
+            throw new RuntimeException("Failed to retrieve users for chat");
+        }
+    }
+
+    /**
+     * Get user by ID for chat purposes (includes display name logic)
+     *
+     * @param userId The user ID
+     * @return User with chat-friendly information
+     */
+    public User getUserForChat(Long userId) {
+        try {
+            Optional<User> user = userRepository.findById(userId);
+            if (user.isPresent()) {
+                User u = user.get();
+                log.debug("Retrieved user for chat: {}", u.getUsername());
+                return u;
+            } else {
+                log.warn("User not found for chat: {}", userId);
+                return null;
+            }
+        } catch (Exception e) {
+            log.error("Error retrieving user {} for chat: {}", userId, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Search users for chat (by username, first name, last name, email)
+     *
+     * @param query Search query
+     * @return List of matching users
+     */
+    public List<User> searchUsersForChat(String query) {
+        try {
+            if (query == null || query.trim().isEmpty()) {
+                return new ArrayList<>();
+            }
+
+            String searchTerm = query.trim().toLowerCase();
+            List<User> allUsers = userRepository.findAll();
+
+            return allUsers.stream()
+                    .filter(user ->
+                            user.getUsername().toLowerCase().contains(searchTerm) ||
+                                    (user.getFirstName() != null && user.getFirstName().toLowerCase().contains(searchTerm)) ||
+                                    (user.getLastName() != null && user.getLastName().toLowerCase().contains(searchTerm)) ||
+                                    (user.getEmail() != null && user.getEmail().toLowerCase().contains(searchTerm))
+                    )
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error searching users for chat with query '{}': {}", query, e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Get display name for a user (for chat purposes)
+     *
+     * @param user The user
+     * @return Display name
+     */
+    public String getDisplayName(User user) {
+        if (user == null) return "Unknown User";
+
+        if (user.getFirstName() != null && !user.getFirstName().trim().isEmpty()) {
+            if (user.getLastName() != null && !user.getLastName().trim().isEmpty()) {
+                return user.getFirstName() + " " + user.getLastName();
+            }
+            return user.getFirstName();
+        }
+
+        return user.getUsername();
+    }
+
+
+    /**
+     * Get users by role for chat
+     *
+     * @param role The user role
+     * @return List of users with that role
+     */
+    public List<User> getUsersByRoleForChat(UserRole role) {
+        try {
+            return userRepository.findByRole(role);
+        } catch (Exception e) {
+            log.error("Error getting users by role {} for chat: {}", role, e.getMessage());
+            return new ArrayList<>();
+        }
     }
 }

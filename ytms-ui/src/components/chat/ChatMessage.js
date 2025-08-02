@@ -105,6 +105,7 @@ const ChatMessage = ({
     }
   };
 
+  // UPDATED: Simple reply handler (no modal)
   const handleReply = () => {
     if (onReplyToMessage) {
       onReplyToMessage(message);
@@ -201,11 +202,15 @@ const ChatMessage = ({
         userMentioned ? 'bg-blue-50 border-l-2 border-blue-500' : ''
       } ${isSearchResult ? 'border border-yellow-300 bg-yellow-50' : ''}`}
     >
-      {/* Reply indicator */}
+      {/* Reply indicator - UPDATED: Better visual styling */}
       {isReply && (
-        <div className="flex items-center mb-1 text-xs text-gray-500">
-          <Reply className="h-3 w-3 mr-1 transform scale-x-[-1]" />
-          <span>Replying to {parentMessage?.senderName || 'message'}</span>
+        <div className="flex items-center mb-2 ml-11 text-xs text-gray-500">
+          <div className="flex items-center space-x-1">
+            <Reply className="h-3 w-3 transform scale-x-[-1]" />
+            <span>
+              Replying to <span className="font-medium">{parentMessage?.senderName || 'message'}</span>
+            </span>
+          </div>
         </div>
       )}
 
@@ -234,14 +239,17 @@ const ChatMessage = ({
             )}
           </div>
 
-          {/* Referenced message for replies */}
+          {/* Referenced message for replies - UPDATED: Better styling */}
           {isReply && parentMessage && (
-            <div className="mb-2 p-2 bg-gray-100 border-l-2 border-gray-300 rounded text-sm">
-              <div className="text-xs text-gray-600 mb-1">
+            <div className={`mb-2 p-2 bg-gray-100 border-l-2 border-gray-300 rounded text-sm ${isOwn ? 'ml-auto max-w-md' : 'max-w-md'}`}>
+              <div className="text-xs text-gray-600 mb-1 font-medium">
                 {parentMessage.senderName}
               </div>
-              <div className="text-gray-800 truncate">
-                {parentMessage.content}
+              <div className="text-gray-800 line-clamp-2">
+                {parentMessage.content?.length > 100 
+                  ? `${parentMessage.content.substring(0, 100)}...`
+                  : parentMessage.content
+                }
               </div>
             </div>
           )}
@@ -374,12 +382,12 @@ const ChatMessage = ({
                 )}
               </div>
 
-              {/* Reply button */}
+              {/* Reply button - UPDATED: Simple click handler */}
               {showReplyButton && (
                 <button
                   onClick={handleReply}
                   className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
-                  title="Reply"
+                  title="Reply to this message"
                 >
                   <Reply className="h-4 w-4" />
                 </button>
@@ -441,6 +449,16 @@ const ChatMessage = ({
           </div>
         )}
       </div>
+
+      {/* Custom styles for line clamping */}
+      <style jsx>{`
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+      `}</style>
     </div>
   );
 };

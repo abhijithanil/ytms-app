@@ -16,6 +16,17 @@ public class OnlineUser {
     private String lastName;
     private String email;
     private String sessionId;
-    private String status;
     private LocalDateTime lastSeen;
+    private String status; // online, away, busy, offline
+    private String statusMessage;
+
+    public String getDisplayName() {
+        if (firstName != null && !firstName.trim().isEmpty()) {
+            if (lastName != null && !lastName.trim().isEmpty()) {
+                return firstName + " " + lastName;
+            }
+            return firstName;
+        }
+        return username;
+    }
 }

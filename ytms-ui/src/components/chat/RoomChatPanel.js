@@ -28,7 +28,6 @@ import ChatMessage from './ChatMessage';
 import TypingIndicator from './TypingIndicator';
 import UserMentionInput from './UserMentionInput';
 import RoomMembersModal from './RoomMembersModal';
-import ReplyModal from './ReplyModal';
 import { chatAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -75,9 +74,8 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   const [page, setPage] = useState(0);
   const [showNewMessageAlert, setShowNewMessageAlert] = useState(false);
   
-  // Reply State
+  // Reply State - UPDATED: No modal, just inline reply indicator
   const [replyingTo, setReplyingTo] = useState(null);
-  const [showReplyModal, setShowReplyModal] = useState(false);
   
   // Refs
   const messagesEndRef = useRef(null);
@@ -90,25 +88,32 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   const topObserverRef = useRef(null);
   const loadingMoreRef = useRef(false);
 
-  // Smooth scroll to bottom function
-  const scrollToBottom = useCallback((behavior = 'smooth') => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ 
-        behavior: behavior,
-        block: 'end',
-        inline: 'nearest'
-      });
+  // Smooth scroll to bottom function - FIXED: Better scrolling behavior
+  const scrollToBottom = useCallback((behavior = 'smooth', force = false) => {
+    if (messagesEndRef.current && (shouldAutoScroll.current || force)) {
+      try {
+        messagesEndRef.current.scrollIntoView({ 
+          behavior: behavior,
+          block: 'end',
+          inline: 'nearest'
+        });
+      } catch (error) {
+        // Fallback for browsers that don't support smooth scrolling
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      }
     }
   }, []);
 
-  // Check if user is near bottom of messages
+  // Check if user is near bottom of messages - IMPROVED
   const checkScrollPosition = useCallback(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
     const { scrollTop, scrollHeight, clientHeight } = container;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    const threshold = 100;
+    const threshold = 150; // Increased threshold for better UX
     
     const nearBottom = distanceFromBottom < threshold;
     setIsNearBottom(nearBottom);
@@ -122,7 +127,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     }
   }, []);
 
-  // Auto-scroll when new messages arrive
+  // Auto-scroll when new messages arrive - IMPROVED
   useEffect(() => {
     const hasNewMessages = messages.length > lastMessageCount.current;
     const newMessagesCount = messages.length - lastMessageCount.current;
@@ -135,7 +140,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       
       if (shouldAutoScroll.current || hasOwnMessage) {
         // Auto scroll for own messages or when user is at bottom
-        setTimeout(() => scrollToBottom(), 100);
+        setTimeout(() => scrollToBottom('smooth', hasOwnMessage), 50);
       } else {
         // Show new message indicator for others' messages
         setShowNewMessageAlert(true);
@@ -144,14 +149,19 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     }
   }, [messages, currentUserId, scrollToBottom]);
 
-  // Initial scroll to bottom
+  // Initial scroll to bottom - IMPROVED
   useEffect(() => {
     if (messages.length > 0 && !loading) {
-      setTimeout(() => scrollToBottom('auto'), 200);
+      // Use a longer timeout for initial load to ensure DOM is ready
+      const timeoutId = setTimeout(() => {
+        scrollToBottom('auto', true);
+      }, 300);
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [messages.length, loading, room?.id, scrollToBottom]);
 
-  // Set up intersection observers for infinite scroll
+  // Set up intersection observers for infinite scroll - FIXED
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -169,7 +179,10 @@ const RoomChatPanel = ({ room, currentUserId }) => {
           }
         });
       },
-      { threshold: 0.1 }
+      { 
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px' // Trigger slightly before reaching bottom
+      }
     );
 
     // Observer for loading more messages
@@ -181,7 +194,10 @@ const RoomChatPanel = ({ room, currentUserId }) => {
           }
         });
       },
-      { threshold: 0.1 }
+      { 
+        threshold: 0.1,
+        rootMargin: '100px 0px 0px 0px' // Trigger before reaching top
+      }
     );
 
     if (messagesEndRef.current) {
@@ -192,9 +208,13 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       topObserver.observe(topObserverRef.current);
     }
 
-    // Handle scroll events
+    // Handle scroll events with throttling
+    let scrollTimeout;
     const handleScroll = () => {
-      checkScrollPosition();
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        checkScrollPosition();
+      }, 100);
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
@@ -203,6 +223,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       bottomObserver.disconnect();
       topObserver.disconnect();
       container.removeEventListener('scroll', handleScroll);
+      if (scrollTimeout) clearTimeout(scrollTimeout);
     };
   }, [hasMoreMessages, connected, checkScrollPosition]);
 
@@ -348,6 +369,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     });
   };
 
+  // UPDATED: Handle sending message with reply (no modal)
   const handleSendMessage = (content) => {
     let messageContent = content;
     
@@ -357,13 +379,17 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         content: content,
         parentMessageId: replyingTo.id
       };
+      
+      // Clear reply after sending
+      setReplyingTo(null);
     }
     
     const success = sendMessage(messageContent);
     
-    if (success && replyingTo) {
-      setReplyingTo(null);
-      setShowReplyModal(false);
+    // Force scroll to bottom when user sends a message
+    if (success) {
+      shouldAutoScroll.current = true;
+      setTimeout(() => scrollToBottom('smooth', true), 100);
     }
     
     return success;
@@ -372,18 +398,18 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   // Message action handlers
   const handleReactToMessage = async (messageId, reactionType) => {
     try {
-      // Implement message reaction API call
       await chatAPI.reactToMessage(messageId, reactionType);
-      // The reaction will be updated via WebSocket
     } catch (error) {
       console.error('Failed to react to message:', error);
       toast.error('Failed to add reaction');
     }
   };
 
+  // UPDATED: Simple reply handler (no modal)
   const handleReplyToMessage = (message) => {
     setReplyingTo(message);
-    setShowReplyModal(true);
+    // Optionally scroll to bottom to show the reply indicator
+    setTimeout(() => scrollToBottom('smooth'), 100);
   };
 
   const handleEditMessage = async (messageId, newContent) => {
@@ -423,7 +449,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     shouldAutoScroll.current = true;
     setShowNewMessageAlert(false);
     setUnreadCount(0);
-    scrollToBottom();
+    scrollToBottom('smooth', true);
   };
 
   const getRoomIcon = () => {
@@ -495,9 +521,9 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white relative">
+    <div className="flex-1 flex flex-col bg-white relative chat-panel overflow-hidden">
       {/* Room Header */}
-      <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-white">
+      <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-white chat-panel-header">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3 min-w-0 flex-1">
             <div className="flex-shrink-0 relative">
@@ -690,11 +716,15 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         )}
       </div>
 
-      {/* Messages Area */}
+      {/* Messages Area - IMPROVED: Better scrolling container */}
       <div 
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto bg-gray-50 relative"
-        style={{ scrollBehavior: 'smooth' }}
+        className="flex-1 overflow-y-auto bg-gray-50 relative chat-messages-area"
+        style={{ 
+          scrollBehavior: 'smooth',
+          // Ensure proper scrolling on all devices
+          WebkitOverflowScrolling: 'touch'
+        }}
       >
         {/* Load More Messages Indicator (at top) */}
         {hasMoreMessages && (
@@ -752,7 +782,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
             </p>
           </div>
         ) : (
-          <div className="space-y-0">
+          <div className="space-y-0 messages-list">
             {messages.map((message, index) => {
               const parentMessage = message.parentMessageId 
                 ? messages.find(m => m.id === message.parentMessageId)
@@ -762,7 +792,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                 <div
                   key={`${message.id}-${message.createdAt}-${index}`}
                   id={`message-${message.id}`}
-                  className={`transition-colors duration-300 ${
+                  className={`transition-colors duration-300 message-item ${
                     searchResults.some(result => result.id === message.id) ? 'search-highlight' : ''
                   }`}
                 >
@@ -813,8 +843,8 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         </button>
       )}
 
-      {/* Reply indicator */}
-      {replyingTo && !showReplyModal && (
+      {/* UPDATED: Reply indicator (no modal) */}
+      {replyingTo && (
         <div className="px-4 py-2 bg-blue-50 border-t border-blue-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
@@ -836,8 +866,8 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         </div>
       )}
 
-      {/* Message Input */}
-      <div className="flex-shrink-0 border-t border-gray-200 bg-white">
+      {/* Message Input - FIXED: Always show for all room types */}
+      <div className="flex-shrink-0 border-t border-gray-200 bg-white chat-input-area">
         <UserMentionInput
           onSendMessage={handleSendMessage}
           onStartTyping={startTyping}
@@ -861,17 +891,6 @@ const RoomChatPanel = ({ room, currentUserId }) => {
           members={members}
           currentUserId={currentUserId}
           onClose={() => setShowMembersModal(false)}
-        />
-      )}
-
-      {showReplyModal && replyingTo && (
-        <ReplyModal
-          message={replyingTo}
-          onClose={() => {
-            setShowReplyModal(false);
-            setReplyingTo(null);
-          }}
-          onSend={handleSendMessage}
         />
       )}
 

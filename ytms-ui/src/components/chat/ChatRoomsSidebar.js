@@ -166,7 +166,7 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
   };
 
   const SectionHeader = ({ title, count, isExpanded, onToggle, children }) => (
-    <div className="px-3 py-2">
+    <div className="px-3 py-2 flex-shrink-0">
       <button
         onClick={onToggle}
         className="flex items-center w-full text-sm font-medium text-gray-700 hover:text-gray-900 group"
@@ -226,7 +226,7 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
 
   if (loading) {
     return (
-      <div className="w-80 bg-gray-50 border-r border-gray-200 flex items-center justify-center">
+      <div className="w-80 bg-gray-50 border-r border-gray-200 flex items-center justify-center h-full">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
           <p className="text-sm text-gray-500 mt-2">Loading conversations...</p>
@@ -237,7 +237,7 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
 
   if (error) {
     return (
-      <div className="w-80 bg-gray-50 border-r border-gray-200 p-4">
+      <div className="w-80 bg-gray-50 border-r border-gray-200 p-4 h-full flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-600 text-sm mb-2">{error}</div>
           <button
@@ -253,9 +253,9 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
   }
 
   return (
-    <div className="w-80 bg-gray-50 border-r border-gray-200 flex flex-col h-full">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-200 bg-white">
+    <div className="w-80 bg-gray-50 border-r border-gray-200 flex flex-col h-full overflow-hidden">
+      {/* Header - Fixed */}
+      <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-gray-900">Messages</h2>
           <div className="flex items-center space-x-1">
@@ -285,11 +285,11 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId }) => {
         </div>
       </div>
 
-      {/* Rooms List */}
+      {/* Rooms List - Scrollable */}
       <div className="flex-1 overflow-y-auto">
         {/* Global Chat */}
         {chatRooms.globalChat && (
-          <div className="py-2">
+          <div className="py-2 border-b border-gray-200">
             <RoomItem
               room={chatRooms.globalChat}
               isSelected={selectedRoomId === chatRooms.globalChat.id}
