@@ -606,8 +606,6 @@ const Settings = () => {
         onMfaEnabled={handleMfaEnabled}
       />
 
-      {/* Chat Widget */}
-      <ChatWidget />
     </div>
   );
 };

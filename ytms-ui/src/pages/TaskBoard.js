@@ -342,8 +342,6 @@ const TaskBoard = () => {
           </div>
         </>
       )}
-      {/* Chat Widget */}
-      <ChatWidget />
     </div>
   );
 };

@@ -1233,8 +1233,7 @@ const Team = () => {
           onInviteSent={fetchTeamMembers}
         />
       )}
-       {/* Chat Widget */}
-      <ChatWidget />
+     
     </div>
   );
 };

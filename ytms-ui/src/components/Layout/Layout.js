@@ -373,13 +373,6 @@ const Layout = ({ children }) => {
         </div>
       </div>
 
-      {/* Floating Chat Widget (shows when panel is closed and not on chat page) */}
-      {showChatWidget && !isChatPanelOpen && (
-        <ChatWidget 
-          taskId={null}
-          onOpenFullChat={openFullChat}
-        />
-      )}
 
       {/* Chat Panel Mobile Overlay (alternative to widget on mobile) */}
       {isChatPanelOpen && (

@@ -1120,8 +1120,7 @@ useEffect(() => {
           </button>
         </div>
       </form>
-      {/* Chat Widget */}
-      <ChatWidget />
+      
     </div>
      
   );

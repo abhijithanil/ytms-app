@@ -2004,8 +2004,7 @@ const TaskDetails = () => {
           </div>
         </div>
       )}
-      {/* Chat Widget */}
-      <ChatWidget />
+   
     </div>
   );
 };

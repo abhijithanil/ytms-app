@@ -275,9 +275,6 @@ const Dashboard = () => {
           )}
         </div>
       </div>
-
-      {/* Chat Widget */}
-      <ChatWidget />
     </div>
   );
 };
