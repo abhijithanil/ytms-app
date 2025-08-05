@@ -122,7 +122,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     }
   }, []);
 
-  // Auto-scroll when new messages arrive
+  // Auto-scroll when new messages arrive - FIXED
   useEffect(() => {
     const hasNewMessages = messages.length > lastMessageCount.current;
     const newMessagesCount = messages.length - lastMessageCount.current;
@@ -132,20 +132,32 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       const latestMessages = messages.slice(-newMessagesCount);
       const hasOwnMessage = latestMessages.some(msg => msg.senderId === currentUserId);
       
-      if (shouldAutoScroll.current || hasOwnMessage) {
-        setTimeout(() => scrollToBottom('smooth', hasOwnMessage), 50);
-      } else {
+      // Always auto-scroll when user sends a message, or when near bottom
+      if (hasOwnMessage || shouldAutoScroll.current) {
+        setTimeout(() => {
+          scrollToBottom('smooth', hasOwnMessage);
+          // Ensure the input area stays visible
+          if (hasOwnMessage) {
+            setIsNearBottom(true);
+            setShowNewMessageAlert(false);
+            setUnreadCount(0);
+          }
+        }, 50);
+      } else if (!hasOwnMessage) {
+        // Show new message indicator for others' messages when not at bottom
         setShowNewMessageAlert(true);
         setUnreadCount(prev => prev + newMessagesCount);
       }
     }
   }, [messages, currentUserId, scrollToBottom]);
 
-  // Initial scroll to bottom
+  // Initial scroll to bottom - IMPROVED
   useEffect(() => {
     if (messages.length > 0 && !loading) {
       const timeoutId = setTimeout(() => {
         scrollToBottom('auto', true);
+        setIsNearBottom(true);
+        shouldAutoScroll.current = true;
       }, 300);
       
       return () => clearTimeout(timeoutId);
@@ -358,22 +370,35 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     });
   };
 
+  // FIXED: Handle sending message with proper content structure
   const handleSendMessage = (content) => {
-    let messageContent = content;
+    // FIXED: Ensure content is always a string for regular messages
+    let messageToSend;
     
     if (replyingTo) {
-      messageContent = {
-        content: content,
+      // For replies, create proper message structure
+      messageToSend = {
+        content: typeof content === 'string' ? content : String(content),
         parentMessageId: replyingTo.id
       };
       setReplyingTo(null);
+    } else {
+      // For regular messages, ensure it's a string
+      messageToSend = typeof content === 'string' ? content : String(content);
     }
     
-    const success = sendMessage(messageContent);
+    const success = sendMessage(messageToSend);
     
+    // Force auto-scroll and ensure input area stays visible
     if (success) {
       shouldAutoScroll.current = true;
-      setTimeout(() => scrollToBottom('smooth', true), 100);
+      setIsNearBottom(true);
+      setShowNewMessageAlert(false);
+      setUnreadCount(0);
+      // Immediate scroll to maintain input visibility
+      setTimeout(() => {
+        scrollToBottom('auto', true);
+      }, 50);
     }
     
     return success;
@@ -381,7 +406,14 @@ const RoomChatPanel = ({ room, currentUserId }) => {
 
   const handleReactToMessage = async (messageId, reactionType) => {
     try {
+      // Make the API call
       await chatAPI.reactToMessage(messageId, reactionType);
+      
+      // The useRoomChat hook should automatically refresh the messages
+      // If it doesn't, you might need to add a manual refresh mechanism
+      // For now, we'll let the WebSocket or polling mechanism handle the update
+      
+      toast.success('Reaction added');
     } catch (error) {
       console.error('Failed to react to message:', error);
       toast.error('Failed to add reaction');
@@ -390,7 +422,12 @@ const RoomChatPanel = ({ room, currentUserId }) => {
 
   const handleReplyToMessage = (message) => {
     setReplyingTo(message);
-    setTimeout(() => scrollToBottom('smooth'), 100);
+    // Keep scroll at bottom when replying
+    setTimeout(() => {
+      if (isNearBottom) {
+        scrollToBottom('smooth');
+      }
+    }, 100);
   };
 
   const handleEditMessage = async (messageId, newContent) => {
@@ -430,6 +467,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     shouldAutoScroll.current = true;
     setShowNewMessageAlert(false);
     setUnreadCount(0);
+    setIsNearBottom(true);
     scrollToBottom('smooth', true);
   };
 
@@ -751,7 +789,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         )}
       </div>
 
-      {/* Messages Area */}
+      {/* Messages Area - FIXED scroll behavior */}
       <div 
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto bg-gray-50 relative"
@@ -827,7 +865,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
               
               return (
                 <div
-                  key={`${message.id}-${message.createdAt}-${index}`}
+                  key={`message-${message.id}-${message.reactions || 'no-reactions'}-${index}`}
                   id={`message-${message.id}`}
                   className={`transition-colors duration-300 ${
                     searchResults.some(result => result.id === message.id) ? 'bg-yellow-50' : ''
@@ -902,7 +940,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         </div>
       )}
 
-      {/* Message Input */}
+      {/* Message Input - FIXED to stay visible */}
       <div className="flex-shrink-0 border-t border-gray-200 bg-white">
         <UserMentionInput
           onSendMessage={handleSendMessage}

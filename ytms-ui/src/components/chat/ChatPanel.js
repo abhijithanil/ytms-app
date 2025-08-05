@@ -65,90 +65,123 @@ const ChatPanel = ({
   const searchTimeout = useRef(null);
   const lastMessageCount = useRef(0);
   const shouldAutoScroll = useRef(true);
+  const isScrollingProgrammatically = useRef(false);
 
-  // Smooth scroll to bottom function
-  const scrollToBottom = useCallback((force = false) => {
+  // FIXED: Improved scroll to bottom function
+  const scrollToBottom = useCallback((force = false, immediate = false) => {
     if (messagesEndRef.current && (shouldAutoScroll.current || force)) {
-      messagesEndRef.current.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'end',
-        inline: 'nearest'
-      });
+      isScrollingProgrammatically.current = true;
+      
+      try {
+        messagesEndRef.current.scrollIntoView({ 
+          behavior: immediate ? 'auto' : 'smooth',
+          block: 'end',
+          inline: 'nearest'
+        });
+      } catch (error) {
+        // Fallback for browsers that don't support smooth scrolling
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      }
+      
+      // Reset the flag after a short delay
+      setTimeout(() => {
+        isScrollingProgrammatically.current = false;
+      }, 500);
     }
   }, []);
 
-  // Check if user is at bottom of messages
+  // FIXED: Improved scroll position checking
   const checkIfUserAtBottom = useCallback(() => {
     const container = messagesContainerRef.current;
-    if (!container) return true;
+    if (!container || isScrollingProgrammatically.current) return;
 
     const { scrollTop, scrollHeight, clientHeight } = container;
     const threshold = 100; // pixels from bottom
     const isAtBottom = scrollHeight - scrollTop - clientHeight < threshold;
     
     setIsUserAtBottom(isAtBottom);
-    setShowScrollToBottom(!isAtBottom);
+    setShowScrollToBottom(!isAtBottom && scrollHeight > clientHeight);
     shouldAutoScroll.current = isAtBottom;
     
     return isAtBottom;
   }, []);
 
-  // Handle scroll events
+  // Handle scroll events with throttling
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
+    let scrollTimeout;
     const handleScroll = () => {
-      checkIfUserAtBottom();
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        if (!isScrollingProgrammatically.current) {
+          checkIfUserAtBottom();
+        }
+      }, 100);
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+    };
   }, [checkIfUserAtBottom]);
 
-  // Auto-scroll when new messages arrive
+  // FIXED: Auto-scroll when new messages arrive
   useEffect(() => {
     const hasNewMessages = messages.length > lastMessageCount.current;
+    const newMessagesCount = messages.length - lastMessageCount.current;
     lastMessageCount.current = messages.length;
 
-    if (hasNewMessages && messages.length > 0) {
-      // Small delay to ensure DOM is updated
-      setTimeout(() => {
-        if (isUserAtBottom || shouldAutoScroll.current) {
-          scrollToBottom();
-        }
-      }, 50);
+    if (hasNewMessages && newMessagesCount > 0) {
+      // Check if any of the new messages are from current user
+      const latestMessages = messages.slice(-newMessagesCount);
+      const hasOwnMessage = latestMessages.some(msg => msg.senderId === user?.id);
+      
+      // Always scroll if user sent a message, or if user is at bottom
+      if (hasOwnMessage || shouldAutoScroll.current) {
+        setTimeout(() => {
+          scrollToBottom(hasOwnMessage, hasOwnMessage);
+          if (hasOwnMessage) {
+            setIsUserAtBottom(true);
+            shouldAutoScroll.current = true;
+          }
+        }, 100);
+      }
     }
-  }, [messages, isUserAtBottom, scrollToBottom]);
+  }, [messages, user?.id, scrollToBottom]);
 
-  // Scroll to bottom when component first loads with messages
+  // FIXED: Initial scroll to bottom when component loads
   useEffect(() => {
     if (messages.length > 0 && !loading) {
       setTimeout(() => {
-        scrollToBottom(true); // Force scroll on initial load
-      }, 100);
+        scrollToBottom(true, true); // Force immediate scroll on initial load
+        setIsUserAtBottom(true);
+        shouldAutoScroll.current = true;
+      }, 200);
     }
   }, [messages.length, loading, scrollToBottom]);
 
-  // Auto-scroll when user sends a message
+  // FIXED: Handle sending message with proper scroll behavior
   const handleSendMessage = useCallback((content) => {
-    // Force scroll to bottom when user sends a message
+    // Force auto-scroll when user sends a message
     shouldAutoScroll.current = true;
+    setIsUserAtBottom(true);
+    
     const result = sendMessage(content);
     
-    // Ensure scroll happens after message is sent
-    setTimeout(() => {
-      scrollToBottom(true);
-    }, 100);
+    // Ensure scroll happens after message is processed
+    if (result !== false) {
+      setTimeout(() => {
+        scrollToBottom(true, false); // Smooth scroll after sending
+      }, 50);
+    }
     
     return result;
   }, [sendMessage, scrollToBottom]);
-
-  // Force scroll to bottom when button is clicked
-  const handleScrollToBottomClick = useCallback(() => {
-    shouldAutoScroll.current = true;
-    scrollToBottom(true);
-  }, [scrollToBottom]);
 
   // Close status menu when clicking outside
   useEffect(() => {
@@ -267,6 +300,13 @@ const ChatPanel = ({
   const handleStatusChange = (status) => {
     updateUserStatus(status);
     setShowStatusMenu(false);
+  };
+
+  // FIXED: Scroll to bottom button handler
+  const handleScrollToBottomClick = () => {
+    shouldAutoScroll.current = true;
+    setIsUserAtBottom(true);
+    scrollToBottom(true, false);
   };
 
   const getConnectionStatus = () => {
@@ -469,13 +509,12 @@ const ChatPanel = ({
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Messages Area */}
+        {/* Messages Area - FIXED: Improved scroll behavior */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Messages Container */}
           <div 
             ref={messagesContainerRef}
-            className="flex-1 overflow-y-auto p-4 bg-gray-50"
-            style={{ scrollBehavior: 'smooth' }}
+            className="flex-1 overflow-y-auto p-4 bg-gray-50 chat-messages-container"
           >
             {error && (
               <div className="mb-4 p-3 bg-red-100 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -515,12 +554,12 @@ const ChatPanel = ({
                 <p className="text-sm">Start the conversation!</p>
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-1 messages-list">
                 {messages.map((message, index) => (
                   <div
-                    key={`${message.id}-${message.createdAt}-${index}`}
+                    key={`${message.id}-${message.createdAt}-${index}-${message.reactions || ''}`}
                     id={`message-${message.id}`}
-                    className={`transition-colors duration-300 ${
+                    className={`transition-colors duration-300 message-item ${
                       searchResults.some(result => result.id === message.id) ? 'search-highlight' : ''
                     }`}
                   >
@@ -529,6 +568,14 @@ const ChatPanel = ({
                       isOwn={message.senderId === user?.id}
                       currentUserId={user?.id}
                       onlineUsers={onlineUsers}
+                      onReactToMessage={async (messageId, reactionType) => {
+                        try {
+                          await chatAPI.reactToMessage(messageId, reactionType);
+                          // The message will be updated through the chat hook
+                        } catch (error) {
+                          console.error('Failed to react to message:', error);
+                        }
+                      }}
                     />
                   </div>
                 ))}
@@ -539,7 +586,7 @@ const ChatPanel = ({
             )}
           </div>
 
-          {/* Scroll to Bottom Button */}
+          {/* Scroll to Bottom Button - FIXED positioning */}
           {showScrollToBottom && (
             <button
               onClick={handleScrollToBottomClick}
@@ -550,8 +597,8 @@ const ChatPanel = ({
             </button>
           )}
 
-          {/* Message Input */}
-          <div className="p-4 bg-white border-t border-gray-200 flex-shrink-0">
+          {/* Message Input - FIXED to maintain visibility */}
+          <div className="flex-shrink-0 p-4 bg-white border-t border-gray-200 chat-input-focused">
             <UserMentionInput
               onSendMessage={handleSendMessage}
               onStartTyping={startTyping}

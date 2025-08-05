@@ -13,16 +13,16 @@ const MessageWithMentions = ({ content, currentUserId, onlineUsers = [] }) => {
   // Ensure onlineUsers is an array
   const safeOnlineUsers = Array.isArray(onlineUsers) ? onlineUsers : [];
 
-  // Parse message content to identify mentions
+  // Parse message content to identify mentions and emojis
   const parseMessageContent = (text) => {
-    // Regular expression to match @username patterns
-    const mentionRegex = /@(\w+)/g;
+    // Updated regex to handle both @username mentions and emoji rendering
+    const mentionAndEmojiRegex = /@(\w+)|(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)/gu;
     const parts = [];
     let lastIndex = 0;
     let match;
 
-    while ((match = mentionRegex.exec(text)) !== null) {
-      // Add text before mention
+    while ((match = mentionAndEmojiRegex.exec(text)) !== null) {
+      // Add text before mention/emoji
       if (match.index > lastIndex) {
         parts.push({
           type: 'text',
@@ -30,18 +30,26 @@ const MessageWithMentions = ({ content, currentUserId, onlineUsers = [] }) => {
         });
       }
 
-      // Add mention
-      const username = match[1];
-      const mentionedUser = safeOnlineUsers.find(user => user && user.username === username);
-      const isCurrentUser = mentionedUser?.userId === currentUserId;
+      if (match[1]) {
+        // This is a mention (@username)
+        const username = match[1];
+        const mentionedUser = safeOnlineUsers.find(user => user && user.username === username);
+        const isCurrentUser = mentionedUser?.userId === currentUserId;
 
-      parts.push({
-        type: 'mention',
-        content: match[0], // @username
-        username: username,
-        isCurrentUser: isCurrentUser,
-        userExists: !!mentionedUser
-      });
+        parts.push({
+          type: 'mention',
+          content: match[0], // @username
+          username: username,
+          isCurrentUser: isCurrentUser,
+          userExists: !!mentionedUser
+        });
+      } else if (match[2]) {
+        // This is an emoji
+        parts.push({
+          type: 'emoji',
+          content: match[2]
+        });
+      }
 
       lastIndex = match.index + match[0].length;
     }
@@ -60,7 +68,14 @@ const MessageWithMentions = ({ content, currentUserId, onlineUsers = [] }) => {
   const messageParts = parseMessageContent(content);
 
   return (
-    <span className="whitespace-pre-wrap break-words">
+    <span 
+      className="whitespace-pre-wrap break-words"
+      style={{ 
+        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif',
+        fontSize: '14px',
+        lineHeight: '1.5'
+      }}
+    >
       {messageParts.map((part, index) => {
         if (part.type === 'mention') {
           return (
@@ -80,6 +95,20 @@ const MessageWithMentions = ({ content, currentUserId, onlineUsers = [] }) => {
                   ? `Mentioned user: ${part.username}` 
                   : `User not found: ${part.username}`
               }
+            >
+              {part.content}
+            </span>
+          );
+        } else if (part.type === 'emoji') {
+          return (
+            <span
+              key={index}
+              className="inline-block"
+              style={{
+                fontSize: '18px',
+                fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif',
+                lineHeight: '1.2'
+              }}
             >
               {part.content}
             </span>

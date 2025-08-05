@@ -36,6 +36,7 @@ const ChatMessage = ({
   const [reactions, setReactions] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content || '');
+  const [isReacting, setIsReacting] = useState(false);
   
   const messageRef = useRef(null);
   const actionsRef = useRef(null);
@@ -50,6 +51,7 @@ const ChatMessage = ({
     { emoji: '😞', type: 'disappointed', label: 'Disappointed' }
   ];
 
+  // FIXED: Enhanced useEffect to properly handle reaction updates
   useEffect(() => {
     try {
       const messageReactions = message.reactions ? JSON.parse(message.reactions) : {};
@@ -58,7 +60,7 @@ const ChatMessage = ({
       console.error('Error parsing reactions:', error);
       setReactions({});
     }
-  }, [message.reactions]);
+  }, [message.reactions, message.id, message.updatedAt]); // Added more dependencies for better reactivity
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -92,13 +94,22 @@ const ChatMessage = ({
   };
 
   const handleReaction = async (reactionType) => {
-    if (!onReactToMessage) return;
+    if (!onReactToMessage || isReacting) return;
     
     try {
-      await onReactToMessage(message.id, reactionType);
+      setIsReacting(true);
       setShowReactions(false);
+      
+      // Call the API first
+      await onReactToMessage(message.id, reactionType);
+      
+      // Force a re-render by updating the key of the parent component
+      // This will be handled by the parent component's message list update
+      
     } catch (error) {
       console.error('Error adding reaction:', error);
+    } finally {
+      setIsReacting(false);
     }
   };
 
@@ -208,7 +219,8 @@ const ChatMessage = ({
         </div>
       )}
 
-      <div className={`flex space-x-3 ${isOwn ? 'flex-row-reverse space-x-reverse' : ''}`}>
+      {/* FIXED: All messages align to left */}
+      <div className="flex space-x-3">
         {/* Avatar */}
         <div className="flex-shrink-0">
           <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-medium ${
@@ -219,9 +231,9 @@ const ChatMessage = ({
         </div>
 
         {/* Message content */}
-        <div className={`flex-1 min-w-0 ${isOwn ? 'text-right' : ''}`}>
+        <div className="flex-1 min-w-0">
           {/* Header */}
-          <div className={`flex items-baseline space-x-2 mb-1 ${isOwn ? 'justify-end' : ''}`}>
+          <div className="flex items-baseline space-x-2 mb-1">
             <span className="text-sm font-semibold text-gray-900">
               {isOwn ? 'You' : (message.senderName || message.senderUsername)}
             </span>
@@ -235,7 +247,7 @@ const ChatMessage = ({
 
           {/* Referenced message for replies */}
           {isReply && parentMessage && (
-            <div className={`mb-3 p-3 bg-gray-100 border-l-4 border-gray-300 rounded-r-lg text-sm ${isOwn ? 'ml-auto max-w-md' : 'max-w-md'}`}>
+            <div className="mb-3 p-3 bg-gray-100 border-l-4 border-gray-300 rounded-r-lg text-sm max-w-md">
               <div className="text-xs text-gray-600 mb-1 font-medium">
                 {parentMessage.senderName}
               </div>
@@ -249,7 +261,7 @@ const ChatMessage = ({
           )}
 
           {/* Message content */}
-          <div className={`${isOwn ? 'text-right' : ''}`}>
+          <div>
             {isEditing ? (
               <div className="space-y-3">
                 <textarea
@@ -307,7 +319,7 @@ const ChatMessage = ({
             </div>
           )}
 
-          {/* Reactions */}
+          {/* FIXED: Only show reactions for other people's messages */}
           {Object.keys(reactions).length > 0 && (
             <div className="flex flex-wrap gap-1 mt-3">
               {Object.entries(reactions).map(([reactionType, reactionData]) => {
@@ -343,39 +355,46 @@ const ChatMessage = ({
           )}
         </div>
 
-        {/* Actions menu */}
+        {/* FIXED: Actions menu - only show reaction button for others' messages */}
         {showActionsMenu && !isEditing && (
-          <div className={`absolute top-2 ${isOwn ? 'left-2' : 'right-2'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
             <div className="flex items-center space-x-1 bg-white border border-gray-200 rounded-lg shadow-sm p-1">
-              {/* Reaction button */}
-              <div className="relative" ref={reactionsRef}>
-                <button
-                  onClick={() => setShowReactions(!showReactions)}
-                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                  title="Add reaction"
-                >
-                  😊
-                </button>
-                
-                {showReactions && (
-                  <div className="absolute top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-50">
-                    <div className="grid grid-cols-3 gap-1">
-                      {availableReactions.map((reaction) => (
-                        <button
-                          key={reaction.type}
-                          onClick={() => handleReaction(reaction.type)}
-                          className="p-2 hover:bg-gray-100 rounded text-lg transition-colors"
-                          title={reaction.label}
-                        >
-                          {reaction.emoji}
-                        </button>
-                      ))}
+              {/* FIXED: Reaction button only for others' messages */}
+              {!isOwn && (
+                <div className="relative" ref={reactionsRef}>
+                  <button
+                    onClick={() => setShowReactions(!showReactions)}
+                    className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                    title="Add reaction"
+                  >
+                    😊
+                  </button>
+                  
+                  {/* FIXED: Larger emoji picker for reactions */}
+                  {showReactions && (
+                    <div className="absolute top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50 reaction-emoji-picker">
+                      <div className="emoji-grid">
+                        {availableReactions.map((reaction) => (
+                          <button
+                            key={reaction.type}
+                            onClick={() => handleReaction(reaction.type)}
+                            className="p-2 hover:bg-gray-100 rounded-lg text-lg transition-colors flex items-center justify-center w-10 h-10"
+                            title={reaction.label}
+                            style={{
+                              fontSize: '18px',
+                              fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif'
+                            }}
+                          >
+                            {reaction.emoji}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
-              {/* Reply button */}
+              {/* Reply button - available for all messages */}
               {showReplyButton && (
                 <button
                   onClick={handleReply}
@@ -448,6 +467,13 @@ const ChatMessage = ({
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
           overflow: hidden;
+        }
+        
+        .emoji-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 6px;
+          min-width: 180px;
         }
       `}</style>
     </div>

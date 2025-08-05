@@ -821,7 +821,7 @@ body {
   }
 }
 
-/* Chat input improvements */
+/* Chat input improvements - FIXED ALIGNMENT */
 .chat-input-container {
   background: white;
   border-top: 1px solid #e5e7eb;
@@ -838,6 +838,102 @@ body {
   background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
 }
 
+/* FIXED: Ensure proper emoji rendering in messages and input */
+.emoji-text {
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+/* FIXED: Emoji picker width and grid layout */
+.emoji-picker {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  min-width: 320px;
+  max-width: 90vw;
+}
+
+.emoji-picker button:hover {
+  background: #f3f4f6;
+  transform: scale(1.1);
+  transition: all 0.15s ease;
+}
+
+/* FIXED: Reaction emoji picker - larger size */
+.reaction-emoji-picker {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  padding: 12px;
+  min-width: 240px;
+  z-index: 50;
+}
+
+.reaction-emoji-picker .emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.reaction-emoji-picker button {
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  font-size: 18px;
+  transition: all 0.15s ease;
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+}
+
+.reaction-emoji-picker button:hover {
+  background: #f3f4f6;
+  transform: scale(1.1);
+}
+
+/* FIXED: Message input area alignment */
+.message-input-wrapper {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 16px;
+}
+
+.message-textarea-container {
+  flex: 1;
+  position: relative;
+}
+
+.message-send-button {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 44px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+/* FIXED: Helper text positioning */
+.helper-text {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+@media (min-width: 640px) {
+  .helper-text {
+    text-align: left;
+  }
+}
+
 /* File attachment preview */
 .file-preview {
   border: 2px dashed #d1d5db;
@@ -850,20 +946,6 @@ body {
 .file-preview:hover {
   border-color: #3b82f6;
   background: #eff6ff;
-}
-
-/* Emoji picker styling */
-.emoji-picker {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
-
-.emoji-picker button:hover {
-  background: #f3f4f6;
-  transform: scale(1.1);
-  transition: all 0.15s ease;
 }
 
 /* Room info sidebar */
@@ -950,6 +1032,26 @@ body {
   100% {
     background-position: 200% 0;
   }
+}
+
+/* FIXED: Auto-scroll behavior for chat messages */
+.chat-messages-container {
+  scroll-behavior: smooth;
+  overflow-anchor: none;
+}
+
+/* Ensure scroll anchoring works properly */
+.messages-list {
+  overflow-anchor: auto;
+}
+
+.message-item {
+  overflow-anchor: auto;
+}
+
+/* FIXED: Prevent unwanted scrolling when sending messages */
+.chat-input-focused {
+  scroll-margin-bottom: 100px;
 }
 
 /* Responsive improvements */

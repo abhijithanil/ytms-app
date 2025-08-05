@@ -198,7 +198,9 @@ const UserMentionInput = ({
 
     sendTimeoutRef.current = setTimeout(() => {
       if (onSendMessage) {
-        const success = onSendMessage(message);
+        // FIXED: Always pass the message content as a string
+        const messageContent = message.trim();
+        const success = onSendMessage(messageContent);
         if (success !== false) {
           setMessage('');
           if (textareaRef.current) {
@@ -299,20 +301,23 @@ const UserMentionInput = ({
         </div>
       )}
 
-      {/* Emoji Picker - Fixed positioning */}
+      {/* Emoji Picker */}
       {showEmojiPicker && (
         <div 
           ref={emojiPickerRef}
-          className="absolute bottom-full right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50"
+          className="absolute bottom-full right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg p-4 z-50 w-80"
         >
-          <div className="grid grid-cols-10 gap-2">
+          <div className="grid grid-cols-8 gap-2">
             {commonEmojis.map((emoji, index) => (
               <button
                 key={index}
                 onClick={() => insertEmoji(emoji)}
-                className="p-2 hover:bg-gray-100 rounded transition-colors text-lg leading-none"
+                className="p-3 hover:bg-gray-100 rounded transition-colors text-xl flex items-center justify-center h-12 w-12"
                 type="button"
-                style={{ fontSize: '18px' }} // Ensures proper emoji rendering
+                style={{ 
+                  fontSize: '20px',
+                  fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif'
+                }}
               >
                 {emoji}
               </button>
@@ -347,7 +352,7 @@ const UserMentionInput = ({
         </div>
       )}
 
-      {/* Message Input - Fixed alignment */}
+      {/* Message Input */}
       <form onSubmit={handleFormSubmit} className="p-4 bg-white border-t border-gray-200">
         <div className="flex items-end space-x-3">
           <div className="flex-1 relative">
@@ -369,8 +374,8 @@ const UserMentionInput = ({
               }}
             />
             
-            {/* Input Actions - Fixed positioning */}
-            <div className="absolute right-2 bottom-2 flex items-center space-x-1">
+            {/* Input Actions */}
+            <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
               <button
                 type="button"
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
@@ -391,28 +396,30 @@ const UserMentionInput = ({
             </div>
           </div>
           
-          {/* Send Button - Fixed alignment */}
-          <button
-            type="submit"
-            disabled={!connected || !message.trim() || isSending}
-            className={`px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex-shrink-0 flex items-center justify-center min-w-[48px] h-[44px] ${
-              replyingTo 
-                ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                : 'bg-blue-500 hover:bg-blue-600 text-white'
-            }`}
-            title={replyingTo ? 'Send reply' : 'Send message'}
-          >
-            {isSending ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </button>
+          {/* Send Button - FIXED: Better alignment */}
+          <div className="flex-shrink-0">
+            <button
+              type="submit"
+              disabled={!connected || !message.trim() || isSending}
+              className={`flex items-center justify-center w-12 h-11 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 ${
+                replyingTo 
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                  : 'bg-blue-500 hover:bg-blue-600 text-white'
+              }`}
+              title={replyingTo ? 'Send reply' : 'Send message'}
+            >
+              {isSending ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* Helper Text - Fixed positioning to not overlap */}
+        {/* Helper Text - FIXED positioning */}
         {!message.trim() && !replyingTo && (
-          <div className="mt-2 text-xs text-gray-400 text-center sm:text-left">
+          <div className="mt-3 text-xs text-gray-400 text-center sm:text-left">
             <span>Press Enter to send • Shift+Enter for new line</span>
           </div>
         )}
