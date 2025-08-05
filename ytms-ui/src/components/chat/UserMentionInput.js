@@ -1,7 +1,5 @@
-// Updated UserMentionInput.js - Enhanced with reply support and better UX
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, X, Reply } from 'lucide-react';
+import { Send, X, Reply, Paperclip, Smile } from 'lucide-react';
 
 const UserMentionInput = ({ 
   onSendMessage, 
@@ -19,61 +17,67 @@ const UserMentionInput = ({
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
   const [mentionStart, setMentionStart] = useState(-1);
   const [isSending, setIsSending] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   
   const textareaRef = useRef(null);
   const suggestionsRef = useRef(null);
   const sendTimeoutRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const emojiPickerRef = useRef(null);
 
-  // Auto-resize function - IMPROVED
+  const commonEmojis = ['😊', '😄', '👍', '👎', '❤️', '😂', '😅', '😍', '🤔', '👏', '🔥', '💯'];
+
   const resizeTextarea = (textarea) => {
     if (!textarea) return;
     
-    // Reset height to auto to get the correct scrollHeight
     textarea.style.height = 'auto';
     
     const scrollHeight = textarea.scrollHeight;
-    const maxHeight = replyingTo ? 120 : 150; // Smaller when replying
-    const minHeight = 40;
+    const maxHeight = replyingTo ? 120 : 150;
+    const minHeight = 44;
     
     const newHeight = Math.max(minHeight, Math.min(scrollHeight, maxHeight));
     textarea.style.height = newHeight + 'px';
     textarea.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
   };
 
-  // Focus textarea when replying
   useEffect(() => {
     if (replyingTo && textareaRef.current) {
       textareaRef.current.focus();
     }
   }, [replyingTo]);
 
-  // Handle input changes and detect mentions
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleInputChange = (e) => {
     const value = e.target.value;
     const cursorPosition = e.target.selectionStart;
     
     setMessage(value);
     
-    // Handle typing indicators with debouncing
     if (onStartTyping) {
       onStartTyping();
       
-      // Clear existing timeout
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
       
-      // Set timeout to stop typing
       typingTimeoutRef.current = setTimeout(() => {
         if (onStopTyping) onStopTyping();
       }, 1000);
     }
     
-    // Auto-resize textarea
     resizeTextarea(e.target);
     
-    // Check for mention trigger (@)
     const textBeforeCursor = value.substring(0, cursorPosition);
     const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
     
@@ -99,7 +103,6 @@ const UserMentionInput = ({
     }
   };
 
-  // Handle keyboard navigation in suggestions
   const handleKeyDown = (e) => {
     if (showSuggestions) {
       switch (e.key) {
@@ -129,7 +132,6 @@ const UserMentionInput = ({
       }
     }
     
-    // Handle escape to cancel reply
     if (e.key === 'Escape' && replyingTo && onCancelReply) {
       onCancelReply();
       return;
@@ -141,7 +143,6 @@ const UserMentionInput = ({
     }
   };
 
-  // Insert mention into message
   const insertMention = (user) => {
     const beforeMention = message.substring(0, mentionStart);
     const afterCursor = message.substring(textareaRef.current.selectionStart);
@@ -150,7 +151,6 @@ const UserMentionInput = ({
     setMessage(newMessage);
     setShowSuggestions(false);
     
-    // Focus back to textarea and set cursor position
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus();
@@ -161,62 +161,66 @@ const UserMentionInput = ({
     }, 0);
   };
 
-  // Handle sending message with duplicate prevention
+  const insertEmoji = (emoji) => {
+    const cursorPosition = textareaRef.current.selectionStart;
+    const beforeCursor = message.substring(0, cursorPosition);
+    const afterCursor = message.substring(cursorPosition);
+    const newMessage = `${beforeCursor}${emoji} ${afterCursor}`;
+    
+    setMessage(newMessage);
+    setShowEmojiPicker(false);
+    
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newCursorPosition = cursorPosition + emoji.length + 1;
+        textareaRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
+        resizeTextarea(textareaRef.current);
+      }
+    }, 0);
+  };
+
   const handleSendMessage = () => {
     if (!message.trim() || !connected || isSending) {
-      console.log('Cannot send message:', { 
-        hasMessage: !!message.trim(), 
-        connected, 
-        isSending 
-      });
       return;
     }
 
-    // Prevent rapid duplicate sends
     setIsSending(true);
     
-    // Clear any existing timeout
     if (sendTimeoutRef.current) {
       clearTimeout(sendTimeoutRef.current);
     }
     
-    // Stop typing indicator
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
     if (onStopTyping) onStopTyping();
 
-    // Debounce the send operation
     sendTimeoutRef.current = setTimeout(() => {
       if (onSendMessage) {
         const success = onSendMessage(message);
         if (success !== false) {
           setMessage('');
-          // Reset textarea height
           if (textareaRef.current) {
-            textareaRef.current.style.height = '40px';
+            textareaRef.current.style.height = '44px';
             textareaRef.current.style.overflowY = 'hidden';
           }
         }
       }
       
-      // Re-enable sending after a short delay
       setTimeout(() => {
         setIsSending(false);
       }, 500);
     }, 100);
   };
 
-  // Handle form submission
   const handleFormSubmit = (e) => {
     e.preventDefault();
     e.stopPropagation();
     handleSendMessage();
   };
 
-  // Handle textarea blur
   const handleBlur = () => {
-    // Delay hiding suggestions to allow for clicks and stop typing
     setTimeout(() => {
       if (onStopTyping) onStopTyping();
       if (typingTimeoutRef.current) {
@@ -225,7 +229,6 @@ const UserMentionInput = ({
     }, 100);
   };
 
-  // Click outside to close suggestions
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (suggestionsRef.current && !suggestionsRef.current.contains(event.target)) {
@@ -237,14 +240,12 @@ const UserMentionInput = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Initial textarea setup
   useEffect(() => {
     if (textareaRef.current) {
       resizeTextarea(textareaRef.current);
     }
   }, []);
 
-  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (sendTimeoutRef.current) {
@@ -257,7 +258,7 @@ const UserMentionInput = ({
   }, []);
 
   return (
-    <div className="relative">
+    <div className="relative bg-white">
       {/* Mention Suggestions */}
       {showSuggestions && suggestions.length > 0 && (
         <div 
@@ -267,11 +268,11 @@ const UserMentionInput = ({
           {suggestions.map((user, index) => (
             <div
               key={user.userId || user.username}
-              className={`px-3 py-2 cursor-pointer flex items-center space-x-2 ${
+              className={`px-3 py-2 cursor-pointer flex items-center space-x-2 transition-colors ${
                 index === selectedSuggestion ? 'bg-blue-50 border-l-2 border-blue-500' : 'hover:bg-gray-50'
               }`}
               onMouseDown={(e) => {
-                e.preventDefault(); // Prevent blur from firing
+                e.preventDefault();
                 insertMention(user);
               }}
             >
@@ -298,78 +299,124 @@ const UserMentionInput = ({
         </div>
       )}
 
-      {/* Reply Preview - UPDATED: Show when replying */}
+      {/* Emoji Picker - Fixed positioning */}
+      {showEmojiPicker && (
+        <div 
+          ref={emojiPickerRef}
+          className="absolute bottom-full right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50"
+        >
+          <div className="grid grid-cols-10 gap-2">
+            {commonEmojis.map((emoji, index) => (
+              <button
+                key={index}
+                onClick={() => insertEmoji(emoji)}
+                className="p-2 hover:bg-gray-100 rounded transition-colors text-lg leading-none"
+                type="button"
+                style={{ fontSize: '18px' }} // Ensures proper emoji rendering
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Reply Preview */}
       {replyingTo && (
-        <div className="border-l-2 border-blue-500 bg-blue-50 px-3 py-2 mx-4 mb-2 rounded-r-lg">
+        <div className="border-l-4 border-blue-500 bg-blue-50 px-4 py-3 mx-4 mb-2 rounded-r-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 flex-1 min-w-0">
-              <Reply className="h-3 w-3 text-blue-600 flex-shrink-0" />
-              <span className="text-xs text-blue-700 font-medium">
+              <Reply className="h-4 w-4 text-blue-600 flex-shrink-0" />
+              <span className="text-sm text-blue-700 font-medium">
                 Replying to {replyingTo.senderName}
               </span>
-              <span className="text-xs text-blue-600 truncate">
+              <span className="text-sm text-blue-600 truncate">
                 {replyingTo.content}
               </span>
             </div>
             {onCancelReply && (
               <button
                 onClick={onCancelReply}
-                className="text-blue-600 hover:text-blue-800 flex-shrink-0 ml-2"
+                className="text-blue-600 hover:text-blue-800 flex-shrink-0 ml-2 p-1"
                 title="Cancel reply"
               >
-                <X className="h-3 w-3" />
+                <X className="h-4 w-4" />
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* Message Input */}
-      <form onSubmit={handleFormSubmit} className="flex items-end space-x-2 p-4 bg-white message-input-container">
-        <div className="flex-1 min-w-0">
-          <textarea
-            ref={textareaRef}
-            value={message}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            onBlur={handleBlur}
-            placeholder={connected ? placeholder : "Connecting..."}
-            disabled={!connected || isSending}
-            rows={1}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm leading-5 overflow-hidden transition-all duration-200 ${
-              (!connected || isSending) ? 'bg-gray-100 cursor-not-allowed' : ''
-            } ${replyingTo ? 'border-blue-300 focus:ring-blue-500' : ''}`}
-            style={{ 
-              minHeight: '40px',
-              maxHeight: replyingTo ? '120px' : '150px'
-            }}
-          />
+      {/* Message Input - Fixed alignment */}
+      <form onSubmit={handleFormSubmit} className="p-4 bg-white border-t border-gray-200">
+        <div className="flex items-end space-x-3">
+          <div className="flex-1 relative">
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onBlur={handleBlur}
+              placeholder={connected ? placeholder : "Connecting..."}
+              disabled={!connected || isSending}
+              rows={1}
+              className={`w-full px-4 py-3 pr-20 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm leading-5 overflow-hidden transition-all duration-200 ${
+                (!connected || isSending) ? 'bg-gray-100 cursor-not-allowed' : ''
+              } ${replyingTo ? 'border-blue-300 focus:ring-blue-500' : ''}`}
+              style={{ 
+                minHeight: '44px',
+                maxHeight: replyingTo ? '120px' : '150px'
+              }}
+            />
+            
+            {/* Input Actions - Fixed positioning */}
+            <div className="absolute right-2 bottom-2 flex items-center space-x-1">
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                title="Add emoji"
+              >
+                <Smile className="h-4 w-4" />
+              </button>
+              
+              <button
+                type="button"
+                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                title="Attach file"
+                disabled
+              >
+                <Paperclip className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          
+          {/* Send Button - Fixed alignment */}
+          <button
+            type="submit"
+            disabled={!connected || !message.trim() || isSending}
+            className={`px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex-shrink-0 flex items-center justify-center min-w-[48px] h-[44px] ${
+              replyingTo 
+                ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                : 'bg-blue-500 hover:bg-blue-600 text-white'
+            }`}
+            title={replyingTo ? 'Send reply' : 'Send message'}
+          >
+            {isSending ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </button>
         </div>
-        <button
-          type="submit"
-          disabled={!connected || !message.trim() || isSending}
-          className={`px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex-shrink-0 h-[40px] flex items-center justify-center ${
-            replyingTo 
-              ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-              : 'bg-blue-500 hover:bg-blue-600 text-white'
-          }`}
-          title={replyingTo ? 'Send reply' : 'Send message'}
-        >
-          {isSending ? (
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </button>
-      </form>
 
-      {/* Keyboard Shortcuts Help */}
-      {message.length === 0 && !replyingTo && (
-        <div className="absolute bottom-2 right-16 text-xs text-gray-400 pointer-events-none">
-          <span className="hidden sm:inline">Enter to send • Shift+Enter for new line</span>
-          {replyingTo && <span> • Esc to cancel reply</span>}
-        </div>
-      )}
+        {/* Helper Text - Fixed positioning to not overlap */}
+        {!message.trim() && !replyingTo && (
+          <div className="mt-2 text-xs text-gray-400 text-center sm:text-left">
+            <span>Press Enter to send • Shift+Enter for new line</span>
+          </div>
+        )}
+      </form>
     </div>
   );
 };

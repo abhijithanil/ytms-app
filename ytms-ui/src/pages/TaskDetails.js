@@ -6,10 +6,8 @@ import React, {
   useMemo,
 } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
 import axios from "axios";
-import ChatWidget from '../components/chat/ChatWidget';
 
 
 // API imports

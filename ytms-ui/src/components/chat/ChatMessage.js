@@ -41,7 +41,6 @@ const ChatMessage = ({
   const actionsRef = useRef(null);
   const reactionsRef = useRef(null);
 
-  // Available reactions
   const availableReactions = [
     { emoji: '👍', type: 'thumbs_up', label: 'Thumbs Up' },
     { emoji: '👎', type: 'thumbs_down', label: 'Thumbs Down' },
@@ -51,7 +50,6 @@ const ChatMessage = ({
     { emoji: '😞', type: 'disappointed', label: 'Disappointed' }
   ];
 
-  // Parse existing reactions
   useEffect(() => {
     try {
       const messageReactions = message.reactions ? JSON.parse(message.reactions) : {};
@@ -62,7 +60,6 @@ const ChatMessage = ({
     }
   }, [message.reactions]);
 
-  // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (reactionsRef.current && !reactionsRef.current.contains(event.target)) {
@@ -105,7 +102,6 @@ const ChatMessage = ({
     }
   };
 
-  // UPDATED: Simple reply handler (no modal)
   const handleReply = () => {
     if (onReplyToMessage) {
       onReplyToMessage(message);
@@ -169,7 +165,6 @@ const ChatMessage = ({
     }
   };
 
-  // Check if current user is mentioned in this message
   const isUserMentioned = () => {
     if (!currentUserId || !message.content || !Array.isArray(onlineUsers)) return false;
     const currentUser = onlineUsers.find(user => user && user.userId === currentUserId);
@@ -184,31 +179,30 @@ const ChatMessage = ({
   // Render system messages differently
   if (message.type === 'JOIN' || message.type === 'LEAVE' || message.type === 'SYSTEM') {
     return (
-      <div className="flex justify-center my-2">
-        <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+      <div className="flex justify-center my-3">
+        <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
           {message.content}
         </span>
       </div>
     );
   }
 
-  // Render thread reply indicator if this is a reply
   const isReply = message.parentMessageId && parentMessage;
 
   return (
     <div 
       ref={messageRef}
-      className={`group relative px-4 py-2 hover:bg-gray-50 transition-colors ${
-        userMentioned ? 'bg-blue-50 border-l-2 border-blue-500' : ''
+      className={`group relative px-4 py-3 hover:bg-gray-50 transition-colors ${
+        userMentioned ? 'bg-blue-50 border-l-4 border-blue-500 pl-6' : ''
       } ${isSearchResult ? 'border border-yellow-300 bg-yellow-50' : ''}`}
     >
-      {/* Reply indicator - UPDATED: Better visual styling */}
+      {/* Reply indicator */}
       {isReply && (
         <div className="flex items-center mb-2 ml-11 text-xs text-gray-500">
           <div className="flex items-center space-x-1">
             <Reply className="h-3 w-3 transform scale-x-[-1]" />
             <span>
-              Replying to <span className="font-medium">{parentMessage?.senderName || 'message'}</span>
+              Replying to <span className="font-medium text-gray-700">{parentMessage?.senderName || 'message'}</span>
             </span>
           </div>
         </div>
@@ -217,8 +211,8 @@ const ChatMessage = ({
       <div className={`flex space-x-3 ${isOwn ? 'flex-row-reverse space-x-reverse' : ''}`}>
         {/* Avatar */}
         <div className="flex-shrink-0">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${
-            isOwn ? 'bg-blue-500' : 'bg-green-500'
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-medium ${
+            isOwn ? 'bg-blue-500' : 'bg-gray-600'
           }`}>
             {getInitials(message.senderName, message.senderUsername)}
           </div>
@@ -228,7 +222,7 @@ const ChatMessage = ({
         <div className={`flex-1 min-w-0 ${isOwn ? 'text-right' : ''}`}>
           {/* Header */}
           <div className={`flex items-baseline space-x-2 mb-1 ${isOwn ? 'justify-end' : ''}`}>
-            <span className="text-sm font-medium text-gray-900">
+            <span className="text-sm font-semibold text-gray-900">
               {isOwn ? 'You' : (message.senderName || message.senderUsername)}
             </span>
             <span className="text-xs text-gray-500">
@@ -239,9 +233,9 @@ const ChatMessage = ({
             )}
           </div>
 
-          {/* Referenced message for replies - UPDATED: Better styling */}
+          {/* Referenced message for replies */}
           {isReply && parentMessage && (
-            <div className={`mb-2 p-2 bg-gray-100 border-l-2 border-gray-300 rounded text-sm ${isOwn ? 'ml-auto max-w-md' : 'max-w-md'}`}>
+            <div className={`mb-3 p-3 bg-gray-100 border-l-4 border-gray-300 rounded-r-lg text-sm ${isOwn ? 'ml-auto max-w-md' : 'max-w-md'}`}>
               <div className="text-xs text-gray-600 mb-1 font-medium">
                 {parentMessage.senderName}
               </div>
@@ -257,31 +251,31 @@ const ChatMessage = ({
           {/* Message content */}
           <div className={`${isOwn ? 'text-right' : ''}`}>
             {isEditing ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <textarea
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={2}
+                  className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
                   autoFocus
                 />
-                <div className="flex space-x-2 text-xs">
+                <div className="flex space-x-2 text-sm">
                   <button
                     onClick={handleSaveEdit}
-                    className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    className="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                   >
                     Save
                   </button>
                   <button
                     onClick={handleCancelEdit}
-                    className="px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+                    className="px-3 py-1.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
                   >
                     Cancel
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="text-gray-800 whitespace-pre-wrap break-words">
+              <div className="text-gray-800 whitespace-pre-wrap break-words leading-relaxed">
                 <MessageWithMentions
                   content={message.content}
                   currentUserId={currentUserId}
@@ -293,19 +287,19 @@ const ChatMessage = ({
 
           {/* Attachments */}
           {message.attachmentUrl && (
-            <div className="mt-2">
+            <div className="mt-3">
               {message.attachmentType?.startsWith('image/') ? (
                 <img
                   src={message.attachmentUrl}
                   alt={message.attachmentName || 'Attachment'}
-                  className="max-w-xs rounded border"
+                  className="max-w-xs rounded-lg border shadow-sm"
                 />
               ) : (
                 <a
                   href={message.attachmentUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   📎 {message.attachmentName || 'Download attachment'}
                 </a>
@@ -315,7 +309,7 @@ const ChatMessage = ({
 
           {/* Reactions */}
           {Object.keys(reactions).length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
+            <div className="flex flex-wrap gap-1 mt-3">
               {Object.entries(reactions).map(([reactionType, reactionData]) => {
                 if (!reactionData || !reactionData.count || reactionData.count === 0) return null;
                 
@@ -334,7 +328,7 @@ const ChatMessage = ({
                     title={`${reactionData.count} ${reactionConfig?.label || reactionType} reaction${reactionData.count !== 1 ? 's' : ''}`}
                   >
                     <span>{reactionConfig?.emoji || '👍'}</span>
-                    <span>{reactionData.count}</span>
+                    <span className="font-medium">{reactionData.count}</span>
                   </button>
                 );
               })}
@@ -343,27 +337,26 @@ const ChatMessage = ({
 
           {/* Thread reply count */}
           {message.threadReplyCount > 0 && (
-            <button className="text-xs text-blue-600 hover:text-blue-800 mt-1">
+            <button className="text-xs text-blue-600 hover:text-blue-800 mt-2 font-medium">
               {message.threadReplyCount} repl{message.threadReplyCount === 1 ? 'y' : 'ies'}
             </button>
           )}
         </div>
 
-        {/* Actions menu (appears on hover) */}
+        {/* Actions menu */}
         {showActionsMenu && !isEditing && (
-          <div className={`absolute top-0 ${isOwn ? 'left-0' : 'right-0'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+          <div className={`absolute top-2 ${isOwn ? 'left-2' : 'right-2'} opacity-0 group-hover:opacity-100 transition-opacity`}>
             <div className="flex items-center space-x-1 bg-white border border-gray-200 rounded-lg shadow-sm p-1">
               {/* Reaction button */}
               <div className="relative" ref={reactionsRef}>
                 <button
                   onClick={() => setShowReactions(!showReactions)}
-                  className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
                   title="Add reaction"
                 >
                   😊
                 </button>
                 
-                {/* Reactions picker */}
                 {showReactions && (
                   <div className="absolute top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-50">
                     <div className="grid grid-cols-3 gap-1">
@@ -382,11 +375,11 @@ const ChatMessage = ({
                 )}
               </div>
 
-              {/* Reply button - UPDATED: Simple click handler */}
+              {/* Reply button */}
               {showReplyButton && (
                 <button
                   onClick={handleReply}
-                  className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
                   title="Reply to this message"
                 >
                   <Reply className="h-4 w-4" />
@@ -397,18 +390,17 @@ const ChatMessage = ({
               <div className="relative" ref={actionsRef}>
                 <button
                   onClick={() => setShowActionsDropdown(!showActionsDropdown)}
-                  className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
                   title="More actions"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
 
-                {/* Actions menu */}
                 {showActionsDropdown && (
-                  <div className="absolute top-full mt-1 right-0 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 min-w-32">
+                  <div className="absolute top-full mt-1 right-0 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 min-w-36">
                     <button
                       onClick={handleCopyMessage}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center transition-colors"
                     >
                       <Copy className="h-4 w-4 mr-2" />
                       Copy
@@ -417,7 +409,7 @@ const ChatMessage = ({
                     {onPinMessage && (
                       <button
                         onClick={handlePin}
-                        className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                        className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center transition-colors"
                       >
                         <Pin className="h-4 w-4 mr-2" />
                         Pin
@@ -428,14 +420,14 @@ const ChatMessage = ({
                       <>
                         <button
                           onClick={handleEdit}
-                          className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                          className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center transition-colors"
                         >
                           <Edit className="h-4 w-4 mr-2" />
                           Edit
                         </button>
                         <button
                           onClick={handleDelete}
-                          className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
+                          className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center transition-colors"
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
                           Delete
@@ -450,7 +442,6 @@ const ChatMessage = ({
         )}
       </div>
 
-      {/* Custom styles for line clamping */}
       <style jsx>{`
         .line-clamp-2 {
           display: -webkit-box;

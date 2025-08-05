@@ -11,13 +11,12 @@ const Layout = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isChatPanelOpen, setIsChatPanelOpen] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(3); // Example count
+  const [notificationCount, setNotificationCount] = useState(3);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const profileDropdownRef = useRef(null);
 
-  // Enhanced chat integration
   const { rooms, loading: chatLoading } = useRoomChat();
   const chatNotificationCount = rooms?.totalUnreadCount || 0;
 
@@ -35,10 +34,9 @@ const Layout = ({ children }) => {
 
   const openFullChat = () => {
     navigate('/chat');
-    setIsChatPanelOpen(false); // Close panel when opening full chat
+    setIsChatPanelOpen(false);
   };
 
-  // Close profile dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
@@ -54,6 +52,18 @@ const Layout = ({ children }) => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isProfileDropdownOpen]);
+
+  // Close sidebar when route changes
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [location.pathname]);
+
+  // Close chat panel when navigating to chat page
+  useEffect(() => {
+    if (location.pathname === '/chat') {
+      setIsChatPanelOpen(false);
+    }
+  }, [location.pathname]);
 
   const handleProfileDropdownToggle = (e) => {
     e.stopPropagation();
@@ -97,7 +107,7 @@ const Layout = ({ children }) => {
     }
 
     return (
-      <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
+      <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
         <div className="py-1">
           {roleSpecificItems.map((item, index) => {
             const ItemIcon = item.icon;
@@ -120,7 +130,6 @@ const Layout = ({ children }) => {
     );
   };
 
-  // Don't show chat widget on the dedicated chat page
   const showChatWidget = location.pathname !== '/chat';
   const isOnChatPage = location.pathname === '/chat';
 
@@ -148,7 +157,7 @@ const Layout = ({ children }) => {
           <h2 className="text-lg font-semibold">Menu</h2>
           <button
             onClick={closeSidebar}
-            className="p-2 hover:bg-gray-100 rounded-lg"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -158,28 +167,27 @@ const Layout = ({ children }) => {
       
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Mobile Header with Menu Button, Chat, Notification Bell and Profile */}
-        <div className="lg:hidden flex items-center justify-between p-4 bg-white border-b">
+        {/* Mobile Header */}
+        <div className="lg:hidden flex items-center justify-between p-4 bg-white border-b border-gray-200 shadow-sm">
           <button
             onClick={toggleSidebar}
-            className="p-2 hover:bg-gray-100 rounded-lg"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <Menu className="h-6 w-6" />
           </button>
           
-          <h1 className="text-lg font-semibold">YTManager</h1>
+          <h1 className="text-lg font-semibold text-gray-900">YTManager</h1>
 
-          {/* Right side container with chat, notification bell and profile */}
           <div className="flex items-center space-x-2">
             {/* Mobile Chat Button */}
             <button 
               onClick={openFullChat}
-              className="relative p-2 text-gray-400 hover:text-gray-500 transition-colors"
+              className="relative p-2 text-gray-600 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
               title="Messages"
             >
               <MessageCircle className="h-5 w-5" />
               {chatNotificationCount > 0 && (
-                <span className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
                   {chatNotificationCount > 9 ? '9+' : chatNotificationCount}
                 </span>
               )}
@@ -187,12 +195,12 @@ const Layout = ({ children }) => {
 
             {/* Mobile Notification Bell */}
             <button 
-              className="relative p-2 text-gray-400 hover:text-gray-500 transition-colors"
+              className="relative p-2 text-gray-600 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
               title="Notifications"
             >
               <Bell className="h-5 w-5" />
               {notificationCount > 0 && (
-                <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
                   {notificationCount > 9 ? '9+' : notificationCount}
                 </span>
               )}
@@ -226,30 +234,29 @@ const Layout = ({ children }) => {
           </div>
         </div>
         
-        {/* Desktop Header - FIXED: Clean header with separate chat controls */}
+        {/* Desktop Header */}
         <div className="hidden lg:block">
           <div className="flex bg-white border-b border-gray-200">
-            {/* Main Header Content */}
             <div className="flex-1">
               <Header />
             </div>
 
-            {/* Chat and User Controls - Separate Section */}
+            {/* Desktop Chat and User Controls */}
             <div className="flex items-center px-6 py-4 space-x-4 border-l border-gray-200">
-              {/* Chat Toggle Button (only show if not on chat page) */}
+              {/* Chat Controls */}
               {!isOnChatPage && (
                 <button
                   onClick={toggleChatPanel}
                   className={`relative p-2 transition-colors rounded-lg ${
                     isChatPanelOpen 
                       ? 'text-blue-600 bg-blue-50' 
-                      : 'text-gray-400 hover:text-gray-500 hover:bg-gray-100'
+                      : 'text-gray-600 hover:text-gray-700 hover:bg-gray-100'
                   }`}
                   title={isChatPanelOpen ? "Close Chat Panel" : "Open Chat Panel"}
                 >
                   <MessageCircle className="h-5 w-5" />
                   {chatNotificationCount > 0 && !isChatPanelOpen && (
-                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
                       {chatNotificationCount > 9 ? '9+' : chatNotificationCount}
                     </span>
                   )}
@@ -259,7 +266,7 @@ const Layout = ({ children }) => {
               {/* Full Chat Button */}
               <button
                 onClick={openFullChat}
-                className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
                   isOnChatPage
                     ? 'border-blue-500 text-blue-700 bg-blue-50'
                     : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
@@ -280,12 +287,12 @@ const Layout = ({ children }) => {
 
               {/* Notification Bell */}
               <button 
-                className="relative p-2 text-gray-400 hover:text-gray-500 transition-colors rounded-lg hover:bg-gray-100"
+                className="relative p-2 text-gray-600 hover:text-gray-700 transition-colors rounded-lg hover:bg-gray-100"
                 title="Notifications"
               >
                 <Bell className="h-5 w-5" />
                 {notificationCount > 0 && (
-                  <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
                     {notificationCount > 9 ? '9+' : notificationCount}
                   </span>
                 )}
@@ -331,7 +338,7 @@ const Layout = ({ children }) => {
             </div>
           </main>
 
-          {/* Desktop Chat Side Panel (only show if not on chat page) */}
+          {/* Desktop Chat Side Panel */}
           {isChatPanelOpen && !isOnChatPage && (
             <div className="hidden lg:block w-80 bg-white border-l border-gray-200 flex-shrink-0 z-30">
               <div className="h-full flex flex-col">
@@ -373,8 +380,7 @@ const Layout = ({ children }) => {
         </div>
       </div>
 
-
-      {/* Chat Panel Mobile Overlay (alternative to widget on mobile) */}
+      {/* Mobile Chat Panel Overlay */}
       {isChatPanelOpen && (
         <div className="lg:hidden fixed inset-0 z-50 bg-white">
           <div className="h-full flex flex-col">

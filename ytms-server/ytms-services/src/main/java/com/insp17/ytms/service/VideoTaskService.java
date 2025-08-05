@@ -364,6 +364,11 @@ public class VideoTaskService {
         }
 
         if (taskUpdateRequest.getAssignedEditorId() != null) {
+            User assignedEditor = videoTask.getAssignedEditor();
+            if (assignedEditor != null && videoTask.getTaskStatus() == TaskStatus.DRAFT) {
+                videoTask.setTaskStatus(TaskStatus.ASSIGNED);
+            }
+
             long assigneeId = Long.parseLong(taskUpdateRequest.getAssignedEditorId());
             User assigner = userRepository.findById(assigneeId).orElseThrow(() -> new RuntimeException("Assignee not found"));
             if (assigner.getUserStatus() == UserStatus.ACTIVE) {

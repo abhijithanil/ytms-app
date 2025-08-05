@@ -15,12 +15,10 @@ import {
   X,
   ChevronUp,
   ChevronDown,
-  Filter,
-  Calendar,
-  FileText,
   ArrowDown,
   Loader,
-  Reply
+  Reply,
+  MoreVertical
 } from 'lucide-react';
 import { useRoomChat } from '../../hook/useRoomChat';
 import { useAuth } from '../../context/AuthContext';
@@ -54,6 +52,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showMoreActions, setShowMoreActions] = useState(false);
   
   // Search State
   const [showSearch, setShowSearch] = useState(false);
@@ -74,7 +73,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   const [page, setPage] = useState(0);
   const [showNewMessageAlert, setShowNewMessageAlert] = useState(false);
   
-  // Reply State - UPDATED: No modal, just inline reply indicator
+  // Reply State
   const [replyingTo, setReplyingTo] = useState(null);
   
   // Refs
@@ -84,11 +83,10 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   const searchTimeout = useRef(null);
   const lastMessageCount = useRef(0);
   const shouldAutoScroll = useRef(true);
-  const observerRef = useRef(null);
   const topObserverRef = useRef(null);
   const loadingMoreRef = useRef(false);
+  const moreActionsRef = useRef(null);
 
-  // Smooth scroll to bottom function - FIXED: Better scrolling behavior
   const scrollToBottom = useCallback((behavior = 'smooth', force = false) => {
     if (messagesEndRef.current && (shouldAutoScroll.current || force)) {
       try {
@@ -98,7 +96,6 @@ const RoomChatPanel = ({ room, currentUserId }) => {
           inline: 'nearest'
         });
       } catch (error) {
-        // Fallback for browsers that don't support smooth scrolling
         if (messagesContainerRef.current) {
           messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
         }
@@ -106,53 +103,47 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     }
   }, []);
 
-  // Check if user is near bottom of messages - IMPROVED
   const checkScrollPosition = useCallback(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
     const { scrollTop, scrollHeight, clientHeight } = container;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    const threshold = 150; // Increased threshold for better UX
+    const threshold = 150;
     
     const nearBottom = distanceFromBottom < threshold;
     setIsNearBottom(nearBottom);
     setShowScrollToBottom(!nearBottom && scrollHeight > clientHeight);
     shouldAutoScroll.current = nearBottom;
     
-    // Hide new message alert if user scrolls to bottom
     if (nearBottom) {
       setShowNewMessageAlert(false);
       setUnreadCount(0);
     }
   }, []);
 
-  // Auto-scroll when new messages arrive - IMPROVED
+  // Auto-scroll when new messages arrive
   useEffect(() => {
     const hasNewMessages = messages.length > lastMessageCount.current;
     const newMessagesCount = messages.length - lastMessageCount.current;
     lastMessageCount.current = messages.length;
 
     if (hasNewMessages && newMessagesCount > 0) {
-      // Check if the new messages are from current user
       const latestMessages = messages.slice(-newMessagesCount);
       const hasOwnMessage = latestMessages.some(msg => msg.senderId === currentUserId);
       
       if (shouldAutoScroll.current || hasOwnMessage) {
-        // Auto scroll for own messages or when user is at bottom
         setTimeout(() => scrollToBottom('smooth', hasOwnMessage), 50);
       } else {
-        // Show new message indicator for others' messages
         setShowNewMessageAlert(true);
         setUnreadCount(prev => prev + newMessagesCount);
       }
     }
   }, [messages, currentUserId, scrollToBottom]);
 
-  // Initial scroll to bottom - IMPROVED
+  // Initial scroll to bottom
   useEffect(() => {
     if (messages.length > 0 && !loading) {
-      // Use a longer timeout for initial load to ensure DOM is ready
       const timeoutId = setTimeout(() => {
         scrollToBottom('auto', true);
       }, 300);
@@ -161,12 +152,11 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     }
   }, [messages.length, loading, room?.id, scrollToBottom]);
 
-  // Set up intersection observers for infinite scroll - FIXED
+  // Set up intersection observers
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
-    // Observer for scroll position detection
     const bottomObserver = new IntersectionObserver(
       (entries) => {
         entries.forEach(entry => {
@@ -181,11 +171,10 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       },
       { 
         threshold: 0.1,
-        rootMargin: '0px 0px -50px 0px' // Trigger slightly before reaching bottom
+        rootMargin: '0px 0px -50px 0px'
       }
     );
 
-    // Observer for loading more messages
     const topObserver = new IntersectionObserver(
       (entries) => {
         entries.forEach(entry => {
@@ -196,7 +185,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       },
       { 
         threshold: 0.1,
-        rootMargin: '100px 0px 0px 0px' // Trigger before reaching top
+        rootMargin: '100px 0px 0px 0px'
       }
     );
 
@@ -208,7 +197,6 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       topObserver.observe(topObserverRef.current);
     }
 
-    // Handle scroll events with throttling
     let scrollTimeout;
     const handleScroll = () => {
       if (scrollTimeout) clearTimeout(scrollTimeout);
@@ -227,19 +215,24 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     };
   }, [hasMoreMessages, connected, checkScrollPosition]);
 
-  // Mark room as read when user is at bottom and new messages arrive
+  // Mark room as read
   useEffect(() => {
     if (room?.id && connected && isNearBottom && messages.length > 0) {
       markAsRead();
     }
   }, [room?.id, connected, isNearBottom, messages.length, markAsRead]);
 
-  // Focus search input when opened
+  // Close more actions when clicking outside
   useEffect(() => {
-    if (showSearch && searchInputRef.current) {
-      searchInputRef.current.focus();
-    }
-  }, [showSearch]);
+    const handleClickOutside = (event) => {
+      if (moreActionsRef.current && !moreActionsRef.current.contains(event.target)) {
+        setShowMoreActions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const loadOlderMessages = async () => {
     if (loadingMoreRef.current || !hasMoreMessages || loading) return;
@@ -258,7 +251,6 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       if (loadedCount > 0) {
         setPage(nextPage);
         
-        // Maintain scroll position after loading new messages
         requestAnimationFrame(() => {
           const newScrollHeight = container.scrollHeight;
           const heightDiff = newScrollHeight - prevScrollHeight;
@@ -276,7 +268,6 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     }
   };
 
-  // Search functionality
   const performSearch = async (query, filters = searchFilters) => {
     if (!query.trim() && !filters.sender && !filters.dateFrom) {
       setSearchResults([]);
@@ -302,7 +293,6 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       setSearchResults(response.data || []);
       setCurrentSearchIndex(response.data?.length > 0 ? 0 : -1);
       
-      // Highlight first result
       if (response.data?.length > 0) {
         scrollToMessage(response.data[0].id);
       }
@@ -349,10 +339,9 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       shouldAutoScroll.current = false;
       messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       
-      // Highlight message briefly
-      messageElement.classList.add('bg-yellow-100', 'border', 'border-yellow-300');
+      messageElement.classList.add('bg-yellow-100', 'border-l-4', 'border-yellow-400', 'pl-2');
       setTimeout(() => {
-        messageElement.classList.remove('bg-yellow-100', 'border', 'border-yellow-300');
+        messageElement.classList.remove('bg-yellow-100', 'border-l-4', 'border-yellow-400', 'pl-2');
       }, 2000);
     }
   };
@@ -369,24 +358,19 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     });
   };
 
-  // UPDATED: Handle sending message with reply (no modal)
   const handleSendMessage = (content) => {
     let messageContent = content;
     
-    // Add reply reference if replying
     if (replyingTo) {
       messageContent = {
         content: content,
         parentMessageId: replyingTo.id
       };
-      
-      // Clear reply after sending
       setReplyingTo(null);
     }
     
     const success = sendMessage(messageContent);
     
-    // Force scroll to bottom when user sends a message
     if (success) {
       shouldAutoScroll.current = true;
       setTimeout(() => scrollToBottom('smooth', true), 100);
@@ -395,7 +379,6 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     return success;
   };
 
-  // Message action handlers
   const handleReactToMessage = async (messageId, reactionType) => {
     try {
       await chatAPI.reactToMessage(messageId, reactionType);
@@ -405,10 +388,8 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     }
   };
 
-  // UPDATED: Simple reply handler (no modal)
   const handleReplyToMessage = (message) => {
     setReplyingTo(message);
-    // Optionally scroll to bottom to show the reply indicator
     setTimeout(() => scrollToBottom('smooth'), 100);
   };
 
@@ -477,7 +458,17 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   const getRoomSubtitle = () => {
     if (room?.roomType === 'DIRECT_MESSAGE') {
       const status = room.dmParticipantStatus || 'offline';
-      return `@${room.dmParticipantUsername} • ${status}`;
+      const statusColors = {
+        online: 'text-green-600',
+        away: 'text-yellow-600',
+        busy: 'text-red-600',
+        offline: 'text-gray-500'
+      };
+      return (
+        <span className={`${statusColors[status]}`}>
+          @{room.dmParticipantUsername} • {status}
+        </span>
+      );
     }
     
     if (room?.roomType === 'GROUP_CHAT') {
@@ -511,23 +502,25 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   if (!room) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <MessageCircle className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No room selected</h3>
-          <p className="mt-1 text-sm text-gray-500">Select a room to start chatting</p>
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="w-20 h-20 mx-auto mb-6 bg-gray-100 rounded-full flex items-center justify-center">
+            <MessageCircle className="h-10 w-10 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No room selected</h3>
+          <p className="text-gray-500">Select a room to start chatting</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white relative chat-panel overflow-hidden">
+    <div className="flex-1 flex flex-col bg-white relative overflow-hidden">
       {/* Room Header */}
-      <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-white chat-panel-header">
+      <div className="flex-shrink-0 px-4 md:px-6 py-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3 min-w-0 flex-1">
             <div className="flex-shrink-0 relative">
-              <div className="text-gray-600">
+              <div className="text-gray-600 p-2 bg-gray-100 rounded-lg">
                 {getRoomIcon()}
               </div>
               {getStatusIndicator() && (
@@ -561,32 +554,75 @@ const RoomChatPanel = ({ room, currentUserId }) => {
 
             {/* Room Actions */}
             {room?.roomType === 'DIRECT_MESSAGE' && (
-              <>
+              <div className="hidden sm:flex items-center space-x-2">
                 <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                   <Phone className="h-5 w-5" />
                 </button>
                 <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                   <Video className="h-5 w-5" />
                 </button>
-              </>
+              </div>
             )}
             
             {room?.roomType === 'GROUP_CHAT' && (
               <button
                 onClick={() => setShowMembersModal(true)}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="hidden sm:flex p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 title="View members"
               >
                 <Users className="h-5 w-5" />
               </button>
             )}
 
-            <button
-              onClick={() => setShowRoomInfo(!showRoomInfo)}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <Info className="h-5 w-5" />
-            </button>
+            {/* More Actions */}
+            <div className="relative" ref={moreActionsRef}>
+              <button
+                onClick={() => setShowMoreActions(!showMoreActions)}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                title="More options"
+              >
+                <MoreVertical className="h-5 w-5" />
+              </button>
+
+              {showMoreActions && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                  <div className="py-1">
+                    <button
+                      onClick={() => {
+                        setShowRoomInfo(!showRoomInfo);
+                        setShowMoreActions(false);
+                      }}
+                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      <Info className="h-4 w-4 mr-3" />
+                      Room Info
+                    </button>
+                    {room?.roomType === 'GROUP_CHAT' && (
+                      <button
+                        onClick={() => {
+                          setShowMembersModal(true);
+                          setShowMoreActions(false);
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 sm:hidden"
+                      >
+                        <Users className="h-4 w-4 mr-3" />
+                        View Members
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setShowSearch(true);
+                        setShowMoreActions(false);
+                      }}
+                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      <Search className="h-4 w-4 mr-3" />
+                      Search Messages
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -602,7 +638,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                   value={searchQuery}
                   onChange={handleSearchChange}
                   placeholder="Search messages..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 {searchLoading && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -611,22 +647,21 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                 )}
               </div>
               
-              {/* Search Navigation */}
               {searchResults.length > 0 && (
                 <div className="flex items-center space-x-1">
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-gray-500 whitespace-nowrap">
                     {currentSearchIndex + 1} of {searchResults.length}
                   </span>
                   <button
                     onClick={() => navigateSearchResult('prev')}
-                    className="p-1 text-gray-600 hover:bg-gray-100 rounded"
+                    className="p-1.5 text-gray-600 hover:bg-gray-100 rounded"
                     title="Previous result"
                   >
                     <ChevronUp className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => navigateSearchResult('next')}
-                    className="p-1 text-gray-600 hover:bg-gray-100 rounded"
+                    className="p-1.5 text-gray-600 hover:bg-gray-100 rounded"
                     title="Next result"
                   >
                     <ChevronDown className="h-4 w-4" />
@@ -644,7 +679,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
             </div>
 
             {/* Advanced Search Filters */}
-            <div className="flex items-center space-x-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
               <select
                 value={searchFilters.messageType}
                 onChange={(e) => setSearchFilters(prev => ({ ...prev, messageType: e.target.value }))}
@@ -688,7 +723,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
               {(searchQuery || searchFilters.dateFrom || searchFilters.dateTo || searchFilters.sender) && (
                 <button
                   onClick={clearSearch}
-                  className="px-2 py-1 text-xs text-gray-600 hover:text-gray-800"
+                  className="px-2 py-1 text-xs text-blue-600 hover:text-blue-800"
                 >
                   Clear
                 </button>
@@ -716,17 +751,15 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         )}
       </div>
 
-      {/* Messages Area - IMPROVED: Better scrolling container */}
+      {/* Messages Area */}
       <div 
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto bg-gray-50 relative chat-messages-area"
+        className="flex-1 overflow-y-auto bg-gray-50 relative"
         style={{ 
           scrollBehavior: 'smooth',
-          // Ensure proper scrolling on all devices
           WebkitOverflowScrolling: 'touch'
         }}
       >
-        {/* Load More Messages Indicator (at top) */}
         {hasMoreMessages && (
           <div ref={topObserverRef} className="h-1" />
         )}
@@ -740,14 +773,14 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         
         {!hasMoreMessages && messages.length > 20 && (
           <div className="flex justify-center py-4">
-            <span className="text-sm text-gray-500 bg-gray-200 px-3 py-1 rounded-full">
+            <span className="text-sm text-gray-500 bg-white px-3 py-1 rounded-full shadow-sm">
               Beginning of conversation
             </span>
           </div>
         )}
 
         {error && (
-          <div className="mx-4 my-4 p-3 bg-red-100 border border-red-200 rounded-lg text-red-700 text-sm">
+          <div className="mx-4 my-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
             {error}
             {!connected && (
               <button
@@ -761,20 +794,24 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         )}
 
         {loading && messages.length === 0 ? (
-          <div className="flex justify-center items-center h-32">
-            <Loader className="animate-spin h-8 w-8 text-blue-500 mr-2" />
-            <span className="text-gray-600">Loading messages...</span>
+          <div className="flex justify-center items-center h-64">
+            <div className="text-center">
+              <Loader className="animate-spin h-8 w-8 text-blue-500 mx-auto mb-4" />
+              <span className="text-gray-600">Loading messages...</span>
+            </div>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-gray-500 p-6">
-            {getRoomIcon()}
-            <p className="text-lg font-medium mt-2">
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-6 min-h-64">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              {getRoomIcon()}
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
               {room?.roomType === 'DIRECT_MESSAGE' 
                 ? `Start a conversation with ${getRoomTitle()}`
                 : `Welcome to ${getRoomTitle()}`
               }
-            </p>
-            <p className="text-sm">
+            </h3>
+            <p className="text-sm text-center max-w-md">
               {room?.roomType === 'DIRECT_MESSAGE'
                 ? 'Send a message to get the conversation started!'
                 : 'This is the beginning of your conversation in this room.'
@@ -782,7 +819,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
             </p>
           </div>
         ) : (
-          <div className="space-y-0 messages-list">
+          <div className="space-y-0">
             {messages.map((message, index) => {
               const parentMessage = message.parentMessageId 
                 ? messages.find(m => m.id === message.parentMessageId)
@@ -792,8 +829,8 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                 <div
                   key={`${message.id}-${message.createdAt}-${index}`}
                   id={`message-${message.id}`}
-                  className={`transition-colors duration-300 message-item ${
-                    searchResults.some(result => result.id === message.id) ? 'search-highlight' : ''
+                  className={`transition-colors duration-300 ${
+                    searchResults.some(result => result.id === message.id) ? 'bg-yellow-50' : ''
                   }`}
                 >
                   <ChatMessage
@@ -813,7 +850,6 @@ const RoomChatPanel = ({ room, currentUserId }) => {
               );
             })}
             <TypingIndicator users={typingUsers} />
-            {/* This div acts as the scroll anchor */}
             <div ref={messagesEndRef} className="h-1"></div>
           </div>
         )}
@@ -836,29 +872,29 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       {showScrollToBottom && !showNewMessageAlert && (
         <button
           onClick={handleScrollToBottomClick}
-          className="absolute bottom-20 right-6 bg-gray-600 text-white p-3 rounded-full shadow-lg hover:bg-gray-700 transition-colors z-10"
+          className="absolute bottom-20 right-4 bg-gray-600 text-white p-3 rounded-full shadow-lg hover:bg-gray-700 transition-colors z-10"
           title="Scroll to bottom"
         >
           <ArrowDown className="h-5 w-5" />
         </button>
       )}
 
-      {/* UPDATED: Reply indicator (no modal) */}
+      {/* Reply indicator */}
       {replyingTo && (
-        <div className="px-4 py-2 bg-blue-50 border-t border-blue-200">
+        <div className="px-4 py-3 bg-blue-50 border-t border-blue-200">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Reply className="h-4 w-4 text-blue-600" />
-              <span className="text-sm text-blue-800">
+            <div className="flex items-center space-x-2 flex-1 min-w-0">
+              <Reply className="h-4 w-4 text-blue-600 flex-shrink-0" />
+              <span className="text-sm text-blue-800 font-medium">
                 Replying to {replyingTo.senderName}
               </span>
-              <span className="text-xs text-blue-600 max-w-xs truncate">
+              <span className="text-xs text-blue-600 truncate">
                 {replyingTo.content}
               </span>
             </div>
             <button
               onClick={() => setReplyingTo(null)}
-              className="text-blue-600 hover:text-blue-800"
+              className="text-blue-600 hover:text-blue-800 flex-shrink-0 ml-2"
             >
               <X className="h-4 w-4" />
             </button>
@@ -866,8 +902,8 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         </div>
       )}
 
-      {/* Message Input - FIXED: Always show for all room types */}
-      <div className="flex-shrink-0 border-t border-gray-200 bg-white chat-input-area">
+      {/* Message Input */}
+      <div className="flex-shrink-0 border-t border-gray-200 bg-white">
         <UserMentionInput
           onSendMessage={handleSendMessage}
           onStartTyping={startTyping}
@@ -896,7 +932,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
 
       {/* Room Info Sidebar */}
       {showRoomInfo && (
-        <div className="fixed right-0 top-0 h-full w-80 bg-white border-l border-gray-200 shadow-lg z-50">
+        <div className="fixed inset-y-0 right-0 w-80 bg-white border-l border-gray-200 shadow-xl z-50 overflow-y-auto">
           <div className="p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-gray-900">Room Info</h3>
@@ -912,7 +948,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
               {/* Room Details */}
               <div>
                 <div className="flex items-center space-x-3 mb-4">
-                  <div className="p-2 bg-gray-100 rounded-lg">
+                  <div className="p-3 bg-gray-100 rounded-lg">
                     {getRoomIcon()}
                   </div>
                   <div>
@@ -922,20 +958,20 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                 </div>
                 
                 {room?.roomDescription && (
-                  <p className="text-sm text-gray-600 mb-4">{room.roomDescription}</p>
+                  <p className="text-sm text-gray-600 mb-4 p-3 bg-gray-50 rounded-lg">{room.roomDescription}</p>
                 )}
               </div>
 
               {/* Room Stats */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <div className="text-lg font-semibold text-gray-900">
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <div className="text-2xl font-bold text-gray-900">
                     {room?.messageCount || messages.length}
                   </div>
                   <div className="text-sm text-gray-500">Messages</div>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <div className="text-lg font-semibold text-gray-900">
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <div className="text-2xl font-bold text-gray-900">
                     {room?.memberCount || members.length}
                   </div>
                   <div className="text-sm text-gray-500">Members</div>
@@ -945,7 +981,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
               {/* Actions */}
               <div className="space-y-2">
                 {room?.roomType === 'GROUP_CHAT' && room.canInviteMembers && (
-                  <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center">
+                  <button className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center transition-colors">
                     <UserPlus className="h-4 w-4 mr-3" />
                     Add members
                   </button>
@@ -956,13 +992,13 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                     setShowSearch(true);
                     setShowRoomInfo(false);
                   }}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center"
+                  className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center transition-colors"
                 >
                   <Search className="h-4 w-4 mr-3" />
                   Search in conversation
                 </button>
                 
-                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center">
+                <button className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center transition-colors">
                   <Settings className="h-4 w-4 mr-3" />
                   Settings
                 </button>
@@ -971,16 +1007,6 @@ const RoomChatPanel = ({ room, currentUserId }) => {
           </div>
         </div>
       )}
-
-      {/* Search Highlight Styles */}
-      <style jsx>{`
-        .search-highlight {
-          background-color: rgba(59, 130, 246, 0.1);
-          border-left: 3px solid #3b82f6;
-          padding-left: 8px;
-          margin-left: -8px;
-        }
-      `}</style>
     </div>
   );
 };

@@ -85,11 +85,13 @@ const CommentsSection = ({
 
       {/* Comments List */}
       <div className="space-y-4">
-        {comments.map((comment) => (
+         {comments
+                    .filter(comment => comment.author && comment.author.username)
+                    .map((comment) => (
           <div key={comment.id} className="flex space-x-3">
             {/* Avatar */}
             <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center text-sm font-medium text-primary-600 flex-shrink-0">
-              {comment.author.username.charAt(0).toUpperCase()}
+              {comment?.author?.username.charAt(0).toUpperCase()}
             </div>
 
             {/* Comment Content */}
@@ -97,7 +99,7 @@ const CommentsSection = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2">
                   <span className="font-medium text-gray-900 text-sm lg:text-base">
-                    {comment.author.username}
+                    {comment?.author?.username}
                   </span>
                   <span className="text-xs lg:text-sm text-gray-500">
                     {formatDistanceToNow(new Date(comment.createdAt), {
