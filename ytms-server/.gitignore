@@ -1,0 +1,10 @@
+target
+.run
+.idea
+# Ignore all files in the target directory
+# Ignore all files in the .run directory
+# Ignore all files in the .idea directory
+*.iml
+*.ipr
+*.iws
+*.class

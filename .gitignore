@@ -26,3 +26,8 @@
 
 */target
 */.idea
+
+*.iml
+*.ipr
+*.iws
+*.class
