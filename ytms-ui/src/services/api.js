@@ -1003,8 +1003,11 @@ export const chatAPI = {
   
   getRoomDetails: (roomId) => api.get(`/chat/rooms/${roomId}`),
   
-  createChatRoom: (request) => api.post('/chat/rooms', request),
-  
+  createChatRoom: (request) => {
+    console.log("Creating chat room with request:", request);
+    debugger
+   return api.post('/chat/rooms', request)
+  },
   createOrGetDirectMessage: (recipientId) => 
     api.post(`/chat/direct-messages?recipientId=${recipientId}`),
   

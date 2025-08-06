@@ -52,7 +52,8 @@ public class ChatService {
     private ObjectMapper objectMapper;
 
     // In-memory storage for online users
-    private final Map<String, OnlineUser> onlineUsers = new ConcurrentHashMap<>();
+    @Autowired
+    private Map<String, OnlineUser> onlineUsers;
     private final Map<Long, String> userSessions = new ConcurrentHashMap<>();
 
     //  CHAT ROOMS MANAGEMENT

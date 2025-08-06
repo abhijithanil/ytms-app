@@ -59,10 +59,11 @@ const CreateDirectMessageModal = ({ onClose, onDirectMessageCreated }) => {
       
       const request = {
         roomType: 'DIRECT_MESSAGE',
-        participantIds: [selectedUser.id]
+        dmParticipantId: selectedUser.id
       };
 
       const response = await chatAPI.createChatRoom(request);
+      debugger
       
       if (response.data) {
         onDirectMessageCreated(response.data);
@@ -213,7 +214,7 @@ const CreateDirectMessageModal = ({ onClose, onDirectMessageCreated }) => {
           {/* Footer */}
           <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
             <div className="text-sm text-gray-500">
-              {selectedUser ? `Message ${getDisplayName(selectedUser)}` : 'Select a user to message'}
+              {selectedUser ? `Message ${getDisplayName(selectedUser)}` : ''}
             </div>
             
             <div className="flex space-x-3">

@@ -103,7 +103,7 @@ public class ChatRoom {
 
     // Generate room name for DMs
     public static String generateDMRoomName(String user1, String user2) {
-        return user1.compareTo(user2) < 0 ? user1 + "_" + user2 : user2 + "_" + user1;
+        return user1.compareTo(user2) < 0 ? user1 + "<>" + user2 : user2 + "<>" + user1;
     }
 
     // Custom equals and hashCode to avoid collection access

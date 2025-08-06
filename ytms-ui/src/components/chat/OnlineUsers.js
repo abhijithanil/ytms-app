@@ -1,8 +1,10 @@
 import React from 'react';
 import { Users, Circle } from 'lucide-react';
+import { de } from 'date-fns/locale';
 
 const OnlineUsers = ({ users, className = '' }) => {
   const getStatusColor = (status) => {
+    console.log('🌐 OnlineUsers: getStatusColor called with status:', status);
     switch (status) {
       case 'online': return 'text-green-500';
       case 'away': return 'text-yellow-500';
