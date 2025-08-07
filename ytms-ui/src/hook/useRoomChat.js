@@ -1,5 +1,3 @@
-// Fixed useRoomChat.js - Complete version with proper reply handling
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import WebSocketService from '../services/WebSocketService ';
@@ -322,9 +320,10 @@ export const useRoomChat = (roomId) => {
       setLoading(true);
       
       // Load room details and messages in parallel
+      // FIXED: Explicitly request all messages including replies (mainOnly = false)
       const [roomResponse, messagesResponse] = await Promise.all([
         chatAPI.getChatRoom ? chatAPI.getChatRoom(roomId) : chatAPI.getRoomDetails(roomId),
-        chatAPI.getRoomMessages(roomId, 0, 50)
+        chatAPI.getRoomMessages(roomId, 0, 50, false) // false = include reply messages
       ]);
 
       if (mountedRef.current && currentRoomIdRef.current === roomId) {
@@ -429,6 +428,8 @@ export const useRoomChat = (roomId) => {
   const handleReactionUpdate = (reactionUpdate) => {
     const { messageId, reactionType, userId, action } = reactionUpdate;
     
+    console.log('🎯 useRoomChat: Processing reaction update:', reactionUpdate);
+    
     if (!mountedRef.current) return;
 
     setMessages(prev => {
@@ -436,6 +437,8 @@ export const useRoomChat = (roomId) => {
         if (message.id === messageId) {
           try {
             const reactions = message.reactions ? JSON.parse(message.reactions) : {};
+            
+            console.log('Current reactions before update:', reactions);
             
             if (!reactions[reactionType]) {
               reactions[reactionType] = { count: 0, userIds: [] };
@@ -447,6 +450,7 @@ export const useRoomChat = (roomId) => {
               if (!reactionData.userIds.includes(userId)) {
                 reactionData.userIds.push(userId);
                 reactionData.count = reactionData.userIds.length;
+                console.log('Added user to reaction:', userId, reactionType);
               }
             } else if (action === 'removed') {
               const index = reactionData.userIds.indexOf(userId);
@@ -457,13 +461,19 @@ export const useRoomChat = (roomId) => {
                 // Remove reaction type if no users
                 if (reactionData.userIds.length === 0) {
                   delete reactions[reactionType];
+                  console.log('Removed reaction type entirely:', reactionType);
+                } else {
+                  console.log('Removed user from reaction:', userId, reactionType);
                 }
               }
             }
             
+            const updatedReactionsJson = JSON.stringify(reactions);
+            console.log('Updated reactions JSON:', updatedReactionsJson);
+            
             return {
               ...message,
-              reactions: JSON.stringify(reactions)
+              reactions: updatedReactionsJson
             };
           } catch (error) {
             console.error('Error updating message reactions:', error);
@@ -633,7 +643,8 @@ export const useRoomChat = (roomId) => {
 
     try {
       console.log('🎯 useRoomChat: Loading more messages, page:', page);
-      const response = await chatAPI.getRoomMessages(roomId, page, 50);
+      // FIXED: Explicitly request all messages including replies (mainOnly = false)
+      const response = await chatAPI.getRoomMessages(roomId, page, 50, false);
       
       if (mountedRef.current && currentRoomIdRef.current === roomId) {
         const newMessages = response.data.sort((a, b) => 

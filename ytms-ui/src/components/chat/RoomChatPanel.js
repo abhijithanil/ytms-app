@@ -464,13 +464,45 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     return success;
   };
 
-  const handleReactToMessage = async (messageId, reactionType) => {
+  const handleReactToMessage = async (
+    messageId,
+    reactionType,
+    action = "toggle"
+  ) => {
     try {
-      await chatAPI.reactToMessage(messageId, reactionType);
-      toast.success("Reaction added");
+      console.log("Handling reaction:", { messageId, reactionType, action });
+
+      let response;
+
+      if (action === "remove") {
+        // Explicitly remove reaction
+        response = await chatAPI.removeReaction(messageId, reactionType);
+        console.log("Reaction removed successfully");
+      } else if (action === "add") {
+        // Explicitly add reaction
+        response = await chatAPI.reactToMessage(messageId, reactionType);
+        console.log("Reaction added successfully");
+      } else {
+        // Toggle reaction (default behavior)
+        response = await chatAPI.toggleReaction(messageId, reactionType);
+        console.log("Reaction toggled successfully:", response.data);
+      }
+
+      // Don't show success toast for reactions as they update in real-time
+      // The WebSocket will handle the UI update
     } catch (error) {
-      console.error("Failed to react to message:", error);
-      toast.error("Failed to add reaction");
+      console.error("Failed to handle reaction:", error);
+
+      // Show error message to user
+      if (error.response?.status === 403) {
+        toast.error("You do not have permission to react to this message");
+      } else if (error.response?.status === 404) {
+        toast.error("Message not found");
+      } else {
+        toast.error("Failed to update reaction. Please try again.");
+      }
+
+      throw error; // Re-throw so the component can handle loading states
     }
   };
 

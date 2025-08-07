@@ -523,7 +523,11 @@ public class ChatService {
     }
 
     public List<ChatMessageDTO> getRoomMessages(Long roomId, int page, int size, Long userId) {
-        log.debug("Fetching messages for room {} by user: {}", roomId, userId);
+        return getRoomMessages(roomId, page, size, userId, false);
+    }
+
+    public List<ChatMessageDTO> getRoomMessages(Long roomId, int page, int size, Long userId, boolean mainOnly) {
+        log.debug("Fetching messages for room {} by user: {} (mainOnly: {})", roomId, userId, mainOnly);
 
         // Verify user has access to room
         if (!chatRoomMemberRepository.existsByChatRoomIdAndUserId(roomId, userId)) {
@@ -531,7 +535,17 @@ public class ChatService {
         }
 
         PageRequest pageRequest = PageRequest.of(page, size);
-        List<ChatMessage> messages = chatMessageRepository.findByChatRoomIdOrderByCreatedAtAsc(roomId, pageRequest);
+        List<ChatMessage> messages;
+
+        if (mainOnly) {
+            // Only fetch main messages (no replies) - useful for thread view
+            messages = chatMessageRepository.findMainMessagesByChatRoomIdOrderByCreatedAtAsc(roomId, pageRequest);
+        } else {
+            // Fetch all messages including replies - default behavior
+            messages = chatMessageRepository.findByChatRoomIdOrderByCreatedAtAsc(roomId, pageRequest);
+        }
+
+        log.debug("Retrieved {} messages for room {} (mainOnly: {})", messages.size(), roomId, mainOnly);
 
         return messages.stream()
                 .map(ChatMessageDTO::new)
@@ -612,6 +626,7 @@ public class ChatService {
 
     //  MESSAGE REACTIONS
 
+    // AddReactionToMessage with better error handling and broadcast
     public void addReactionToMessage(Long messageId, String reactionType, Long userId) {
         ChatMessage message = chatMessageRepository.findById(messageId)
                 .orElseThrow(() -> new RuntimeException("Message not found"));
@@ -639,16 +654,21 @@ public class ChatService {
                 message.setReactions(reactionsJson);
                 chatMessageRepository.save(message);
 
+                log.info("Added reaction {} to message {} by user {}", reactionType, messageId, userId);
+
                 // Broadcast reaction update
                 broadcastReactionUpdate(message.getChatRoom().getId(), messageId, reactionType, userId, "added");
+            } else {
+                log.debug("User {} already has reaction {} on message {}", userId, reactionType, messageId);
             }
         } catch (Exception e) {
-            log.error("Failed to add reaction: {}", e.getMessage());
+            log.error("Failed to add reaction: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to add reaction");
         }
     }
 
-    public void removeReactionFromMessage(Long messageId, String reactionType, Long userId) {
+    // RemoveReactionFromMessage with better error handling and return value
+    public boolean removeReactionFromMessage(Long messageId, String reactionType, Long userId) {
         ChatMessage message = chatMessageRepository.findById(messageId)
                 .orElseThrow(() -> new RuntimeException("Message not found"));
 
@@ -663,25 +683,120 @@ public class ChatService {
 
             if (reactionData != null) {
                 List<Long> userIds = (List<Long>) reactionData.get("userIds");
-                if (userIds.remove(userId)) {
+                boolean wasRemoved = userIds.remove(userId);
+
+                if (wasRemoved) {
                     if (userIds.isEmpty()) {
+                        // Remove the entire reaction type if no users left
                         reactions.remove(reactionType);
+                        log.debug("Removed reaction type {} entirely from message {}", reactionType, messageId);
                     } else {
+                        // Update count
                         reactionData.put("count", userIds.size());
+                        log.debug("Updated reaction {} count to {} on message {}", reactionType, userIds.size(), messageId);
                     }
 
                     String reactionsJson = objectMapper.writeValueAsString(reactions);
                     message.setReactions(reactionsJson);
                     chatMessageRepository.save(message);
 
+                    log.info("Removed reaction {} from message {} by user {}", reactionType, messageId, userId);
+
                     // Broadcast reaction update
                     broadcastReactionUpdate(message.getChatRoom().getId(), messageId, reactionType, userId, "removed");
+
+                    return true; // Successfully removed
+                } else {
+                    log.debug("User {} did not have reaction {} on message {}", userId, reactionType, messageId);
+                    return false; // User didn't have this reaction
                 }
+            } else {
+                log.debug("Reaction type {} not found on message {}", reactionType, messageId);
+                return false; // Reaction type doesn't exist
             }
         } catch (Exception e) {
-            log.error("Failed to remove reaction: {}", e.getMessage());
+            log.error("Failed to remove reaction: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to remove reaction");
         }
+    }
+
+    // Toggle reaction method for better UX
+    public boolean toggleReactionOnMessage(Long messageId, String reactionType, Long userId) {
+        ChatMessage message = chatMessageRepository.findById(messageId)
+                .orElseThrow(() -> new RuntimeException("Message not found"));
+
+        // Verify user has access to the message's room
+        if (!chatRoomMemberRepository.existsByChatRoomIdAndUserId(message.getChatRoom().getId(), userId)) {
+            throw new SecurityException("User does not have access to this message");
+        }
+
+        try {
+            Map<String, Object> reactions = parseReactions(message.getReactions());
+            Map<String, Object> reactionData = (Map<String, Object>) reactions.get(reactionType);
+
+            boolean userHasReaction = false;
+            if (reactionData != null) {
+                List<Long> userIds = (List<Long>) reactionData.get("userIds");
+                userHasReaction = userIds.contains(userId);
+            }
+
+            if (userHasReaction) {
+                // Remove reaction
+                removeReactionFromMessage(messageId, reactionType, userId);
+                return false; // Removed
+            } else {
+                // Add reaction
+                addReactionToMessage(messageId, reactionType, userId);
+                return true; // Added
+            }
+        } catch (Exception e) {
+            log.error("Failed to toggle reaction: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to toggle reaction");
+        }
+    }
+
+    // ParseReactions with better error handling
+    private Map<String, Object> parseReactions(String reactionsJson) {
+        try {
+            if (reactionsJson == null || reactionsJson.trim().isEmpty() || "{}".equals(reactionsJson)) {
+                return new HashMap<>();
+            }
+
+            Map<String, Object> reactions = objectMapper.readValue(reactionsJson, Map.class);
+
+            // Ensure all reaction data has the correct structure
+            for (Map.Entry<String, Object> entry : reactions.entrySet()) {
+                Map<String, Object> reactionData = (Map<String, Object>) entry.getValue();
+                if (!reactionData.containsKey("userIds")) {
+                    reactionData.put("userIds", new ArrayList<>());
+                }
+                if (!reactionData.containsKey("count")) {
+                    reactionData.put("count", ((List<?>) reactionData.get("userIds")).size());
+                }
+            }
+
+            return reactions;
+        } catch (JsonProcessingException e) {
+            log.error("Failed to parse reactions JSON: {}", e.getMessage());
+            return new HashMap<>();
+        }
+    }
+
+    //  Broadcast method with more details
+    private void broadcastReactionUpdate(Long roomId, Long messageId, String reactionType, Long userId, String action) {
+        Map<String, Object> reactionUpdate = new HashMap<>();
+        reactionUpdate.put("messageId", messageId);
+        reactionUpdate.put("reactionType", reactionType);
+        reactionUpdate.put("userId", userId);
+        reactionUpdate.put("action", action);
+        reactionUpdate.put("timestamp", LocalDateTime.now());
+        reactionUpdate.put("roomId", roomId);
+
+        // Broadcast to room subscribers
+        messagingTemplate.convertAndSend("/topic/rooms/" + roomId + "/reactions", reactionUpdate);
+
+        log.debug("Broadcasted reaction update: {} {} on message {} in room {}",
+                action, reactionType, messageId, roomId);
     }
 
     public Map<String, MessageReactionDTO> getMessageReactions(Long messageId, Long userId) {
@@ -1073,16 +1188,6 @@ public class ChatService {
         messagingTemplate.convertAndSend("/topic/rooms/" + roomId + "/read-status", readStatus);
     }
 
-    private void broadcastReactionUpdate(Long roomId, Long messageId, String reactionType, Long userId, String action) {
-        Map<String, Object> reactionUpdate = new HashMap<>();
-        reactionUpdate.put("messageId", messageId);
-        reactionUpdate.put("reactionType", reactionType);
-        reactionUpdate.put("userId", userId);
-        reactionUpdate.put("action", action);
-        reactionUpdate.put("timestamp", LocalDateTime.now());
-
-        messagingTemplate.convertAndSend("/topic/rooms/" + roomId + "/reactions", reactionUpdate);
-    }
 
     private void broadcastMessageUpdate(Long roomId, ChatMessageDTO message, String action) {
         Map<String, Object> messageUpdate = new HashMap<>();
@@ -1093,17 +1198,6 @@ public class ChatService {
         messagingTemplate.convertAndSend("/topic/rooms/" + roomId + "/message-updates", messageUpdate);
     }
 
-    private Map<String, Object> parseReactions(String reactionsJson) {
-        try {
-            if (reactionsJson == null || reactionsJson.trim().isEmpty() || "{}".equals(reactionsJson)) {
-                return new HashMap<>();
-            }
-            return objectMapper.readValue(reactionsJson, Map.class);
-        } catch (JsonProcessingException e) {
-            log.error("Failed to parse reactions JSON: {}", e.getMessage());
-            return new HashMap<>();
-        }
-    }
 
     //  BACKWARD COMPATIBILITY METHODS
 

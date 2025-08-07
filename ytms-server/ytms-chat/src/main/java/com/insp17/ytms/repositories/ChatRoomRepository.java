@@ -60,4 +60,5 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
             "WHERE m.userId = :userId AND cr.isArchived = false " +
             "AND cr.lastMessageAt > COALESCE(m.lastReadAt, cr.createdAt)")
     long countUnreadRooms(@Param("userId") Long userId);
+
 }

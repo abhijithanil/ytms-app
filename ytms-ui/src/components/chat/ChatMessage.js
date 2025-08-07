@@ -1,3 +1,5 @@
+// FIXED: Update the reaction handling in ChatMessage.js
+
 import React, { useState, useRef, useEffect } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { 
@@ -38,6 +40,7 @@ const ChatMessage = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content || '');
   const [isReacting, setIsReacting] = useState(false);
+  const [reactingToType, setReactingToType] = useState(null); // Track which reaction is being processed
   
   const messageRef = useRef(null);
   const actionsRef = useRef(null);
@@ -56,6 +59,7 @@ const ChatMessage = ({
     try {
       const messageReactions = message.reactions ? JSON.parse(message.reactions) : {};
       setReactions(messageReactions);
+      console.log('Updated reactions for message', message.id, messageReactions);
     } catch (error) {
       console.error('Error parsing reactions:', error);
       setReactions({});
@@ -76,34 +80,41 @@ const ChatMessage = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const getInitials = (name, username) => {
-    if (name && name.includes(' ')) {
-      const parts = name.split(' ');
-      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-    }
-    return username ? username[0].toUpperCase() : '?';
-  };
-
-  const formatTime = (timestamp) => {
-    try {
-      const date = new Date(timestamp);
-      return formatDistanceToNow(date, { addSuffix: true });
-    } catch (error) {
-      return 'Unknown time';
-    }
-  };
-
+  // FIXED: Enhanced reaction handler with better state management and error handling
   const handleReaction = async (reactionType) => {
-    if (!onReactToMessage || isReacting) return;
+    if (!onReactToMessage || isReacting || reactingToType === reactionType) return;
     
     try {
       setIsReacting(true);
+      setReactingToType(reactionType);
       setShowReactions(false);
-      await onReactToMessage(message.id, reactionType);
+      
+      console.log('Handling reaction:', reactionType, 'for message:', message.id);
+      
+      // Check if user already has this reaction
+      const currentReaction = reactions[reactionType];
+      const userHasReaction = currentReaction && 
+        currentReaction.userIds && 
+        currentReaction.userIds.includes(currentUserId);
+      
+      console.log('User has reaction:', userHasReaction, 'Current reaction data:', currentReaction);
+      
+      if (userHasReaction) {
+        // Remove reaction
+        console.log('Removing reaction:', reactionType);
+        await onReactToMessage(message.id, reactionType, 'remove');
+      } else {
+        // Add reaction
+        console.log('Adding reaction:', reactionType);
+        await onReactToMessage(message.id, reactionType, 'add');
+      }
+      
     } catch (error) {
-      console.error('Error adding reaction:', error);
+      console.error('Error handling reaction:', error);
+      // Optionally show user-friendly error message
     } finally {
       setIsReacting(false);
+      setReactingToType(null);
     }
   };
 
@@ -144,7 +155,6 @@ const ChatMessage = ({
   const handleDelete = async () => {
     if (!onDeleteMessage) return;
     
-    // Using a custom modal is better, but window.confirm is used here for simplicity.
     if (window.confirm('Are you sure you want to delete this message?')) {
       try {
         await onDeleteMessage(message.id);
@@ -168,6 +178,23 @@ const ChatMessage = ({
       } catch (error) {
         console.error('Error pinning message:', error);
       }
+    }
+  };
+
+  const getInitials = (name, username) => {
+    if (name && name.includes(' ')) {
+      const parts = name.split(' ');
+      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    }
+    return username ? username[0].toUpperCase() : '?';
+  };
+
+  const formatTime = (timestamp) => {
+    try {
+      const date = new Date(timestamp);
+      return formatDistanceToNow(date, { addSuffix: true });
+    } catch (error) {
+      return 'Unknown time';
     }
   };
 
@@ -300,7 +327,7 @@ const ChatMessage = ({
             </div>
           )}
 
-          {/* Reactions Display */}
+          {/* FIXED: Enhanced Reactions Display with better error handling */}
           {Object.keys(reactions).length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {Object.entries(reactions).map(([reactionType, reactionData]) => {
@@ -308,27 +335,30 @@ const ChatMessage = ({
                 
                 const reactionConfig = availableReactions.find(r => r.type === reactionType);
                 const hasUserReacted = reactionData.userIds?.includes(currentUserId);
+                const isProcessing = reactingToType === reactionType;
                 
                 return (
                   <button
                     key={reactionType}
                     onClick={() => handleReaction(reactionType)}
-                    className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-xs transition-colors ${
+                    disabled={isReacting}
+                    className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-xs transition-colors disabled:opacity-50 ${
                       hasUserReacted 
                         ? 'bg-blue-100 text-blue-800 border border-blue-200' 
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    } ${isProcessing ? 'animate-pulse' : ''}`}
                     title={`${reactionData.count} ${reactionConfig?.label || reactionType} reaction${reactionData.count !== 1 ? 's' : ''}`}
                   >
                     <span>{reactionConfig?.emoji || '👍'}</span>
                     <span className="font-medium">{reactionData.count}</span>
+                    {isProcessing && <span className="text-xs">...</span>}
                   </button>
                 );
               })}
             </div>
           )}
           
-          {/* NEW: Actions Bar - appears below message content */}
+          {/* Actions Bar */}
           {showActionsMenu && !isEditing && (
             <div className="mt-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
               {/* Add Reaction Button */}
@@ -336,7 +366,8 @@ const ChatMessage = ({
                 <div className="relative" ref={reactionsRef}>
                   <button
                     onClick={() => setShowReactions(!showReactions)}
-                    className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                    disabled={isReacting}
+                    className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
                     title="Add reaction"
                   >
                     <Smile className="h-4 w-4" />
@@ -348,7 +379,8 @@ const ChatMessage = ({
                           <button
                             key={reaction.type}
                             onClick={() => handleReaction(reaction.type)}
-                            className="p-1.5 hover:bg-gray-100 rounded-lg text-lg transition-colors"
+                            disabled={isReacting}
+                            className="p-1.5 hover:bg-gray-100 rounded-lg text-lg transition-colors disabled:opacity-50"
                             title={reaction.label}
                           >
                             {reaction.emoji}

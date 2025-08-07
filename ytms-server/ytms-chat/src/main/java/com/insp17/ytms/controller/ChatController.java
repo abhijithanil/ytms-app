@@ -22,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -346,6 +347,7 @@ public class ChatController {
         }
     }
 
+    // FIXED: Enhanced reaction removal with better error handling
     @DeleteMapping("/messages/{messageId}/reactions/{reactionType}")
     public ResponseEntity<Void> removeReaction(@PathVariable Long messageId,
                                                @PathVariable String reactionType,
@@ -353,21 +355,62 @@ public class ChatController {
         try {
             UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
             if (userPrincipal == null) {
+                log.warn("Unauthorized reaction removal attempt for message {}", messageId);
                 return ResponseEntity.status(401).build();
             }
 
             log.info("Removing reaction {} from message {} by user: {}",
                     reactionType, messageId, userPrincipal.getUsername());
 
-            chatService.removeReactionFromMessage(messageId, reactionType, userPrincipal.getId());
-            return ResponseEntity.ok().build();
+            boolean removed = chatService.removeReactionFromMessage(messageId, reactionType, userPrincipal.getId());
+
+            if (removed) {
+                log.debug("Successfully removed reaction {} from message {}", reactionType, messageId);
+                return ResponseEntity.ok().build();
+            } else {
+                log.warn("Reaction {} not found for user {} on message {}", reactionType, userPrincipal.getId(), messageId);
+                return ResponseEntity.notFound().build();
+            }
         } catch (SecurityException e) {
+            log.warn("Access denied for reaction removal on message {}: {}", messageId, e.getMessage());
             return ResponseEntity.status(403).build();
         } catch (Exception e) {
             log.error("Error removing reaction from message {}: {}", messageId, e.getMessage(), e);
             return ResponseEntity.status(500).build();
         }
     }
+
+    // FIXED: Also add a toggle reaction endpoint for better UX
+    @PostMapping("/messages/{messageId}/reactions/toggle")
+    public ResponseEntity<Map<String, Object>> toggleReaction(@PathVariable Long messageId,
+                                                              @RequestBody MessageReactionRequest request,
+                                                              Principal principal) {
+        try {
+            UserPrincipal userPrincipal = getUserPrincipalFromPrincipal(principal);
+            if (userPrincipal == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            log.info("Toggling reaction {} on message {} by user: {}",
+                    request.getReactionType(), messageId, userPrincipal.getUsername());
+
+            boolean added = chatService.toggleReactionOnMessage(messageId, request.getReactionType(), userPrincipal.getId());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("action", added ? "added" : "removed");
+            response.put("reactionType", request.getReactionType());
+            response.put("messageId", messageId);
+
+            return ResponseEntity.ok(response);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (Exception e) {
+            log.error("Error toggling reaction on message {}: {}", messageId, e.getMessage(), e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+
 
     @GetMapping("/messages/{messageId}/reactions")
     public ResponseEntity<Map<String, MessageReactionDTO>> getMessageReactions(@PathVariable Long messageId,

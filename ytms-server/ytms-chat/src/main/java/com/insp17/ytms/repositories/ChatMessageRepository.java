@@ -1,6 +1,7 @@
 package com.insp17.ytms.repositories;
 
 import com.insp17.ytms.entity.ChatMessage;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -27,15 +28,6 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
 
     long countByTaskIdAndIsDeletedFalse(Long taskId);
 
-    // New methods for chat rooms
-    @Query("SELECT cm FROM ChatMessage cm WHERE cm.chatRoom.id = :roomId AND cm.isDeleted = false " +
-            "AND cm.parentMessageId IS NULL ORDER BY cm.createdAt ASC")
-    List<ChatMessage> findByChatRoomIdOrderByCreatedAtAsc(@Param("roomId") Long roomId, Pageable pageable);
-
-    @Query("SELECT cm FROM ChatMessage cm WHERE cm.chatRoom.id = :roomId AND cm.isDeleted = false " +
-            "ORDER BY cm.createdAt DESC")
-    List<ChatMessage> findByChatRoomIdOrderByCreatedAtDesc(@Param("roomId") Long roomId, Pageable pageable);
-
     // Thread messages
     @Query("SELECT cm FROM ChatMessage cm WHERE cm.parentMessageId = :parentId AND cm.isDeleted = false " +
             "ORDER BY cm.createdAt ASC")
@@ -58,12 +50,6 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     @Query("SELECT cm FROM ChatMessage cm WHERE cm.chatRoom.id = :roomId AND cm.isDeleted = false " +
             "ORDER BY cm.createdAt DESC LIMIT 1")
     Optional<ChatMessage> findLatestMessageInRoomOptional(@Param("roomId") Long roomId);
-
-    // Search messages in room
-    @Query("SELECT cm FROM ChatMessage cm WHERE cm.chatRoom.id = :roomId AND cm.isDeleted = false " +
-            "AND LOWER(cm.content) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
-            "ORDER BY cm.createdAt DESC")
-    List<ChatMessage> searchMessagesInRoom(@Param("roomId") Long roomId, @Param("searchTerm") String searchTerm, Pageable pageable);
 
     // Get message count in room
     long countByChatRoomIdAndIsDeletedFalse(Long roomId);
@@ -233,4 +219,24 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     Map<String, Object> getRoomMessageStatistics(@Param("roomId") Long roomId);
 
 
+    List<ChatMessage> findMainMessagesByChatRoomIdOrderByCreatedAtAsc(Long roomId, PageRequest pageRequest);
+
+    @Query("SELECT cm FROM ChatMessage cm WHERE cm.chatRoom.id = :roomId AND cm.isDeleted = false " +
+            "ORDER BY cm.createdAt ASC")
+    List<ChatMessage> findByChatRoomIdOrderByCreatedAtAsc(@Param("roomId") Long roomId, Pageable pageable);
+
+    @Query("SELECT cm FROM ChatMessage cm WHERE cm.chatRoom.id = :roomId AND cm.isDeleted = false " +
+            "ORDER BY cm.createdAt DESC")
+    List<ChatMessage> findByChatRoomIdOrderByCreatedAtDesc(@Param("roomId") Long roomId, Pageable pageable);
+
+    // Keep the separate method for main messages only (for UI that wants to show only top-level messages)
+    @Query("SELECT cm FROM ChatMessage cm WHERE cm.chatRoom.id = :roomId AND cm.isDeleted = false " +
+            "AND cm.parentMessageId IS NULL ORDER BY cm.createdAt ASC")
+    List<ChatMessage> findMainMessagesByChatRoomIdOrderByCreatedAtAsc(@Param("roomId") Long roomId, Pageable pageable);
+
+    // search method to include replies
+    @Query("SELECT cm FROM ChatMessage cm WHERE cm.chatRoom.id = :roomId AND cm.isDeleted = false " +
+            "AND LOWER(cm.content) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
+            "ORDER BY cm.createdAt DESC")
+    List<ChatMessage> searchMessagesInRoom(@Param("roomId") Long roomId, @Param("searchTerm") String searchTerm, Pageable pageable);
 }

@@ -81,11 +81,14 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
-  loginVerify: async(username, otp) =>{
-     const response = await api.post('/auth/login/verify', { username, token: parseInt(otp) });
-     return response.data
+  loginVerify: async (username, otp) => {
+    const response = await api.post("/auth/login/verify", {
+      username,
+      token: parseInt(otp),
+    });
+    return response.data;
   },
-  
+
   verifyMfa: (mfaVerifyRequest) => {
     return api.post("/auth/mfa/verify", mfaVerifyRequest);
   },
@@ -94,11 +97,11 @@ export const authAPI = {
     return api.post("auth/mfa/signup/enable", mfaRequest);
   },
 
-  usersExist: async () =>{
-      const response = await api.get("/auth/user-exists");
-      return response.data;
+  usersExist: async () => {
+    const response = await api.get("/auth/user-exists");
+    return response.data;
   },
-   createInitialAdmin: async (adminData) => {
+  createInitialAdmin: async (adminData) => {
     try {
       const response = await api.post("/auth/initial-admin", adminData);
       return response.data;
@@ -178,11 +181,11 @@ export const authAPI = {
 
 // Team API
 export const teamAPI = {
-  getTasksCount: async() =>{
-    try{
+  getTasksCount: async () => {
+    try {
       const response = await api.get("/team/task-counts");
       return response.data;
-    } catch(error) {
+    } catch (error) {
       console.error("Failed to get task counts:", error);
       throw error;
     }
@@ -214,7 +217,7 @@ export const usersAPI = {
     const response = await api.delete(`/users/${userId}/permanently`);
     return response.data;
   },
-  
+
   getAllUsers: async () => {
     try {
       // UPDATED: Use the new chat-friendly endpoint
@@ -225,10 +228,10 @@ export const usersAPI = {
       throw error;
     }
   },
-  
+
   getUserById: async (id) => {
     try {
-      // UPDATED: Use chat-friendly endpoint  
+      // UPDATED: Use chat-friendly endpoint
       const response = await api.get(`/users/chat/${id}`);
       return response;
     } catch (error) {
@@ -236,7 +239,7 @@ export const usersAPI = {
       throw error;
     }
   },
-  
+
   createUser: async (userData) => {
     try {
       const response = await api.post("/users", userData);
@@ -246,7 +249,7 @@ export const usersAPI = {
       throw error;
     }
   },
-  
+
   updateUser: async (id, userData) => {
     try {
       const response = await api.put(`/users/${id}`, userData);
@@ -256,7 +259,7 @@ export const usersAPI = {
       throw error;
     }
   },
-  
+
   deleteUser: async (id) => {
     try {
       const response = await api.delete(`/users/${id}`);
@@ -266,7 +269,7 @@ export const usersAPI = {
       throw error;
     }
   },
-  
+
   getEditors: async () => {
     try {
       const response = await api.get("/users/editors");
@@ -276,7 +279,7 @@ export const usersAPI = {
       throw error;
     }
   },
-  
+
   getAdmins: async () => {
     try {
       const response = await api.get("/users/admins");
@@ -286,7 +289,7 @@ export const usersAPI = {
       throw error;
     }
   },
-  
+
   updateUserProfile: async (id, profileData) => {
     try {
       const response = await api.put(`/users/${id}/profile`, profileData);
@@ -296,7 +299,7 @@ export const usersAPI = {
       throw error;
     }
   },
-  
+
   changePassword: async (id, passwordData) => {
     try {
       const response = await api.put(`/users/${id}/password`, passwordData);
@@ -308,37 +311,37 @@ export const usersAPI = {
   },
 
   // NEW: Enhanced chat-specific methods
-  
+
   // Search users for chat
   searchUsers: (query) => {
     console.log(`Searching users with query: ${query}`);
     return api.get(`/users/search?q=${encodeURIComponent(query)}`);
   },
-  
+
   // Get current user's profile
   getCurrentUser: () => {
     console.log("Getting current user profile");
-    return api.get('/users/me');
+    return api.get("/users/me");
   },
-  
+
   // Update user status for chat presence
   updateUserStatus: (status) => {
     console.log(`Updating user status to: ${status}`);
-    return api.patch('/users/me/status', { status });
+    return api.patch("/users/me/status", { status });
   },
-  
+
   // Get user profile by ID
   getUserProfile: (userId) => {
     console.log(`Getting user profile for: ${userId}`);
     return api.get(`/users/profile/${userId}`);
   },
-  
+
   // Check if username exists
   checkUsernameExists: (username) => {
     console.log(`Checking if username exists: ${username}`);
     return api.get(`/users/check/username/${username}`);
   },
-  
+
   // Check if email exists
   checkEmailExists: (email) => {
     console.log(`Checking if email exists: ${email}`);
@@ -348,9 +351,9 @@ export const usersAPI = {
   // Admin methods (updated paths)
   getAllUsersAdmin: () => {
     console.log("Getting all users for admin");
-    return api.get('/users/admin/all');
+    return api.get("/users/admin/all");
   },
-  
+
   getUserByIdAdmin: (userId) => {
     console.log(`Getting user ${userId} for admin`);
     return api.get(`/users/admin/${userId}`);
@@ -444,15 +447,13 @@ export const usersAPI = {
 //     }
 //   },
 //    // Existing methods...
-  
-  
+
 //   // Search users
 //   searchUsers: (query) => api.get(`/api/users/search?q=${encodeURIComponent(query)}`),
 
-  
 //   // Get current user's profile
 //   getCurrentUser: () => api.get('/api/users/me'),
-  
+
 //   // Update user status
 //   updateUserStatus: (status) => api.patch('/api/users/me/status', { status }),
 // };
@@ -649,8 +650,8 @@ export const commentsAPI = {
 // Metadata API - Updated for multiple videos support
 export const metadataAPI = {
   // Task-level metadata endpoints
-  createMetadata: (taskId, metadataData) =>{
-    api.post(`/metadata/${taskId}`, metadataData)
+  createMetadata: (taskId, metadataData) => {
+    api.post(`/metadata/${taskId}`, metadataData);
   },
 
   getMetadata: (taskId) => api.get(`/metadata/task/${taskId}`),
@@ -846,7 +847,7 @@ export const fileUtils = {
 
 // YouTube Channel API
 export const youtubeChannelAPI = {
-  getPlayLists:(id) =>{
+  getPlayLists: (id) => {
     return api.get(`/youtube-channels/${id}/playlists`);
   },
   getAllChannels: () => {
@@ -988,64 +989,106 @@ export const youtubeOAuthAPI = {
   },
 };
 
-
 export const chatAPI = {
   // Existing methods... (keep all your current methods)
   getChatHistory: (taskId, page = 0, size = 50) => {
-    const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
-    if (taskId) params.append('taskId', taskId.toString());
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString(),
+    });
+    if (taskId) params.append("taskId", taskId.toString());
     return api.get(`/chat/history?${params}`);
   },
 
-  getOnlineUsers: () => api.get('/chat/online-users'),
+  getOnlineUsers: () => api.get("/chat/online-users"),
 
-  getChatRoomList: () => api.get('/chat/rooms'),
-  
+  getChatRoomList: () => api.get("/chat/rooms"),
+
   getRoomDetails: (roomId) => api.get(`/chat/rooms/${roomId}`),
-  
+
   createChatRoom: (request) => {
     console.log("Creating chat room with request:", request);
-    debugger
-   return api.post('/chat/rooms', request)
+    debugger;
+    return api.post("/chat/rooms", request);
   },
-  createOrGetDirectMessage: (recipientId) => 
+  createOrGetDirectMessage: (recipientId) =>
     api.post(`/chat/direct-messages?recipientId=${recipientId}`),
-  
-  sendDirectMessage: (request) => api.post('/chat/direct-messages/send', request),
-  
+
+  sendDirectMessage: (request) =>
+    api.post("/chat/direct-messages/send", request),
+
   getRoomMessages: (roomId, page = 0, size = 50) => {
-    const params = new URLSearchParams({ 
-      page: page.toString(), 
-      size: size.toString() 
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString(),
     });
     return api.get(`/chat/rooms/${roomId}/messages?${params}`);
   },
-  
+
   markRoomAsRead: (roomId) => api.post(`/chat/rooms/${roomId}/read`),
-  
-  searchMessages: (request) => api.post('/chat/search', request),
-  
-  addMembersToRoom: (roomId, request) => 
+
+  searchMessages: (request) => api.post("/chat/search", request),
+
+  addMembersToRoom: (roomId, request) =>
     api.post(`/chat/rooms/${roomId}/members`, request),
-  
-  removeMemberFromRoom: (roomId, userId) => 
+
+  removeMemberFromRoom: (roomId, userId) =>
     api.delete(`/chat/rooms/${roomId}/members/${userId}`),
-  
+
   updateRoom: (roomId, request) => api.put(`/chat/rooms/${roomId}`, request),
 
   // NEW: Message reaction methods
-  reactToMessage: (messageId, reactionType) => {
+  reactToMessage: async (messageId, reactionType) => {
     console.log(`Adding ${reactionType} reaction to message ${messageId}`);
-    return api.post(`/chat/messages/${messageId}/reactions`, {
-      reactionType: reactionType
-    });
+    try {
+      const response = await api.post(`/chat/messages/${messageId}/reactions`, {
+        reactionType: reactionType,
+      });
+      return response;
+    } catch (error) {
+      console.error(
+        `Failed to add reaction ${reactionType} to message ${messageId}:`,
+        error
+      );
+      throw error;
+    }
   },
 
-  removeReaction: (messageId, reactionType) => {
+  removeReaction: async (messageId, reactionType) => {
     console.log(`Removing ${reactionType} reaction from message ${messageId}`);
-    return api.delete(`/chat/messages/${messageId}/reactions/${reactionType}`);
+    try {
+      const response = await api.delete(
+        `/chat/messages/${messageId}/reactions/${reactionType}`
+      );
+      return response;
+    } catch (error) {
+      console.error(
+        `Failed to remove reaction ${reactionType} from message ${messageId}:`,
+        error
+      );
+      throw error;
+    }
   },
 
+  // NEW: Toggle reaction method for better UX
+  toggleReaction: async (messageId, reactionType) => {
+    console.log(`Toggling ${reactionType} reaction on message ${messageId}`);
+    try {
+      const response = await api.post(
+        `/chat/messages/${messageId}/reactions/toggle`,
+        {
+          reactionType: reactionType,
+        }
+      );
+      return response;
+    } catch (error) {
+      console.error(
+        `Failed to toggle reaction ${reactionType} on message ${messageId}:`,
+        error
+      );
+      throw error;
+    }
+  },
   getMessageReactions: (messageId) => {
     console.log(`Getting reactions for message ${messageId}`);
     return api.get(`/chat/messages/${messageId}/reactions`);
@@ -1055,7 +1098,7 @@ export const chatAPI = {
   editMessage: (messageId, newContent) => {
     console.log(`Editing message ${messageId} with new content`);
     return api.put(`/chat/messages/${messageId}`, {
-      content: newContent
+      content: newContent,
     });
   },
 
@@ -1077,9 +1120,9 @@ export const chatAPI = {
   // NEW: Thread/reply methods
   getThreadReplies: (messageId, page = 0, size = 20) => {
     console.log(`Getting thread replies for message ${messageId}`);
-    const params = new URLSearchParams({ 
-      page: page.toString(), 
-      size: size.toString() 
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString(),
     });
     return api.get(`/chat/messages/${messageId}/replies?${params}`);
   },
@@ -1088,41 +1131,43 @@ export const chatAPI = {
     console.log(`Sending reply to message ${parentMessageId}`);
     const payload = {
       content: content,
-      parentMessageId: parentMessageId
+      parentMessageId: parentMessageId,
     };
-    
+
     if (attachments) {
       payload.attachmentUrl = attachments.url;
       payload.attachmentName = attachments.name;
       payload.attachmentType = attachments.type;
     }
-    
-    return api.post('/chat/messages/reply', payload);
+
+    return api.post("/chat/messages/reply", payload);
   },
 
   // NEW: Advanced search methods
   advancedSearchMessages: (request) => {
-    console.log('Performing advanced message search:', request);
-    return api.post('/chat/search/advanced', request);
+    console.log("Performing advanced message search:", request);
+    return api.post("/chat/search/advanced", request);
   },
 
   getMessageContext: (messageId, beforeCount = 10, afterCount = 10) => {
     console.log(`Getting context for message ${messageId}`);
     const params = new URLSearchParams({
       beforeCount: beforeCount.toString(),
-      afterCount: afterCount.toString()
+      afterCount: afterCount.toString(),
     });
     return api.get(`/chat/messages/${messageId}/context?${params}`);
   },
 
   // NEW: Message history with date range
   getMessagesByDateRange: (roomId, fromDate, toDate, page = 0, size = 50) => {
-    console.log(`Getting messages for room ${roomId} from ${fromDate} to ${toDate}`);
+    console.log(
+      `Getting messages for room ${roomId} from ${fromDate} to ${toDate}`
+    );
     const params = new URLSearchParams({
       fromDate: fromDate,
       toDate: toDate,
       page: page.toString(),
-      size: size.toString()
+      size: size.toString(),
     });
     return api.get(`/chat/rooms/${roomId}/messages/date-range?${params}`);
   },
@@ -1130,16 +1175,16 @@ export const chatAPI = {
   // NEW: File upload for chat attachments
   uploadChatAttachment: async (file, roomId) => {
     console.log(`Uploading attachment for room ${roomId}`);
-    
+
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('roomId', roomId.toString());
-    
-    return api.post('/chat/attachments/upload', formData, {
+    formData.append("file", file);
+    formData.append("roomId", roomId.toString());
+
+    return api.post("/chat/attachments/upload", formData, {
       headers: {
-        'Content-Type': 'multipart/form-data'
+        "Content-Type": "multipart/form-data",
       },
-      timeout: 5 * 60 * 1000 // 5 minutes for file upload
+      timeout: 5 * 60 * 1000, // 5 minutes for file upload
     });
   },
 
@@ -1150,26 +1195,33 @@ export const chatAPI = {
   },
 
   // NEW: Export chat history
-  exportChatHistory: (roomId, format = 'json', fromDate = null, toDate = null) => {
-    console.log(`Exporting chat history for room ${roomId} in ${format} format`);
+  exportChatHistory: (
+    roomId,
+    format = "json",
+    fromDate = null,
+    toDate = null
+  ) => {
+    console.log(
+      `Exporting chat history for room ${roomId} in ${format} format`
+    );
     const params = new URLSearchParams({
-      format: format
+      format: format,
     });
-    
-    if (fromDate) params.append('fromDate', fromDate);
-    if (toDate) params.append('toDate', toDate);
-    
+
+    if (fromDate) params.append("fromDate", fromDate);
+    if (toDate) params.append("toDate", toDate);
+
     return api.get(`/chat/rooms/${roomId}/export?${params}`, {
-      responseType: 'blob'
+      responseType: "blob",
     });
   },
 
   // NEW: Mention methods
   getMentions: (page = 0, size = 20) => {
-    console.log('Getting user mentions');
-    const params = new URLSearchParams({ 
-      page: page.toString(), 
-      size: size.toString() 
+    console.log("Getting user mentions");
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString(),
     });
     return api.get(`/chat/mentions?${params}`);
   },
@@ -1186,21 +1238,21 @@ export const chatAPI = {
   },
 
   getUserNotificationSettings: () => {
-    console.log('Getting user notification settings');
-    return api.get('/chat/notifications/settings');
+    console.log("Getting user notification settings");
+    return api.get("/chat/notifications/settings");
   },
 
   updateGlobalNotificationSettings: (settings) => {
-    console.log('Updating global notification settings', settings);
-    return api.put('/chat/notifications/settings', settings);
+    console.log("Updating global notification settings", settings);
+    return api.put("/chat/notifications/settings", settings);
   },
 
   // NEW: Presence and status methods
   updateUserPresence: (status, statusMessage = null) => {
     console.log(`Updating user presence to ${status}`);
-    return api.post('/chat/presence', {
+    return api.post("/chat/presence", {
       status: status,
-      statusMessage: statusMessage
+      statusMessage: statusMessage,
     });
   },
 
@@ -1213,10 +1265,9 @@ export const chatAPI = {
   sendTypingIndicator: (roomId, isTyping) => {
     console.log(`Sending typing indicator for room ${roomId}: ${isTyping}`);
     return api.post(`/chat/rooms/${roomId}/typing`, {
-      isTyping: isTyping
+      isTyping: isTyping,
     });
-  }
+  },
 };
-
 
 export default api;
