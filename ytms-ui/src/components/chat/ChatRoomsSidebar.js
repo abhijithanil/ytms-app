@@ -333,21 +333,20 @@ const ChatRoomsSidebar = ({ selectedRoomId, onRoomSelect, currentUserId, collaps
         <div className={`flex-shrink-0 border-b border-gray-200 bg-white ${
           isMobile ? 'p-2' : 'p-4'
         }`}>
-          <div className={`flex items-center justify-between ${isMobile ? 'mb-2' : 'mb-4'}`}>
+          {/* CORRECTED HEADER SECTION */}
+          <div className={`flex items-center space-x-2 ${isMobile ? 'mb-2' : 'mb-4'}`}>
+            <button 
+              onClick={loadChatRooms}
+              className={`hover:bg-gray-100 rounded-lg transition-colors ${
+                isMobile ? 'p-1' : 'p-1.5'
+              }`}
+              title="Refresh"
+            >
+              <RefreshCw className={`text-gray-600 ${isMobile ? 'h-3 w-3' : 'h-4 w-4'}`} />
+            </button>
             <h2 className={`font-semibold text-gray-900 ${isMobile ? 'text-sm' : ''}`}>
               Messages
             </h2>
-            <div className="flex items-center space-x-1 margin-right-2">
-              <button 
-                onClick={loadChatRooms}
-                className={`hover:bg-gray-100 rounded-lg transition-colors ${
-                  isMobile ? 'p-1' : 'p-1.5'
-                }`}
-                title="Refresh"
-              >
-                <RefreshCw className={`text-gray-600 ${isMobile ? 'h-3 w-3' : 'h-4 w-4'}`} />
-              </button>
-            </div>
           </div>
           
           {/* Search */}

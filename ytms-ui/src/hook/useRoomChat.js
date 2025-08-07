@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import WebSocketService from '../services/WebSocketService ';
 import { chatAPI } from '../services/api';
 import toast from 'react-hot-toast';
+import { de } from 'date-fns/locale';
 
 export const useRoomChat = (roomId) => {
   const { user, token } = useAuth();
@@ -402,8 +403,9 @@ export const useRoomChat = (roomId) => {
 
   // FIXED: Removed optimistic updates that were causing duplicates
   const sendMessage = useCallback((content, options = {}) => {
+    debugger
     console.log('🎯 useRoomChat: Attempting to send message to room', roomId);
-    if (!content.trim() || !connected || !roomId) {
+    if (!content|| !connected || !roomId) {
       console.log('🎯 useRoomChat: Cannot send - invalid state');
       toast.error('Cannot send message - not connected');
       return false;
@@ -412,7 +414,7 @@ export const useRoomChat = (roomId) => {
     try {
       // Send message via WebSocket to room WITHOUT optimistic update
       const messageData = {
-        content: content.trim(),
+        content: content,
         ...options
       };
 

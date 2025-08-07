@@ -46,6 +46,9 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     loadMoreMessages
   } = useRoomChat(room?.id);
 
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
   // UI State
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showRoomInfo, setShowRoomInfo] = useState(false);
@@ -87,6 +90,16 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   const loadingMoreRef = useRef(false);
   const moreActionsRef = useRef(null);
 
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const scrollToBottom = useCallback((behavior = 'smooth', force = false) => {
     if (messagesEndRef.current && (shouldAutoScroll.current || force)) {
       try {
@@ -109,7 +122,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
 
     const { scrollTop, scrollHeight, clientHeight } = container;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    const threshold = 150;
+    const threshold = isMobile ? 100 : 150;
     
     const nearBottom = distanceFromBottom < threshold;
     setIsNearBottom(nearBottom);
@@ -120,9 +133,9 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       setShowNewMessageAlert(false);
       setUnreadCount(0);
     }
-  }, []);
+  }, [isMobile]);
 
-  // Auto-scroll when new messages arrive - FIXED
+  // Auto-scroll when new messages arrive
   useEffect(() => {
     const hasNewMessages = messages.length > lastMessageCount.current;
     const newMessagesCount = messages.length - lastMessageCount.current;
@@ -132,11 +145,9 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       const latestMessages = messages.slice(-newMessagesCount);
       const hasOwnMessage = latestMessages.some(msg => msg.senderId === currentUserId);
       
-      // Always auto-scroll when user sends a message, or when near bottom
       if (hasOwnMessage || shouldAutoScroll.current) {
         setTimeout(() => {
           scrollToBottom('smooth', hasOwnMessage);
-          // Ensure the input area stays visible
           if (hasOwnMessage) {
             setIsNearBottom(true);
             setShowNewMessageAlert(false);
@@ -144,14 +155,13 @@ const RoomChatPanel = ({ room, currentUserId }) => {
           }
         }, 50);
       } else if (!hasOwnMessage) {
-        // Show new message indicator for others' messages when not at bottom
         setShowNewMessageAlert(true);
         setUnreadCount(prev => prev + newMessagesCount);
       }
     }
   }, [messages, currentUserId, scrollToBottom]);
 
-  // Initial scroll to bottom - IMPROVED
+  // Initial scroll to bottom
   useEffect(() => {
     if (messages.length > 0 && !loading) {
       const timeoutId = setTimeout(() => {
@@ -164,7 +174,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     }
   }, [messages.length, loading, room?.id, scrollToBottom]);
 
-  // Set up intersection observers
+  // Set up intersection observers for infinite scroll and scroll position tracking
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -183,7 +193,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       },
       { 
         threshold: 0.1,
-        rootMargin: '0px 0px -50px 0px'
+        rootMargin: isMobile ? '0px 0px -30px 0px' : '0px 0px -50px 0px'
       }
     );
 
@@ -197,7 +207,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       },
       { 
         threshold: 0.1,
-        rootMargin: '100px 0px 0px 0px'
+        rootMargin: isMobile ? '50px 0px 0px 0px' : '100px 0px 0px 0px'
       }
     );
 
@@ -225,7 +235,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
       container.removeEventListener('scroll', handleScroll);
       if (scrollTimeout) clearTimeout(scrollTimeout);
     };
-  }, [hasMoreMessages, connected, checkScrollPosition]);
+  }, [hasMoreMessages, connected, checkScrollPosition, isMobile]);
 
   // Mark room as read
   useEffect(() => {
@@ -370,32 +380,26 @@ const RoomChatPanel = ({ room, currentUserId }) => {
     });
   };
 
-  // FIXED: Handle sending message with proper content structure
   const handleSendMessage = (content) => {
-    // FIXED: Ensure content is always a string for regular messages
     let messageToSend;
     
     if (replyingTo) {
-      // For replies, create proper message structure
       messageToSend = {
         content: typeof content === 'string' ? content : String(content),
         parentMessageId: replyingTo.id
       };
       setReplyingTo(null);
     } else {
-      // For regular messages, ensure it's a string
       messageToSend = typeof content === 'string' ? content : String(content);
     }
     
     const success = sendMessage(messageToSend);
     
-    // Force auto-scroll and ensure input area stays visible
     if (success) {
       shouldAutoScroll.current = true;
       setIsNearBottom(true);
       setShowNewMessageAlert(false);
       setUnreadCount(0);
-      // Immediate scroll to maintain input visibility
       setTimeout(() => {
         scrollToBottom('auto', true);
       }, 50);
@@ -406,13 +410,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
 
   const handleReactToMessage = async (messageId, reactionType) => {
     try {
-      // Make the API call
       await chatAPI.reactToMessage(messageId, reactionType);
-      
-      // The useRoomChat hook should automatically refresh the messages
-      // If it doesn't, you might need to add a manual refresh mechanism
-      // For now, we'll let the WebSocket or polling mechanism handle the update
-      
       toast.success('Reaction added');
     } catch (error) {
       console.error('Failed to react to message:', error);
@@ -422,7 +420,6 @@ const RoomChatPanel = ({ room, currentUserId }) => {
 
   const handleReplyToMessage = (message) => {
     setReplyingTo(message);
-    // Keep scroll at bottom when replying
     setTimeout(() => {
       if (isNearBottom) {
         scrollToBottom('smooth');
@@ -472,17 +469,18 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   };
 
   const getRoomIcon = () => {
+    const iconClass = isMobile ? "h-4 w-4" : "h-5 w-5";
     switch (room?.roomType) {
       case 'DIRECT_MESSAGE':
-        return <User className="h-5 w-5" />;
+        return <User className={iconClass} />;
       case 'GROUP_CHAT':
-        return room.isPrivate ? <Lock className="h-5 w-5" /> : <Hash className="h-5 w-5" />;
+        return room.isPrivate ? <Lock className={iconClass} /> : <Hash className={iconClass} />;
       case 'TASK_CHAT':
-        return <Hash className="h-5 w-5" />;
+        return <Hash className={iconClass} />;
       case 'GLOBAL_CHAT':
-        return <Globe className="h-5 w-5" />;
+        return <Globe className={iconClass} />;
       default:
-        return <MessageCircle className="h-5 w-5" />;
+        return <MessageCircle className={iconClass} />;
     }
   };
 
@@ -530,8 +528,10 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         offline: 'bg-gray-400'
       };
       
+      const size = isMobile ? 'w-2.5 h-2.5' : 'w-3 h-3';
+      
       return (
-        <div className={`w-3 h-3 rounded-full ${colors[room.dmParticipantStatus] || colors.offline}`} />
+        <div className={`${size} rounded-full ${colors[room.dmParticipantStatus] || colors.offline}`} />
       );
     }
     return null;
@@ -540,12 +540,18 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   if (!room) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div className="w-20 h-20 mx-auto mb-6 bg-gray-100 rounded-full flex items-center justify-center">
-            <MessageCircle className="h-10 w-10 text-gray-400" />
+        <div className={`text-center max-w-md mx-auto ${isMobile ? 'p-3' : 'p-6'}`}>
+          <div className={`mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center ${
+            isMobile ? 'w-12 h-12 mb-3' : 'w-20 h-20 mb-6'
+          }`}>
+            <MessageCircle className={`text-gray-400 ${isMobile ? 'h-6 w-6' : 'h-10 w-10'}`} />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No room selected</h3>
-          <p className="text-gray-500">Select a room to start chatting</p>
+          <h3 className={`font-semibold text-gray-900 mb-2 ${
+            isMobile ? 'text-base' : 'text-lg'
+          }`}>No room selected</h3>
+          <p className={`text-gray-500 ${isMobile ? 'text-sm' : ''}`}>
+            Select a room to start chatting
+          </p>
         </div>
       </div>
     );
@@ -554,11 +560,15 @@ const RoomChatPanel = ({ room, currentUserId }) => {
   return (
     <div className="flex-1 flex flex-col bg-white relative overflow-hidden">
       {/* Room Header */}
-      <div className="flex-shrink-0 px-4 md:px-6 py-4 border-b border-gray-200 bg-white">
+      <div className={`flex-shrink-0 border-b border-gray-200 bg-white ${
+        isMobile ? 'px-3 py-2' : 'px-4 md:px-6 py-4'
+      }`}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3 min-w-0 flex-1">
+          <div className={`flex items-center min-w-0 flex-1 ${isMobile ? 'space-x-2' : 'space-x-3'}`}>
             <div className="flex-shrink-0 relative">
-              <div className="text-gray-600 p-2 bg-gray-100 rounded-lg">
+              <div className={`text-gray-600 bg-gray-100 rounded-lg ${
+                isMobile ? 'p-1.5' : 'p-2'
+              }`}>
                 {getRoomIcon()}
               </div>
               {getStatusIndicator() && (
@@ -569,29 +579,31 @@ const RoomChatPanel = ({ room, currentUserId }) => {
             </div>
             
             <div className="min-w-0 flex-1">
-              <h2 className="text-lg font-semibold text-gray-900 truncate">
+              <h2 className={`font-semibold text-gray-900 truncate ${
+                isMobile ? 'text-sm' : 'text-lg'
+              }`}>
                 {getRoomTitle()}
               </h2>
-              <p className="text-sm text-gray-500 truncate">
+              <p className={`text-gray-500 truncate ${
+                isMobile ? 'text-xs' : 'text-sm'
+              }`}>
                 {getRoomSubtitle()}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
-            {/* Search Toggle */}
+          <div className={`flex items-center ${isMobile ? 'space-x-1' : 'space-x-2'}`}>
             <button
               onClick={() => setShowSearch(!showSearch)}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`rounded-lg transition-colors ${
                 showSearch ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'
-              }`}
+              } ${isMobile ? 'p-1.5' : 'p-2'}`}
               title="Search messages"
             >
-              <Search className="h-5 w-5" />
+              <Search className={isMobile ? 'h-4 w-4' : 'h-5 w-5'} />
             </button>
 
-            {/* Room Actions */}
-            {room?.roomType === 'DIRECT_MESSAGE' && (
+            {room?.roomType === 'DIRECT_MESSAGE' && !isMobile && (
               <div className="hidden sm:flex items-center space-x-2">
                 <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                   <Phone className="h-5 w-5" />
@@ -602,7 +614,7 @@ const RoomChatPanel = ({ room, currentUserId }) => {
               </div>
             )}
             
-            {room?.roomType === 'GROUP_CHAT' && (
+            {room?.roomType === 'GROUP_CHAT' && !isMobile && (
               <button
                 onClick={() => setShowMembersModal(true)}
                 className="hidden sm:flex p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -612,27 +624,32 @@ const RoomChatPanel = ({ room, currentUserId }) => {
               </button>
             )}
 
-            {/* More Actions */}
             <div className="relative" ref={moreActionsRef}>
               <button
                 onClick={() => setShowMoreActions(!showMoreActions)}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className={`text-gray-600 hover:bg-gray-100 rounded-lg transition-colors ${
+                  isMobile ? 'p-1.5' : 'p-2'
+                }`}
                 title="More options"
               >
-                <MoreVertical className="h-5 w-5" />
+                <MoreVertical className={isMobile ? 'h-4 w-4' : 'h-5 w-5'} />
               </button>
 
               {showMoreActions && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                <div className={`absolute right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 ${
+                  isMobile ? 'w-40' : 'w-48'
+                }`}>
                   <div className="py-1">
                     <button
                       onClick={() => {
                         setShowRoomInfo(!showRoomInfo);
                         setShowMoreActions(false);
                       }}
-                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      className={`flex items-center w-full text-gray-700 hover:bg-gray-100 ${
+                        isMobile ? 'px-3 py-2 text-xs' : 'px-4 py-2 text-sm'
+                      }`}
                     >
-                      <Info className="h-4 w-4 mr-3" />
+                      <Info className={`mr-2 ${isMobile ? 'h-3 w-3' : 'h-4 w-4 mr-3'}`} />
                       Room Info
                     </button>
                     {room?.roomType === 'GROUP_CHAT' && (
@@ -641,9 +658,11 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                           setShowMembersModal(true);
                           setShowMoreActions(false);
                         }}
-                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 sm:hidden"
+                        className={`flex items-center w-full text-gray-700 hover:bg-gray-100 ${
+                          isMobile ? 'px-3 py-2 text-xs sm:hidden' : 'px-4 py-2 text-sm sm:hidden'
+                        }`}
                       >
-                        <Users className="h-4 w-4 mr-3" />
+                        <Users className={`mr-2 ${isMobile ? 'h-3 w-3' : 'h-4 w-4 mr-3'}`} />
                         View Members
                       </button>
                     )}
@@ -652,9 +671,11 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                         setShowSearch(true);
                         setShowMoreActions(false);
                       }}
-                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      className={`flex items-center w-full text-gray-700 hover:bg-gray-100 ${
+                        isMobile ? 'px-3 py-2 text-xs' : 'px-4 py-2 text-sm'
+                      }`}
                     >
-                      <Search className="h-4 w-4 mr-3" />
+                      <Search className={`mr-2 ${isMobile ? 'h-3 w-3' : 'h-4 w-4 mr-3'}`} />
                       Search Messages
                     </button>
                   </div>
@@ -664,64 +685,84 @@ const RoomChatPanel = ({ room, currentUserId }) => {
           </div>
         </div>
 
-        {/* Search Bar */}
         {showSearch && (
-          <div className="mt-4 space-y-3">
-            <div className="flex items-center space-x-2">
+          <div className={`space-y-2 ${isMobile ? 'mt-2' : 'mt-4 space-y-3'}`}>
+            <div className={`flex items-center ${isMobile ? 'space-x-1' : 'space-x-2'}`}>
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className={`absolute top-1/2 transform -translate-y-1/2 text-gray-400 ${
+                  isMobile ? 'left-2.5 h-3 w-3' : 'left-3 h-4 w-4'
+                }`} />
                 <input
                   ref={searchInputRef}
                   type="text"
                   value={searchQuery}
                   onChange={handleSearchChange}
                   placeholder="Search messages..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    isMobile 
+                      ? 'pl-8 pr-3 py-2 text-sm' 
+                      : 'pl-10 pr-4 py-2.5'
+                  }`}
                 />
                 {searchLoading && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <Loader className="w-4 h-4 animate-spin text-blue-500" />
+                  <div className={`absolute top-1/2 transform -translate-y-1/2 ${
+                    isMobile ? 'right-2.5' : 'right-3'
+                  }`}>
+                    <Loader className={`animate-spin text-blue-500 ${
+                      isMobile ? 'w-3 h-3' : 'w-4 h-4'
+                    }`} />
                   </div>
                 )}
               </div>
               
               {searchResults.length > 0 && (
-                <div className="flex items-center space-x-1">
-                  <span className="text-sm text-gray-500 whitespace-nowrap">
+                <div className={`flex items-center ${isMobile ? 'space-x-0.5' : 'space-x-1'}`}>
+                  <span className={`text-gray-500 whitespace-nowrap ${
+                    isMobile ? 'text-xs' : 'text-sm'
+                  }`}>
                     {currentSearchIndex + 1} of {searchResults.length}
                   </span>
                   <button
                     onClick={() => navigateSearchResult('prev')}
-                    className="p-1.5 text-gray-600 hover:bg-gray-100 rounded"
+                    className={`text-gray-600 hover:bg-gray-100 rounded ${
+                      isMobile ? 'p-1' : 'p-1.5'
+                    }`}
                     title="Previous result"
                   >
-                    <ChevronUp className="h-4 w-4" />
+                    <ChevronUp className={isMobile ? 'h-3 w-3' : 'h-4 w-4'} />
                   </button>
                   <button
                     onClick={() => navigateSearchResult('next')}
-                    className="p-1.5 text-gray-600 hover:bg-gray-100 rounded"
+                    className={`text-gray-600 hover:bg-gray-100 rounded ${
+                      isMobile ? 'p-1' : 'p-1.5'
+                    }`}
                     title="Next result"
                   >
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className={isMobile ? 'h-3 w-3' : 'h-4 w-4'} />
                   </button>
                 </div>
               )}
               
               <button
                 onClick={() => setShowSearch(false)}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className={`text-gray-600 hover:bg-gray-100 rounded-lg transition-colors ${
+                  isMobile ? 'p-1.5' : 'p-2'
+                }`}
                 title="Close search"
               >
-                <X className="h-4 w-4" />
+                <X className={isMobile ? 'h-3 w-3' : 'h-4 w-4'} />
               </button>
             </div>
 
-            {/* Advanced Search Filters */}
-            <div className="flex flex-wrap items-center gap-2 text-sm">
+            <div className={`flex flex-wrap items-center gap-1 ${
+              isMobile ? 'text-xs' : 'gap-2 text-sm'
+            }`}>
               <select
                 value={searchFilters.messageType}
                 onChange={(e) => setSearchFilters(prev => ({ ...prev, messageType: e.target.value }))}
-                className="px-2 py-1 border border-gray-300 rounded text-xs"
+                className={`border border-gray-300 rounded ${
+                  isMobile ? 'px-1.5 py-1 text-xs' : 'px-2 py-1'
+                }`}
               >
                 <option value="all">All Types</option>
                 <option value="chat">Messages</option>
@@ -733,7 +774,9 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                 type="date"
                 value={searchFilters.dateFrom}
                 onChange={(e) => setSearchFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
-                className="px-2 py-1 border border-gray-300 rounded text-xs"
+                className={`border border-gray-300 rounded ${
+                  isMobile ? 'px-1.5 py-1 text-xs' : 'px-2 py-1'
+                }`}
                 placeholder="From date"
               />
               
@@ -741,14 +784,18 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                 type="date"
                 value={searchFilters.dateTo}
                 onChange={(e) => setSearchFilters(prev => ({ ...prev, dateTo: e.target.value }))}
-                className="px-2 py-1 border border-gray-300 rounded text-xs"
+                className={`border border-gray-300 rounded ${
+                  isMobile ? 'px-1.5 py-1 text-xs' : 'px-2 py-1'
+                }`}
                 placeholder="To date"
               />
               
               <select
                 value={searchFilters.sender}
                 onChange={(e) => setSearchFilters(prev => ({ ...prev, sender: e.target.value }))}
-                className="px-2 py-1 border border-gray-300 rounded text-xs"
+                className={`border border-gray-300 rounded ${
+                  isMobile ? 'px-1.5 py-1 text-xs' : 'px-2 py-1'
+                }`}
               >
                 <option value="">All Users</option>
                 {members.map(member => (
@@ -761,7 +808,9 @@ const RoomChatPanel = ({ room, currentUserId }) => {
               {(searchQuery || searchFilters.dateFrom || searchFilters.dateTo || searchFilters.sender) && (
                 <button
                   onClick={clearSearch}
-                  className="px-2 py-1 text-xs text-blue-600 hover:text-blue-800"
+                  className={`text-blue-600 hover:text-blue-800 ${
+                    isMobile ? 'px-1.5 py-1 text-xs' : 'px-2 py-1 text-xs'
+                  }`}
                 >
                   Clear
                 </button>
@@ -770,17 +819,22 @@ const RoomChatPanel = ({ room, currentUserId }) => {
           </div>
         )}
 
-        {/* Connection Status */}
         {!connected && (
-          <div className="mt-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className={`px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg ${
+            isMobile ? 'mt-2' : 'mt-3'
+          }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <div className="w-2 h-2 bg-yellow-500 rounded-full mr-2 animate-pulse"></div>
-                <span className="text-sm text-yellow-800">Reconnecting...</span>
+                <span className={`text-yellow-800 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                  Reconnecting...
+                </span>
               </div>
               <button
                 onClick={reconnect}
-                className="text-sm text-yellow-700 hover:text-yellow-900 underline"
+                className={`text-yellow-700 hover:text-yellow-900 underline ${
+                  isMobile ? 'text-xs' : 'text-sm'
+                }`}
               >
                 Retry
               </button>
@@ -789,7 +843,6 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         )}
       </div>
 
-      {/* Messages Area - FIXED scroll behavior */}
       <div 
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto bg-gray-50 relative"
@@ -803,22 +856,28 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         )}
         
         {isLoadingMore && (
-          <div className="flex justify-center items-center py-4">
-            <Loader className="animate-spin h-5 w-5 text-blue-500 mr-2" />
-            <span className="text-sm text-gray-600">Loading older messages...</span>
+          <div className={`flex justify-center items-center ${isMobile ? 'py-2' : 'py-4'}`}>
+            <Loader className={`animate-spin text-blue-500 mr-2 ${isMobile ? 'h-4 w-4' : 'h-5 w-5'}`} />
+            <span className={`text-gray-600 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+              Loading older messages...
+            </span>
           </div>
         )}
         
         {!hasMoreMessages && messages.length > 20 && (
-          <div className="flex justify-center py-4">
-            <span className="text-sm text-gray-500 bg-white px-3 py-1 rounded-full shadow-sm">
+          <div className={`flex justify-center ${isMobile ? 'py-2' : 'py-4'}`}>
+            <span className={`text-gray-500 bg-white px-3 py-1 rounded-full shadow-sm ${
+              isMobile ? 'text-xs' : 'text-sm'
+            }`}>
               Beginning of conversation
             </span>
           </div>
         )}
 
         {error && (
-          <div className="mx-4 my-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <div className={`mx-4 my-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 ${
+            isMobile ? 'text-xs' : 'text-sm'
+          }`}>
             {error}
             {!connected && (
               <button
@@ -832,24 +891,36 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         )}
 
         {loading && messages.length === 0 ? (
-          <div className="flex justify-center items-center h-64">
+          <div className={`flex justify-center items-center ${isMobile ? 'h-40' : 'h-64'}`}>
             <div className="text-center">
-              <Loader className="animate-spin h-8 w-8 text-blue-500 mx-auto mb-4" />
-              <span className="text-gray-600">Loading messages...</span>
+              <Loader className={`animate-spin text-blue-500 mx-auto mb-4 ${
+                isMobile ? 'h-6 w-6 mb-2' : 'h-8 w-8'
+              }`} />
+              <span className={`text-gray-600 ${isMobile ? 'text-sm' : ''}`}>
+                Loading messages...
+              </span>
             </div>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-6 min-h-64">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+          <div className={`flex-1 flex flex-col items-center justify-center text-gray-500 p-3 ${
+            isMobile ? 'min-h-40' : 'min-h-64 p-6'
+          }`}>
+            <div className={`bg-gray-100 rounded-full flex items-center justify-center mb-4 ${
+              isMobile ? 'w-12 h-12 mb-2' : 'w-16 h-16'
+            }`}>
               {getRoomIcon()}
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <h3 className={`font-medium text-gray-900 mb-2 ${
+              isMobile ? 'text-sm' : 'text-lg'
+            }`}>
               {room?.roomType === 'DIRECT_MESSAGE' 
                 ? `Start a conversation with ${getRoomTitle()}`
                 : `Welcome to ${getRoomTitle()}`
               }
             </h3>
-            <p className="text-sm text-center max-w-md">
+            <p className={`text-center max-w-md ${
+              isMobile ? 'text-xs' : 'text-sm'
+            }`}>
               {room?.roomType === 'DIRECT_MESSAGE'
                 ? 'Send a message to get the conversation started!'
                 : 'This is the beginning of your conversation in this room.'
@@ -893,54 +964,36 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         )}
       </div>
 
-      {/* New Message Alert */}
       {showNewMessageAlert && unreadCount > 0 && (
-        <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-20">
+        <div className={`absolute left-1/2 transform -translate-x-1/2 z-20 ${
+          isMobile ? 'bottom-16' : 'bottom-20'
+        }`}>
           <button
             onClick={handleScrollToBottomClick}
-            className="bg-blue-500 text-white px-4 py-2 rounded-full shadow-lg hover:bg-blue-600 transition-colors flex items-center space-x-2"
+            className={`bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors flex items-center space-x-2 ${
+              isMobile ? 'px-3 py-1.5 text-sm' : 'px-4 py-2'
+            }`}
           >
             <span>{unreadCount} new message{unreadCount !== 1 ? 's' : ''}</span>
-            <ArrowDown className="h-4 w-4" />
+            <ArrowDown className={isMobile ? 'h-3 w-3' : 'h-4 w-4'} />
           </button>
         </div>
       )}
 
-      {/* Scroll to Bottom Button */}
       {showScrollToBottom && !showNewMessageAlert && (
         <button
           onClick={handleScrollToBottomClick}
-          className="absolute bottom-20 right-4 bg-gray-600 text-white p-3 rounded-full shadow-lg hover:bg-gray-700 transition-colors z-10"
+          className={`absolute bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 transition-colors z-10 ${
+            isMobile 
+              ? 'bottom-12 right-2 w-10 h-10' 
+              : 'bottom-20 right-4 w-12 h-12'
+          }`}
           title="Scroll to bottom"
         >
-          <ArrowDown className="h-5 w-5" />
+          <ArrowDown className={`mx-auto ${isMobile ? 'h-4 w-4' : 'h-5 w-5'}`} />
         </button>
       )}
 
-      {/* Reply indicator */}
-      {replyingTo && (
-        <div className="px-4 py-3 bg-blue-50 border-t border-blue-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 flex-1 min-w-0">
-              <Reply className="h-4 w-4 text-blue-600 flex-shrink-0" />
-              <span className="text-sm text-blue-800 font-medium">
-                Replying to {replyingTo.senderName}
-              </span>
-              <span className="text-xs text-blue-600 truncate">
-                {replyingTo.content}
-              </span>
-            </div>
-            <button
-              onClick={() => setReplyingTo(null)}
-              className="text-blue-600 hover:text-blue-800 flex-shrink-0 ml-2"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Message Input - FIXED to stay visible */}
       <div className="flex-shrink-0 border-t border-gray-200 bg-white">
         <UserMentionInput
           onSendMessage={handleSendMessage}
@@ -958,7 +1011,6 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         />
       </div>
 
-      {/* Modals */}
       {showMembersModal && room?.roomType === 'GROUP_CHAT' && (
         <RoomMembersModal
           room={room}
@@ -968,59 +1020,87 @@ const RoomChatPanel = ({ room, currentUserId }) => {
         />
       )}
 
-      {/* Room Info Sidebar */}
       {showRoomInfo && (
-        <div className="fixed inset-y-0 right-0 w-80 bg-white border-l border-gray-200 shadow-xl z-50 overflow-y-auto">
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-900">Room Info</h3>
+        <div className={`fixed inset-y-0 right-0 bg-white border-l border-gray-200 shadow-xl z-50 overflow-y-auto ${
+          isMobile ? 'w-full' : 'w-80'
+        }`}>
+          <div className={isMobile ? 'p-4' : 'p-6'}>
+            <div className={`flex items-center justify-between ${
+              isMobile ? 'mb-4' : 'mb-6'
+            }`}>
+              <h3 className={`font-semibold text-gray-900 ${
+                isMobile ? 'text-base' : 'text-lg'
+              }`}>Room Info</h3>
               <button
                 onClick={() => setShowRoomInfo(false)}
-                className="p-1 hover:bg-gray-100 rounded"
+                className={`hover:bg-gray-100 rounded ${
+                  isMobile ? 'p-1' : 'p-1'
+                }`}
               >
-                <X className="h-5 w-5 text-gray-600" />
+                <X className={`text-gray-600 ${isMobile ? 'h-4 w-4' : 'h-5 w-5'}`} />
               </button>
             </div>
             
-            <div className="space-y-6">
-              {/* Room Details */}
+            <div className={isMobile ? 'space-y-4' : 'space-y-6'}>
               <div>
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="p-3 bg-gray-100 rounded-lg">
+                <div className={`flex items-center mb-4 ${
+                  isMobile ? 'space-x-2' : 'space-x-3'
+                }`}>
+                  <div className={`bg-gray-100 rounded-lg ${
+                    isMobile ? 'p-2' : 'p-3'
+                  }`}>
                     {getRoomIcon()}
                   </div>
                   <div>
-                    <h4 className="font-medium text-gray-900">{getRoomTitle()}</h4>
-                    <p className="text-sm text-gray-500">{getRoomSubtitle()}</p>
+                    <h4 className={`font-medium text-gray-900 ${
+                      isMobile ? 'text-sm' : ''
+                    }`}>{getRoomTitle()}</h4>
+                    <p className={`text-gray-500 ${
+                      isMobile ? 'text-xs' : 'text-sm'
+                    }`}>{getRoomSubtitle()}</p>
                   </div>
                 </div>
                 
                 {room?.roomDescription && (
-                  <p className="text-sm text-gray-600 mb-4 p-3 bg-gray-50 rounded-lg">{room.roomDescription}</p>
+                  <p className={`text-gray-600 p-3 bg-gray-50 rounded-lg ${
+                    isMobile ? 'text-sm mb-3' : 'text-sm mb-4'
+                  }`}>{room.roomDescription}</p>
                 )}
               </div>
 
-              {/* Room Stats */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-gray-900">
+              <div className={`grid grid-cols-2 ${isMobile ? 'gap-3' : 'gap-4'}`}>
+                <div className={`text-center bg-gray-50 rounded-lg ${
+                  isMobile ? 'p-3' : 'p-4'
+                }`}>
+                  <div className={`font-bold text-gray-900 ${
+                    isMobile ? 'text-lg' : 'text-2xl'
+                  }`}>
                     {room?.messageCount || messages.length}
                   </div>
-                  <div className="text-sm text-gray-500">Messages</div>
+                  <div className={`text-gray-500 ${
+                    isMobile ? 'text-xs' : 'text-sm'
+                  }`}>Messages</div>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-gray-900">
+                <div className={`text-center bg-gray-50 rounded-lg ${
+                  isMobile ? 'p-3' : 'p-4'
+                }`}>
+                  <div className={`font-bold text-gray-900 ${
+                    isMobile ? 'text-lg' : 'text-2xl'
+                  }`}>
                     {room?.memberCount || members.length}
                   </div>
-                  <div className="text-sm text-gray-500">Members</div>
+                  <div className={`text-gray-500 ${
+                    isMobile ? 'text-xs' : 'text-sm'
+                  }`}>Members</div>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="space-y-2">
+              <div className={isMobile ? 'space-y-1' : 'space-y-2'}>
                 {room?.roomType === 'GROUP_CHAT' && room.canInviteMembers && (
-                  <button className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center transition-colors">
-                    <UserPlus className="h-4 w-4 mr-3" />
+                  <button className={`w-full text-left text-gray-700 hover:bg-gray-100 rounded-lg flex items-center transition-colors ${
+                    isMobile ? 'px-3 py-2 text-sm' : 'px-4 py-3 text-sm'
+                  }`}>
+                    <UserPlus className={`mr-2 ${isMobile ? 'h-3 w-3' : 'h-4 w-4 mr-3'}`} />
                     Add members
                   </button>
                 )}
@@ -1030,14 +1110,18 @@ const RoomChatPanel = ({ room, currentUserId }) => {
                     setShowSearch(true);
                     setShowRoomInfo(false);
                   }}
-                  className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center transition-colors"
+                  className={`w-full text-left text-gray-700 hover:bg-gray-100 rounded-lg flex items-center transition-colors ${
+                    isMobile ? 'px-3 py-2 text-sm' : 'px-4 py-3 text-sm'
+                  }`}
                 >
-                  <Search className="h-4 w-4 mr-3" />
+                  <Search className={`mr-2 ${isMobile ? 'h-3 w-3' : 'h-4 w-4 mr-3'}`} />
                   Search in conversation
                 </button>
                 
-                <button className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center transition-colors">
-                  <Settings className="h-4 w-4 mr-3" />
+                <button className={`w-full text-left text-gray-700 hover:bg-gray-100 rounded-lg flex items-center transition-colors ${
+                  isMobile ? 'px-3 py-2 text-sm' : 'px-4 py-3 text-sm'
+                }`}>
+                  <Settings className={`mr-2 ${isMobile ? 'h-3 w-3' : 'h-4 w-4 mr-3'}`} />
                   Settings
                 </button>
               </div>

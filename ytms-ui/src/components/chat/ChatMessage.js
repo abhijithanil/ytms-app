@@ -12,7 +12,8 @@ import {
   Edit,
   Trash2,
   Copy,
-  Pin
+  Pin,
+  Smile
 } from 'lucide-react';
 import MessageWithMentions from './MessageWithMentions';
 
@@ -51,7 +52,6 @@ const ChatMessage = ({
     { emoji: '😞', type: 'disappointed', label: 'Disappointed' }
   ];
 
-  // FIXED: Enhanced useEffect to properly handle reaction updates
   useEffect(() => {
     try {
       const messageReactions = message.reactions ? JSON.parse(message.reactions) : {};
@@ -60,7 +60,7 @@ const ChatMessage = ({
       console.error('Error parsing reactions:', error);
       setReactions({});
     }
-  }, [message.reactions, message.id, message.updatedAt]); // Added more dependencies for better reactivity
+  }, [message.reactions, message.id, message.updatedAt]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -99,13 +99,7 @@ const ChatMessage = ({
     try {
       setIsReacting(true);
       setShowReactions(false);
-      
-      // Call the API first
       await onReactToMessage(message.id, reactionType);
-      
-      // Force a re-render by updating the key of the parent component
-      // This will be handled by the parent component's message list update
-      
     } catch (error) {
       console.error('Error adding reaction:', error);
     } finally {
@@ -150,6 +144,7 @@ const ChatMessage = ({
   const handleDelete = async () => {
     if (!onDeleteMessage) return;
     
+    // Using a custom modal is better, but window.confirm is used here for simplicity.
     if (window.confirm('Are you sure you want to delete this message?')) {
       try {
         await onDeleteMessage(message.id);
@@ -187,7 +182,6 @@ const ChatMessage = ({
 
   const userMentioned = isUserMentioned();
 
-  // Render system messages differently
   if (message.type === 'JOIN' || message.type === 'LEAVE' || message.type === 'SYSTEM') {
     return (
       <div className="flex justify-center my-3">
@@ -203,23 +197,10 @@ const ChatMessage = ({
   return (
     <div 
       ref={messageRef}
-      className={`group relative px-4 py-3 hover:bg-gray-50 transition-colors ${
+      className={`group relative px-4 py-2 hover:bg-gray-50 transition-colors ${
         userMentioned ? 'bg-blue-50 border-l-4 border-blue-500 pl-6' : ''
       } ${isSearchResult ? 'border border-yellow-300 bg-yellow-50' : ''}`}
     >
-      {/* Reply indicator */}
-      {isReply && (
-        <div className="flex items-center mb-2 ml-11 text-xs text-gray-500">
-          <div className="flex items-center space-x-1">
-            <Reply className="h-3 w-3 transform scale-x-[-1]" />
-            <span>
-              Replying to <span className="font-medium text-gray-700">{parentMessage?.senderName || 'message'}</span>
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* FIXED: All messages align to left */}
       <div className="flex space-x-3">
         {/* Avatar */}
         <div className="flex-shrink-0">
@@ -230,7 +211,7 @@ const ChatMessage = ({
           </div>
         </div>
 
-        {/* Message content */}
+        {/* Message content container */}
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="flex items-baseline space-x-2 mb-1">
@@ -247,7 +228,7 @@ const ChatMessage = ({
 
           {/* Referenced message for replies */}
           {isReply && parentMessage && (
-            <div className="mb-3 p-3 bg-gray-100 border-l-4 border-gray-300 rounded-r-lg text-sm max-w-md">
+            <div className="mb-2 p-2 bg-gray-100 border-l-4 border-gray-300 rounded-r-lg text-sm max-w-md">
               <div className="text-xs text-gray-600 mb-1 font-medium">
                 {parentMessage.senderName}
               </div>
@@ -260,27 +241,27 @@ const ChatMessage = ({
             </div>
           )}
 
-          {/* Message content */}
+          {/* Message Content */}
           <div>
             {isEditing ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <textarea
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                   rows={3}
                   autoFocus
                 />
                 <div className="flex space-x-2 text-sm">
                   <button
                     onClick={handleSaveEdit}
-                    className="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                    className="px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                   >
                     Save
                   </button>
                   <button
                     onClick={handleCancelEdit}
-                    className="px-3 py-1.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                    className="px-3 py-1 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
                   >
                     Cancel
                   </button>
@@ -299,7 +280,7 @@ const ChatMessage = ({
 
           {/* Attachments */}
           {message.attachmentUrl && (
-            <div className="mt-3">
+            <div className="mt-2">
               {message.attachmentType?.startsWith('image/') ? (
                 <img
                   src={message.attachmentUrl}
@@ -311,7 +292,7 @@ const ChatMessage = ({
                   href={message.attachmentUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   📎 {message.attachmentName || 'Download attachment'}
                 </a>
@@ -319,9 +300,9 @@ const ChatMessage = ({
             </div>
           )}
 
-          {/* FIXED: Only show reactions for other people's messages */}
+          {/* Reactions Display */}
           {Object.keys(reactions).length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-3">
+            <div className="flex flex-wrap gap-1 mt-2">
               {Object.entries(reactions).map(([reactionType, reactionData]) => {
                 if (!reactionData || !reactionData.count || reactionData.count === 0) return null;
                 
@@ -332,7 +313,7 @@ const ChatMessage = ({
                   <button
                     key={reactionType}
                     onClick={() => handleReaction(reactionType)}
-                    className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs transition-colors ${
+                    className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-xs transition-colors ${
                       hasUserReacted 
                         ? 'bg-blue-100 text-blue-800 border border-blue-200' 
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -346,20 +327,11 @@ const ChatMessage = ({
               })}
             </div>
           )}
-
-          {/* Thread reply count */}
-          {message.threadReplyCount > 0 && (
-            <button className="text-xs text-blue-600 hover:text-blue-800 mt-2 font-medium">
-              {message.threadReplyCount} repl{message.threadReplyCount === 1 ? 'y' : 'ies'}
-            </button>
-          )}
-        </div>
-
-        {/* FIXED: Actions menu - only show reaction button for others' messages */}
-        {showActionsMenu && !isEditing && (
-          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="flex items-center space-x-1 bg-white border border-gray-200 rounded-lg shadow-sm p-1">
-              {/* FIXED: Reaction button only for others' messages */}
+          
+          {/* NEW: Actions Bar - appears below message content */}
+          {showActionsMenu && !isEditing && (
+            <div className="mt-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Add Reaction Button */}
               {!isOwn && (
                 <div className="relative" ref={reactionsRef}>
                   <button
@@ -367,23 +339,17 @@ const ChatMessage = ({
                     className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
                     title="Add reaction"
                   >
-                    😊
+                    <Smile className="h-4 w-4" />
                   </button>
-                  
-                  {/* FIXED: Larger emoji picker for reactions */}
                   {showReactions && (
-                    <div className="absolute top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50 reaction-emoji-picker">
-                      <div className="emoji-grid">
+                    <div className="absolute bottom-full mb-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-50">
+                      <div className="flex gap-1">
                         {availableReactions.map((reaction) => (
                           <button
                             key={reaction.type}
                             onClick={() => handleReaction(reaction.type)}
-                            className="p-2 hover:bg-gray-100 rounded-lg text-lg transition-colors flex items-center justify-center w-10 h-10"
+                            className="p-1.5 hover:bg-gray-100 rounded-lg text-lg transition-colors"
                             title={reaction.label}
-                            style={{
-                              fontSize: '18px',
-                              fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif'
-                            }}
                           >
                             {reaction.emoji}
                           </button>
@@ -394,18 +360,18 @@ const ChatMessage = ({
                 </div>
               )}
 
-              {/* Reply button - available for all messages */}
+              {/* Reply Button */}
               {showReplyButton && (
                 <button
                   onClick={handleReply}
                   className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                  title="Reply to this message"
+                  title="Reply"
                 >
                   <Reply className="h-4 w-4" />
                 </button>
               )}
 
-              {/* More actions */}
+              {/* More Actions Dropdown */}
               <div className="relative" ref={actionsRef}>
                 <button
                   onClick={() => setShowActionsDropdown(!showActionsDropdown)}
@@ -414,39 +380,36 @@ const ChatMessage = ({
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
-
                 {showActionsDropdown && (
-                  <div className="absolute top-full mt-1 right-0 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 min-w-36">
+                  <div className="absolute bottom-full mb-1 left-0 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 min-w-[150px]">
                     <button
                       onClick={handleCopyMessage}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center transition-colors"
+                      className="w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center transition-colors"
                     >
                       <Copy className="h-4 w-4 mr-2" />
                       Copy
                     </button>
-                    
                     {onPinMessage && (
                       <button
                         onClick={handlePin}
-                        className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center transition-colors"
+                        className="w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center transition-colors"
                       >
                         <Pin className="h-4 w-4 mr-2" />
                         Pin
                       </button>
                     )}
-                    
                     {isOwn && (
                       <>
                         <button
                           onClick={handleEdit}
-                          className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center transition-colors"
+                          className="w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center transition-colors"
                         >
                           <Edit className="h-4 w-4 mr-2" />
                           Edit
                         </button>
                         <button
                           onClick={handleDelete}
-                          className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center transition-colors"
+                          className="w-full px-3 py-1.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center transition-colors"
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
                           Delete
@@ -457,8 +420,9 @@ const ChatMessage = ({
                 )}
               </div>
             </div>
-          </div>
-        )}
+          )}
+
+        </div>
       </div>
 
       <style jsx>{`
@@ -467,13 +431,6 @@ const ChatMessage = ({
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
           overflow: hidden;
-        }
-        
-        .emoji-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 6px;
-          min-width: 180px;
         }
       `}</style>
     </div>

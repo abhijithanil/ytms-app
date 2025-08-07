@@ -209,7 +209,6 @@ const UserMentionInput = ({
 
     sendTimeoutRef.current = setTimeout(() => {
       if (onSendMessage) {
-        // FIXED: Always pass the message content as a string
         const messageContent = message.trim();
         const success = onSendMessage(messageContent);
         if (success !== false) {
@@ -367,16 +366,18 @@ const UserMentionInput = ({
               <Reply className={`text-blue-600 flex-shrink-0 ${
                 isMobile ? 'h-3 w-3' : 'h-4 w-4'
               }`} />
-              <span className={`text-blue-700 font-medium ${
-                isMobile ? 'text-xs' : 'text-sm'
-              }`}>
-                Replying to {replyingTo.senderName}
-              </span>
-              <span className={`text-blue-600 truncate ${
-                isMobile ? 'text-xs' : 'text-sm'
-              }`}>
-                {replyingTo.content}
-              </span>
+              <div className="flex-1 min-w-0">
+                <span className={`text-blue-700 font-medium ${
+                  isMobile ? 'text-xs' : 'text-sm'
+                }`}>
+                  Replying to {replyingTo.senderName}
+                </span>
+                <p className={`text-blue-600 truncate ${
+                  isMobile ? 'text-xs' : 'text-sm'
+                }`}>
+                  {replyingTo.content}
+                </p>
+              </div>
             </div>
             {onCancelReply && (
               <button
@@ -450,7 +451,7 @@ const UserMentionInput = ({
             </div>
           </div>
           
-          {/* Send Button - FIXED: Better alignment and mobile optimization */}
+          {/* Send Button */}
           <div className="flex-shrink-0">
             <button
               type="submit"
@@ -477,7 +478,6 @@ const UserMentionInput = ({
           </div>
         </div>
 
-        {/* Helper Text - FIXED positioning and mobile optimization */}
         {!message.trim() && !replyingTo && (
           <div className={`text-gray-400 text-center sm:text-left ${
             isMobile ? 'mt-2 text-xs' : 'mt-3 text-xs'
