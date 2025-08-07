@@ -191,6 +191,7 @@ const UserMentionInput = ({
     }, 0);
   };
 
+  // FIXED: Handle reply message sending properly
   const handleSendMessage = () => {
     if (!message.trim() || !connected || isSending) {
       return;
@@ -210,7 +211,19 @@ const UserMentionInput = ({
     sendTimeoutRef.current = setTimeout(() => {
       if (onSendMessage) {
         const messageContent = message.trim();
-        const success = onSendMessage(messageContent);
+        
+        // FIXED: Create proper message structure for replies
+        let messageToSend;
+        if (replyingTo) {
+          messageToSend = {
+            content: messageContent,
+            parentMessageId: replyingTo.id
+          };
+        } else {
+          messageToSend = messageContent;
+        }
+        
+        const success = onSendMessage(messageToSend);
         if (success !== false) {
           setMessage('');
           if (textareaRef.current) {

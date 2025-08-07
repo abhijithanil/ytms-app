@@ -1,11 +1,10 @@
-// Updated useRoomChat.js - Fix for sender seeing duplicate messages
+// Fixed useRoomChat.js - Complete version with proper reply handling
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import WebSocketService from '../services/WebSocketService ';
 import { chatAPI } from '../services/api';
 import toast from 'react-hot-toast';
-import { de } from 'date-fns/locale';
 
 export const useRoomChat = (roomId) => {
   const { user, token } = useAuth();
@@ -268,6 +267,30 @@ export const useRoomChat = (roomId) => {
       }
     );
 
+    // Subscribe to message reactions
+    WebSocketService.subscribe(
+      `/topic/rooms/${roomId}/reactions`,
+      `roomReactions_${roomId}`,
+      (reactionUpdate) => {
+        console.log('🎯 useRoomChat: Received reaction update:', reactionUpdate);
+        if (mountedRef.current) {
+          handleReactionUpdate(reactionUpdate);
+        }
+      }
+    );
+
+    // Subscribe to message updates (edits, deletes)
+    WebSocketService.subscribe(
+      `/topic/rooms/${roomId}/message-updates`,
+      `roomMessageUpdates_${roomId}`,
+      (messageUpdate) => {
+        console.log('🎯 useRoomChat: Received message update:', messageUpdate);
+        if (mountedRef.current) {
+          handleMessageUpdate(messageUpdate);
+        }
+      }
+    );
+
     // Join the room via WebSocket
     if (WebSocketService.joinRoom) {
       WebSocketService.joinRoom(roomId);
@@ -282,6 +305,8 @@ export const useRoomChat = (roomId) => {
     WebSocketService.unsubscribe(`/topic/typing/room/${roomIdToCleanup}`);
     WebSocketService.unsubscribe(`/topic/rooms/${roomIdToCleanup}/members`);
     WebSocketService.unsubscribe(`/topic/rooms/${roomIdToCleanup}/read-status`);
+    WebSocketService.unsubscribe(`/topic/rooms/${roomIdToCleanup}/reactions`);
+    WebSocketService.unsubscribe(`/topic/rooms/${roomIdToCleanup}/message-updates`);
     
     // Leave the room via WebSocket
     if (WebSocketService.leaveRoom) {
@@ -401,29 +426,133 @@ export const useRoomChat = (roomId) => {
     });
   };
 
-  // FIXED: Removed optimistic updates that were causing duplicates
+  const handleReactionUpdate = (reactionUpdate) => {
+    const { messageId, reactionType, userId, action } = reactionUpdate;
+    
+    if (!mountedRef.current) return;
+
+    setMessages(prev => {
+      return prev.map(message => {
+        if (message.id === messageId) {
+          try {
+            const reactions = message.reactions ? JSON.parse(message.reactions) : {};
+            
+            if (!reactions[reactionType]) {
+              reactions[reactionType] = { count: 0, userIds: [] };
+            }
+            
+            const reactionData = reactions[reactionType];
+            
+            if (action === 'added') {
+              if (!reactionData.userIds.includes(userId)) {
+                reactionData.userIds.push(userId);
+                reactionData.count = reactionData.userIds.length;
+              }
+            } else if (action === 'removed') {
+              const index = reactionData.userIds.indexOf(userId);
+              if (index > -1) {
+                reactionData.userIds.splice(index, 1);
+                reactionData.count = reactionData.userIds.length;
+                
+                // Remove reaction type if no users
+                if (reactionData.userIds.length === 0) {
+                  delete reactions[reactionType];
+                }
+              }
+            }
+            
+            return {
+              ...message,
+              reactions: JSON.stringify(reactions)
+            };
+          } catch (error) {
+            console.error('Error updating message reactions:', error);
+            return message;
+          }
+        }
+        return message;
+      });
+    });
+  };
+
+  const handleMessageUpdate = (messageUpdate) => {
+    const { messageId, action, message: updatedMessage } = messageUpdate;
+    
+    if (!mountedRef.current) return;
+
+    setMessages(prev => {
+      switch (action) {
+        case 'edited':
+          return prev.map(msg => 
+            msg.id === messageId ? { ...msg, ...updatedMessage, isEdited: true } : msg
+          );
+        case 'deleted':
+          return prev.map(msg => 
+            msg.id === messageId ? { ...msg, isDeleted: true, content: 'This message was deleted' } : msg
+          );
+        case 'pinned':
+        case 'unpinned':
+          return prev.map(msg => 
+            msg.id === messageId ? { ...msg, isPinned: action === 'pinned' } : msg
+          );
+        default:
+          return prev;
+      }
+    });
+  };
+
+  // FIXED: Enhanced sendMessage to handle reply structure properly
   const sendMessage = useCallback((content, options = {}) => {
-    debugger
-    console.log('🎯 useRoomChat: Attempting to send message to room', roomId);
-    if (!content|| !connected || !roomId) {
+    console.log('🎯 useRoomChat: Attempting to send message to room', roomId, {
+      content,
+      options,
+      contentType: typeof content
+    });
+    
+    if (!connected || !roomId) {
       console.log('🎯 useRoomChat: Cannot send - invalid state');
       toast.error('Cannot send message - not connected');
       return false;
     }
 
-    try {
-      // Send message via WebSocket to room WITHOUT optimistic update
-      const messageData = {
+    // Handle both string content and object content (for replies)
+    let messageData = {};
+    
+    if (typeof content === 'string') {
+      // Simple text message
+      messageData = {
         content: content,
         ...options
       };
+    } else if (content && typeof content === 'object') {
+      // Object message (likely a reply with parentMessageId)
+      messageData = {
+        ...content,
+        ...options
+      };
+    } else {
+      console.error('🎯 useRoomChat: Invalid content type:', typeof content);
+      return false;
+    }
 
+    // Validate message has content
+    if (!messageData.content || !messageData.content.trim()) {
+      console.log('🎯 useRoomChat: Cannot send - empty content');
+      return false;
+    }
+
+    try {
+      console.log('🎯 useRoomChat: Sending message data:', messageData);
+
+      // Send message via WebSocket to room WITHOUT optimistic update
       const success = WebSocketService.sendRoomMessage ? 
         WebSocketService.sendRoomMessage(roomId, messageData) :
         WebSocketService.sendMessage(`/app/chat/room/${roomId}`, messageData);
       
       if (!success) {
         toast.error('Failed to send message');
+      } else {
+        console.log('🎯 useRoomChat: Message sent successfully');
       }
       
       return success;
