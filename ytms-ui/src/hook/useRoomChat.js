@@ -426,64 +426,79 @@ export const useRoomChat = (roomId) => {
   };
 
   const handleReactionUpdate = (reactionUpdate) => {
-    const { messageId, reactionType, userId, action } = reactionUpdate;
-    
-    console.log('🎯 useRoomChat: Processing reaction update:', reactionUpdate);
-    
-    if (!mountedRef.current) return;
+  const { messageId, reactionType, userId, action } = reactionUpdate;
+  
+  console.log('🎯 useRoomChat: Processing reaction update:', {
+    messageId,
+    reactionType,
+    userId,
+    action,
+    currentUserId: user?.id,
+    timestamp: new Date().toISOString()
+  });
+  
+  if (!mountedRef.current) return;
 
-    setMessages(prev => {
-      return prev.map(message => {
-        if (message.id === messageId) {
-          try {
-            const reactions = message.reactions ? JSON.parse(message.reactions) : {};
-            
-            console.log('Current reactions before update:', reactions);
-            
-            if (!reactions[reactionType]) {
-              reactions[reactionType] = { count: 0, userIds: [] };
-            }
-            
-            const reactionData = reactions[reactionType];
-            
-            if (action === 'added') {
-              if (!reactionData.userIds.includes(userId)) {
-                reactionData.userIds.push(userId);
-                reactionData.count = reactionData.userIds.length;
-                console.log('Added user to reaction:', userId, reactionType);
-              }
-            } else if (action === 'removed') {
-              const index = reactionData.userIds.indexOf(userId);
-              if (index > -1) {
-                reactionData.userIds.splice(index, 1);
-                reactionData.count = reactionData.userIds.length;
-                
-                // Remove reaction type if no users
-                if (reactionData.userIds.length === 0) {
-                  delete reactions[reactionType];
-                  console.log('Removed reaction type entirely:', reactionType);
-                } else {
-                  console.log('Removed user from reaction:', userId, reactionType);
-                }
-              }
-            }
-            
-            const updatedReactionsJson = JSON.stringify(reactions);
-            console.log('Updated reactions JSON:', updatedReactionsJson);
-            
-            return {
-              ...message,
-              reactions: updatedReactionsJson
-            };
-          } catch (error) {
-            console.error('Error updating message reactions:', error);
-            return message;
+  setMessages(prev => {
+    return prev.map(message => {
+      if (message.id === messageId) {
+        try {
+          const reactions = message.reactions ? JSON.parse(message.reactions) : {};
+          
+          console.log('🎯 useRoomChat: Current reactions before update:', reactions);
+          
+          if (!reactions[reactionType]) {
+            reactions[reactionType] = { count: 0, userIds: [] };
           }
+          
+          const reactionData = reactions[reactionType];
+          const userIndex = reactionData.userIds.indexOf(userId);
+          
+          if (action === 'added') {
+            if (userIndex === -1) {
+              // User doesn't have this reaction - add them
+              reactionData.userIds.push(userId);
+              reactionData.count = reactionData.userIds.length;
+              console.log('🎯 useRoomChat: Added user to reaction:', userId, reactionType);
+            } else {
+              console.warn('🎯 useRoomChat: User already has reaction, ignoring add:', userId, reactionType);
+            }
+          } else if (action === 'removed') {
+            if (userIndex > -1) {
+              // User has this reaction - remove them
+              reactionData.userIds.splice(userIndex, 1);
+              reactionData.count = reactionData.userIds.length;
+              
+              // Remove reaction type entirely if no users left
+              if (reactionData.userIds.length === 0) {
+                delete reactions[reactionType];
+                console.log('🎯 useRoomChat: Removed reaction type entirely:', reactionType);
+              } else {
+                console.log('🎯 useRoomChat: Removed user from reaction:', userId, reactionType);
+              }
+            } else {
+              console.warn('🎯 useRoomChat: User does not have reaction, ignoring remove:', userId, reactionType);
+            }
+          }
+          
+          const updatedReactionsJson = JSON.stringify(reactions);
+          console.log('🎯 useRoomChat: Updated reactions JSON:', updatedReactionsJson);
+          
+          return {
+            ...message,
+            reactions: updatedReactionsJson,
+            // Add timestamp to force component re-render
+            lastReactionUpdate: new Date().toISOString()
+          };
+        } catch (error) {
+          console.error('🎯 useRoomChat: Error updating message reactions:', error);
+          return message;
         }
-        return message;
-      });
+      }
+      return message;
     });
-  };
+  });
+};
 
   const handleMessageUpdate = (messageUpdate) => {
     const { messageId, action, message: updatedMessage } = messageUpdate;

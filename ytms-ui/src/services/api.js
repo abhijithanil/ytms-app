@@ -1037,42 +1037,10 @@ export const chatAPI = {
 
   updateRoom: (roomId, request) => api.put(`/chat/rooms/${roomId}`, request),
 
-  // NEW: Message reaction methods
-  reactToMessage: async (messageId, reactionType) => {
-    console.log(`Adding ${reactionType} reaction to message ${messageId}`);
-    try {
-      const response = await api.post(`/chat/messages/${messageId}/reactions`, {
-        reactionType: reactionType,
-      });
-      return response;
-    } catch (error) {
-      console.error(
-        `Failed to add reaction ${reactionType} to message ${messageId}:`,
-        error
-      );
-      throw error;
-    }
-  },
-
-  removeReaction: async (messageId, reactionType) => {
-    console.log(`Removing ${reactionType} reaction from message ${messageId}`);
-    try {
-      const response = await api.delete(
-        `/chat/messages/${messageId}/reactions/${reactionType}`
-      );
-      return response;
-    } catch (error) {
-      console.error(
-        `Failed to remove reaction ${reactionType} from message ${messageId}:`,
-        error
-      );
-      throw error;
-    }
-  },
-
-  // NEW: Toggle reaction method for better UX
   toggleReaction: async (messageId, reactionType) => {
-    console.log(`Toggling ${reactionType} reaction on message ${messageId}`);
+    console.log(
+      `🎯 API: Toggling ${reactionType} reaction on message ${messageId}`
+    );
     try {
       const response = await api.post(
         `/chat/messages/${messageId}/reactions/toggle`,
@@ -1080,17 +1048,36 @@ export const chatAPI = {
           reactionType: reactionType,
         }
       );
+      console.log(`🎯 API: Toggle reaction response:`, response.data);
       return response;
     } catch (error) {
       console.error(
-        `Failed to toggle reaction ${reactionType} on message ${messageId}:`,
+        `🎯 API: Failed to toggle reaction ${reactionType} on message ${messageId}:`,
         error
       );
       throw error;
     }
   },
+
+  // DEPRECATED: Keep for backward compatibility but don't use
+  reactToMessage: async (messageId, reactionType) => {
+    console.warn(
+      "🎯 API: reactToMessage is deprecated, use toggleReaction instead"
+    );
+    return chatAPI.toggleReaction(messageId, reactionType);
+  },
+
+  // DEPRECATED: Keep for backward compatibility but don't use
+  removeReaction: async (messageId, reactionType) => {
+    console.warn(
+      "🎯 API: removeReaction is deprecated, use toggleReaction instead"
+    );
+    return chatAPI.toggleReaction(messageId, reactionType);
+  },
+
+  // Get message reactions
   getMessageReactions: (messageId) => {
-    console.log(`Getting reactions for message ${messageId}`);
+    console.log(`🎯 API: Getting reactions for message ${messageId}`);
     return api.get(`/chat/messages/${messageId}/reactions`);
   },
 

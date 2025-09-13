@@ -1,5 +1,3 @@
-// FIXED: Update the reaction handling in ChatMessage.js
-
 import React, { useState, useRef, useEffect } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { 
@@ -40,7 +38,7 @@ const ChatMessage = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content || '');
   const [isReacting, setIsReacting] = useState(false);
-  const [reactingToType, setReactingToType] = useState(null); // Track which reaction is being processed
+  const [reactingToType, setReactingToType] = useState(null);
   
   const messageRef = useRef(null);
   const actionsRef = useRef(null);
@@ -55,13 +53,21 @@ const ChatMessage = ({
     { emoji: '😞', type: 'disappointed', label: 'Disappointed' }
   ];
 
+  // FIXED: Enhanced reaction parsing with better debugging
   useEffect(() => {
     try {
+      console.log('🎯 ChatMessage: Processing reactions for message', message.id, {
+        rawReactions: message.reactions,
+        messageUpdatedAt: message.updatedAt,
+        messageCreatedAt: message.createdAt
+      });
+      
       const messageReactions = message.reactions ? JSON.parse(message.reactions) : {};
       setReactions(messageReactions);
-      console.log('Updated reactions for message', message.id, messageReactions);
+      
+      console.log('🎯 ChatMessage: Parsed reactions:', messageReactions);
     } catch (error) {
-      console.error('Error parsing reactions:', error);
+      console.error('🎯 ChatMessage: Error parsing reactions:', error);
       setReactions({});
     }
   }, [message.reactions, message.id, message.updatedAt]);
@@ -80,38 +86,45 @@ const ChatMessage = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // FIXED: Enhanced reaction handler with better state management and error handling
+  // FIXED: Enhanced reaction handler with better state management and debugging
   const handleReaction = async (reactionType) => {
-    if (!onReactToMessage || isReacting || reactingToType === reactionType) return;
+    if (!onReactToMessage || isReacting || reactingToType === reactionType) {
+      console.log('🎯 ChatMessage: Reaction blocked', {
+        hasHandler: !!onReactToMessage,
+        isReacting,
+        reactingToType,
+        requestedType: reactionType
+      });
+      return;
+    }
     
     try {
       setIsReacting(true);
       setReactingToType(reactionType);
       setShowReactions(false);
       
-      console.log('Handling reaction:', reactionType, 'for message:', message.id);
-      
-      // Check if user already has this reaction
+      // Check current reaction state
       const currentReaction = reactions[reactionType];
       const userHasReaction = currentReaction && 
         currentReaction.userIds && 
         currentReaction.userIds.includes(currentUserId);
       
-      console.log('User has reaction:', userHasReaction, 'Current reaction data:', currentReaction);
+      console.log('🎯 ChatMessage: Handling reaction:', {
+        reactionType,
+        messageId: message.id,
+        currentReactions: reactions,
+        userHasReaction,
+        currentReaction
+      });
       
-      if (userHasReaction) {
-        // Remove reaction
-        console.log('Removing reaction:', reactionType);
-        await onReactToMessage(message.id, reactionType, 'remove');
-      } else {
-        // Add reaction
-        console.log('Adding reaction:', reactionType);
-        await onReactToMessage(message.id, reactionType, 'add');
-      }
+      // FIXED: Just call the handler - let backend handle toggle logic
+      await onReactToMessage(message.id, reactionType);
+      
+      console.log('🎯 ChatMessage: Reaction handled successfully');
       
     } catch (error) {
-      console.error('Error handling reaction:', error);
-      // Optionally show user-friendly error message
+      console.error('🎯 ChatMessage: Error handling reaction:', error);
+      // Error message will be shown by the handler in RoomChatPanel
     } finally {
       setIsReacting(false);
       setReactingToType(null);
@@ -327,7 +340,7 @@ const ChatMessage = ({
             </div>
           )}
 
-          {/* FIXED: Enhanced Reactions Display with better error handling */}
+          {/* FIXED: Enhanced Reactions Display with better state tracking */}
           {Object.keys(reactions).length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {Object.entries(reactions).map(([reactionType, reactionData]) => {
